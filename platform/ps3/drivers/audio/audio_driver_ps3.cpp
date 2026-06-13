@@ -29,16 +29,38 @@
 
 #include "audio_driver_ps3.h"
 
+#include "core/os/os.h"
 #include "core/string/print_string.h"
 
 #ifdef PS3SOUND_ENABLED
 #include <ps3sound/sound.h>
 #endif
 
+void AudioDriverPS3::thread_func(void *p_udata) {
+	AudioDriverPS3 *driver = static_cast<AudioDriverPS3 *>(p_udata);
+	const uint64_t usdelay = (driver->buffer_frames / float(driver->mix_rate)) * 1000000;
+
+	while (!driver->exit_thread.is_set()) {
+		if (driver->active.is_set()) {
+			driver->lock();
+			driver->audio_server_process(driver->buffer_frames, driver->mix_buffer.ptrw());
+			driver->unlock();
+
+#ifdef PS3SOUND_ENABLED
+			soundPlay(driver->mix_buffer.ptr(), driver->buffer_frames * 2);
+#endif
+		}
+
+		OS::get_singleton()->delay_usec(usdelay);
+	}
+}
+
 Error AudioDriverPS3::init() {
 	mix_rate = 44100;
 	buffer_frames = 1024;
 	mix_buffer.resize(buffer_frames * 2);
+	active.clear();
+	exit_thread.clear();
 
 #ifdef PS3SOUND_ENABLED
 	if (soundInit() != 0) {
@@ -48,13 +70,20 @@ Error AudioDriverPS3::init() {
 	print_line("PS3: ps3soundlib initialized.");
 #endif
 
+	thread.start(thread_func, this);
 	return OK;
 }
 
 void AudioDriverPS3::start() {
+	active.set();
 }
 
 void AudioDriverPS3::finish() {
+	exit_thread.set();
+	if (thread.is_started()) {
+		thread.wait_to_finish();
+	}
+
 #ifdef PS3SOUND_ENABLED
 	soundQuit();
 #endif

@@ -30,6 +30,8 @@
 #include "register_types.h"
 
 #include "ps3_module.h"
+#include "ps3_pad.h"
+#include "ps3_sysutil.h"
 
 #include "core/object/class_db.h"
 
@@ -39,6 +41,8 @@ void initialize_ps3_module_module(ModuleInitializationLevel p_level) {
 	}
 #ifdef PS3_MODULE_ENABLED
 	GDREGISTER_CLASS(PS3Module);
+	GDREGISTER_CLASS(PS3Pad);
+	GDREGISTER_CLASS(PS3SystemUtil);
 #endif
 }
 

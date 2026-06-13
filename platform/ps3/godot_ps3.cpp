@@ -31,6 +31,7 @@
 #include "platform/ps3/ps3_wrapper.h"
 
 #include "core/config/engine.h"
+#include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "main/main.h"
 #include "servers/display_server.h"
@@ -52,6 +53,22 @@ static void ps3_load_modules() {
 	ps3_modules_loaded = true;
 }
 
+static String _find_main_pack() {
+	const String exec_path = OS_PS3::get_singleton()->get_executable_path();
+	const String game_dir = exec_path.get_base_dir();
+	const String usrdir_pack = game_dir.path_join("USRDIR").path_join("game.pck");
+	if (FileAccess::exists(usrdir_pack)) {
+		return usrdir_pack;
+	}
+
+	const String eboot_pack = game_dir.path_join("EBOOT.pck");
+	if (FileAccess::exists(eboot_pack)) {
+		return eboot_pack;
+	}
+
+	return String();
+}
+
 int main(int argc, char *argv[]) {
 	ps3_load_modules();
 
@@ -62,7 +79,28 @@ int main(int argc, char *argv[]) {
 		print_line(vformat("PS3: cwd %s", cwd));
 	}
 
-	Error err = Main::setup(argv[0], argc - 1, &argv[1]);
+	const String main_pack = _find_main_pack();
+	if (!main_pack.is_empty()) {
+		print_line(vformat("PS3: loading pack %s", main_pack));
+	}
+
+	LocalVector<CharString> arg_storage;
+	LocalVector<char *> new_argv;
+
+	arg_storage.push_back(String::utf8(argv[0]));
+	if (!main_pack.is_empty()) {
+		arg_storage.push_back("--main-pack");
+		arg_storage.push_back(main_pack.utf8());
+	}
+	for (int i = 1; i < argc; i++) {
+		arg_storage.push_back(String::utf8(argv[i]));
+	}
+
+	for (uint32_t i = 0; i < arg_storage.size(); i++) {
+		new_argv.push_back(arg_storage[i].ptrw());
+	}
+
+	Error err = Main::setup(new_argv[0], new_argv.size() - 1, &new_argv[1]);
 	if (err != OK) {
 		if (err == ERR_HELP) {
 			return EXIT_SUCCESS;

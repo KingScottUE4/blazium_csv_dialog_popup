@@ -61,6 +61,7 @@ private:
 	}
 
 	NoRSXFramebuffer framebuffer;
+	uint32_t frame_counter = 0;
 	Size2i window_size = Size2i(NoRSXFramebuffer::WIDTH, NoRSXFramebuffer::HEIGHT);
 	NativeMenu *native_menu = nullptr;
 	Callable input_event_callback;

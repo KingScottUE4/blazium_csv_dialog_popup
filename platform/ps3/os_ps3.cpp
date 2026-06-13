@@ -36,6 +36,7 @@
 #include "drivers/unix/dir_access_unix.h"
 #include "drivers/unix/file_access_unix.h"
 #include "main/main.h"
+#include "servers/audio_server.h"
 
 #include <unistd.h>
 
@@ -45,10 +46,19 @@ OS_PS3 *OS_PS3::get_singleton() {
 	return singleton;
 }
 
+String OS_PS3::_get_game_dir() const {
+	const String exec_path = get_executable_path();
+	if (!exec_path.is_empty()) {
+		return exec_path.get_base_dir();
+	}
+	return "/dev_hdd0/game/BLAZ00001";
+}
+
 OS_PS3::OS_PS3() {
 	if (singleton == nullptr) {
 		singleton = this;
 	}
+	AudioDriverManager::add_driver(&audio_driver);
 }
 
 OS_PS3::~OS_PS3() {
@@ -130,10 +140,16 @@ String OS_PS3::get_version_alias() const {
 
 String OS_PS3::get_executable_path() const {
 	char path[1024];
-	if (readlink("/proc/self/exe", path, sizeof(path) - 1) > 0) {
+	const ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+	if (len > 0) {
+		path[len] = '\0';
 		return String::utf8(path);
 	}
-	return "/dev_hdd0/game/BLAZ00001/EBOOT.BIN";
+	return _get_game_dir().path_join("EBOOT.BIN");
+}
+
+String OS_PS3::get_resource_dir() const {
+	return _get_game_dir().path_join("USRDIR");
 }
 
 String OS_PS3::get_user_data_dir() const {

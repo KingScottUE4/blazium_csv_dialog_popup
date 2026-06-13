@@ -20,11 +20,21 @@ if env.get("rsx", False):
 
 prog = env.add_program("#bin/blazium", ps3_files)
 
-# Post-link: copy ELF as template artifact; SELF conversion when make_self is available.
 elf_target = "#bin/ps3_" + env["target"] + ".elf"
 env.Command(elf_target, prog, "cp $SOURCE $TARGET")
 
 make_self = env.WhereIs("make_self_npdrm")
+self_target = None
 if make_self:
     self_target = "#bin/ps3_" + env["target"] + ".self"
     env.Command(self_target, elf_target, make_self + " $SOURCE $TARGET")
+
+template_name = None
+if env["target"] == "template_release":
+    template_name = "ps3_release.ppc64"
+elif env["target"] == "template_debug":
+    template_name = "ps3_debug.ppc64"
+
+if template_name:
+    template_source = self_target if make_self and self_target else elf_target
+    env.Command("#bin/" + template_name, template_source, "cp $SOURCE $TARGET")

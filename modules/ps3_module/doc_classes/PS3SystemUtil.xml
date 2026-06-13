@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="PS3SystemUtil" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		PS3 system utility helpers.
+	</brief_description>
+	<description>
+		Exposes lightweight PSL1GHT system utility helpers for on-console messaging.
+	</description>
+	<methods>
+		<method name="show_message" qualifiers="const">
+			<return type="void" />
+			<param index="0" name="message" type="String" />
+			<description>
+				Shows a system message dialog on PS3 hardware or emulator.
+			</description>
+		</method>
+	</methods>
+</class>

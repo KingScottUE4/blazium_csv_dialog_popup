@@ -33,6 +33,10 @@
 
 #include "editor/export/editor_export.h"
 
+#ifdef TOOLS_ENABLED
+#include "../editor/ps3_editor_plugin.h"
+#endif
+
 void register_ps3_exporter_types() {
 	GDREGISTER_VIRTUAL_CLASS(EditorExportPlatformPS3);
 }
@@ -41,4 +45,7 @@ void register_ps3_exporter() {
 	Ref<EditorExportPlatformPS3> platform;
 	platform.instantiate();
 	EditorExport::get_singleton()->add_export_platform(platform);
+#ifdef TOOLS_ENABLED
+	PS3EditorPlugin::initialize();
+#endif
 }

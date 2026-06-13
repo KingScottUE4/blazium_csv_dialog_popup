@@ -41,8 +41,11 @@ class EditorExportPlatformPS3 : public EditorExportPlatform {
 		return String("ps3_") + (p_debug ? "debug" : "release") + ".ppc64";
 	}
 
-	Error _write_param_sfo(const String &p_path, const String &p_title, const String &p_title_id, const String &p_version) const;
+	Error _write_param_sfo(const String &p_path, const String &p_title, const String &p_title_id, const String &p_version, const String &p_content_id) const;
 	Error _copy_template(const String &p_template, const String &p_dest) const;
+	String _get_script_path(const String &p_script_name) const;
+	Error _run_python_script(const String &p_script, const List<String> &p_args, String *r_output = nullptr) const;
+	Error _generate_pkg(const String &p_game_dir, const String &p_title_id, const String &p_content_id, const String &p_version, const String &p_title, String *r_pkg_path) const;
 
 public:
 	virtual String get_name() const override;

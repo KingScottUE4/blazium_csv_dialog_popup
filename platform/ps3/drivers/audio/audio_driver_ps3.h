@@ -30,13 +30,20 @@
 #pragma once
 
 #include "core/os/mutex.h"
+#include "core/os/thread.h"
+#include "core/os/thread_safe.h"
 #include "servers/audio_server.h"
 
 class AudioDriverPS3 : public AudioDriver {
 	Mutex mutex;
+	Thread thread;
+	ThreadSafeFlag active;
+	ThreadSafeFlag exit_thread;
 	int mix_rate = 44100;
 	int buffer_frames = 1024;
 	Vector<int32_t> mix_buffer;
+
+	static void thread_func(void *p_udata);
 
 public:
 	virtual const char *get_name() const override { return "PS3"; }

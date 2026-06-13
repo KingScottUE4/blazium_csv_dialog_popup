@@ -42,6 +42,8 @@ class OS_PS3 : public OS_Unix {
 	AudioDriverPS3 audio_driver;
 	CrashHandlerPS3 crash_handler;
 
+	String _get_game_dir() const;
+
 protected:
 	void initialize() override;
 	void set_main_loop(MainLoop *p_main_loop) override;
@@ -63,6 +65,7 @@ public:
 	String get_version_alias() const override;
 
 	String get_executable_path() const override;
+	String get_resource_dir() const override;
 	String get_user_data_dir() const override;
 	String get_data_path() const override;
 	String get_cache_path() const override;

@@ -92,6 +92,11 @@ void DisplayServerPS3::process_events() {
 }
 
 void DisplayServerPS3::swap_buffers() {
+	if (framebuffer.is_initialized()) {
+		const uint32_t color = 0xFF000040 | ((frame_counter & 0xFF) << 8);
+		framebuffer.clear(color);
+		frame_counter++;
+	}
 	framebuffer.present();
 }
 

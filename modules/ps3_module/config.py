@@ -16,6 +16,8 @@ def configure(env):
 def get_doc_classes():
     return [
         "PS3Module",
+        "PS3Pad",
+        "PS3SystemUtil",
     ]
 
 

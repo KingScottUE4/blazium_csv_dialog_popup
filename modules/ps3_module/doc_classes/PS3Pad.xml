@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="PS3Pad" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		PS3 controller helper for pressure and rumble.
+	</brief_description>
+	<description>
+		Provides direct access to PSL1GHT pad features on PlayStation 3 builds.
+	</description>
+	<methods>
+		<method name="get_port" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the controller port index.
+			</description>
+		</method>
+		<method name="get_pressure" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="button" type="int" />
+			<description>
+				Returns button pressure for the given pad button index.
+			</description>
+		</method>
+		<method name="set_port">
+			<return type="void" />
+			<param index="0" name="port" type="int" />
+			<description>
+				Sets the controller port index.
+			</description>
+		</method>
+		<method name="set_rumble">
+			<return type="void" />
+			<param index="0" name="weak" type="float" />
+			<param index="1" name="strong" type="float" />
+			<description>
+				Sets weak and strong motor rumble intensities from 0.0 to 1.0.
+			</description>
+		</method>
+	</methods>
+</class>
