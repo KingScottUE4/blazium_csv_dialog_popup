@@ -31,12 +31,12 @@
 
 #include "platform/ps3/ps3_wrapper.h"
 
-#include <pad.h>
+#include <io/pad.h>
 
 JoypadPS3::JoypadPS3() {
 	input = Input::get_singleton();
-	padInit(0);
-	padSetPortSetting(0, PAD_SETTINGS_CIRCULAR);
+	ioPadInit(1);
+	ioPadSetPortSetting(0, PAD_SETTINGS_PRESS_ON);
 	connected = true;
 	input->joy_connection_changed(0, true, "PS3 Controller");
 }
@@ -47,32 +47,32 @@ void JoypadPS3::process() {
 	}
 
 	padData data;
-	int result = padGetData(0, &data);
+	const s32 result = ioPadGetData(0, &data);
 	if (result == 0) {
 		input->joy_connection_changed(0, false, "PS3 Controller");
 		connected = false;
 		return;
 	}
 
-	input->joy_button(0, JoyButton::SOUTH, (data.button[PAD_BTN_CROSS] != 0));
-	input->joy_button(0, JoyButton::EAST, (data.button[PAD_BTN_CIRCLE] != 0));
-	input->joy_button(0, JoyButton::NORTH, (data.button[PAD_BTN_TRIANGLE] != 0));
-	input->joy_button(0, JoyButton::WEST, (data.button[PAD_BTN_SQUARE] != 0));
+	input->joy_button(0, JoyButton::A, data.BTN_CROSS != 0);
+	input->joy_button(0, JoyButton::B, data.BTN_CIRCLE != 0);
+	input->joy_button(0, JoyButton::Y, data.BTN_TRIANGLE != 0);
+	input->joy_button(0, JoyButton::X, data.BTN_SQUARE != 0);
 
-	input->joy_button(0, JoyButton::DPAD_UP, (data.button[PAD_BTN_UP] != 0));
-	input->joy_button(0, JoyButton::DPAD_DOWN, (data.button[PAD_BTN_DOWN] != 0));
-	input->joy_button(0, JoyButton::DPAD_LEFT, (data.button[PAD_BTN_LEFT] != 0));
-	input->joy_button(0, JoyButton::DPAD_RIGHT, (data.button[PAD_BTN_RIGHT] != 0));
+	input->joy_button(0, JoyButton::DPAD_UP, data.BTN_UP != 0);
+	input->joy_button(0, JoyButton::DPAD_DOWN, data.BTN_DOWN != 0);
+	input->joy_button(0, JoyButton::DPAD_LEFT, data.BTN_LEFT != 0);
+	input->joy_button(0, JoyButton::DPAD_RIGHT, data.BTN_RIGHT != 0);
 
-	input->joy_button(0, JoyButton::LEFT_SHOULDER, (data.button[PAD_BTN_L1] != 0));
-	input->joy_button(0, JoyButton::RIGHT_SHOULDER, (data.button[PAD_BTN_R1] != 0));
-	input->joy_button(0, JoyButton::LEFT_STICK, (data.button[PAD_BTN_L3] != 0));
-	input->joy_button(0, JoyButton::RIGHT_STICK, (data.button[PAD_BTN_R3] != 0));
-	input->joy_button(0, JoyButton::START, (data.button[PAD_BTN_START] != 0));
-	input->joy_button(0, JoyButton::BACK, (data.button[PAD_BTN_SELECT] != 0));
+	input->joy_button(0, JoyButton::LEFT_SHOULDER, data.BTN_L1 != 0);
+	input->joy_button(0, JoyButton::RIGHT_SHOULDER, data.BTN_R1 != 0);
+	input->joy_button(0, JoyButton::LEFT_STICK, data.BTN_L3 != 0);
+	input->joy_button(0, JoyButton::RIGHT_STICK, data.BTN_R3 != 0);
+	input->joy_button(0, JoyButton::START, data.BTN_START != 0);
+	input->joy_button(0, JoyButton::BACK, data.BTN_SELECT != 0);
 
-	input->joy_axis(0, JoyAxis::LEFT_X, (data.ana_left_x - 128) / 128.0f);
-	input->joy_axis(0, JoyAxis::LEFT_Y, (data.ana_left_y - 128) / 128.0f);
-	input->joy_axis(0, JoyAxis::RIGHT_X, (data.ana_right_x - 128) / 128.0f);
-	input->joy_axis(0, JoyAxis::RIGHT_Y, (data.ana_right_y - 128) / 128.0f);
+	input->joy_axis(0, JoyAxis::LEFT_X, (data.ANA_L_H - 128) / 128.0f);
+	input->joy_axis(0, JoyAxis::LEFT_Y, (data.ANA_L_V - 128) / 128.0f);
+	input->joy_axis(0, JoyAxis::RIGHT_X, (data.ANA_R_H - 128) / 128.0f);
+	input->joy_axis(0, JoyAxis::RIGHT_Y, (data.ANA_R_V - 128) / 128.0f);
 }

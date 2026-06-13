@@ -34,7 +34,9 @@
 #include "core/string/print_string.h"
 
 #ifdef NORSX_ENABLED
-#include <NoRSX/NoRSX.h>
+#include <NoRSX.h>
+
+static NoRSX *g_norsx = nullptr;
 #endif
 
 Error NoRSXFramebuffer::initialize() {
@@ -46,11 +48,8 @@ Error NoRSXFramebuffer::initialize() {
 	buffer.fill(0);
 
 #ifdef NORSX_ENABLED
-	if (NoRSX_Init(WIDTH, HEIGHT, 32, 0, 0) != 0) {
-		ERR_PRINT("NoRSX_Init failed; using internal buffer only.");
-	} else {
-		print_line("PS3: NoRSX initialized.");
-	}
+	g_norsx = memnew(NoRSX(RESOLUTION_1280x720, RESOLUTION_1280x720));
+	print_line("PS3: NoRSX initialized.");
 #endif
 
 	initialized = true;
@@ -59,7 +58,11 @@ Error NoRSXFramebuffer::initialize() {
 
 void NoRSXFramebuffer::shutdown() {
 #ifdef NORSX_ENABLED
-	NoRSX_Exit();
+	if (g_norsx) {
+		g_norsx->NoRSX_Exit();
+		memdelete(g_norsx);
+		g_norsx = nullptr;
+	}
 #endif
 	buffer.clear();
 	initialized = false;
@@ -79,9 +82,9 @@ void NoRSXFramebuffer::present() {
 	}
 
 #ifdef NORSX_ENABLED
-	NoRSX_SwapBuffers(reinterpret_cast<uint32_t *>(buffer.ptr()));
-#else
-	
+	if (g_norsx) {
+		g_norsx->Flip();
+	}
 #endif
 }
 

@@ -40,7 +40,7 @@ class OS_PS3 : public OS_Unix {
 	MainLoop *main_loop = nullptr;
 	JoypadPS3 *joypad = nullptr;
 	AudioDriverPS3 audio_driver;
-	CrashHandlerPS3 crash_handler;
+	CrashHandler crash_handler;
 
 	String _get_game_dir() const;
 
@@ -51,11 +51,12 @@ protected:
 	void finalize() override;
 	bool _check_internal_feature_support(const String &p_feature) override;
 
+	MainLoop *get_main_loop() const override;
+
 public:
 	static OS_PS3 *get_singleton();
 
 	void initialize_joypads() override;
-	void set_joy_usage_setting(bool p_use_all) override;
 
 	bool main_loop_iterate();
 

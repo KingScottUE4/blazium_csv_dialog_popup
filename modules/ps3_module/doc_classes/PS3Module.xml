@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="PS3Module" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		PS3 module entry point for SDK metadata.
+	</brief_description>
+	<description>
+		Provides basic PlayStation 3 SDK information when [code]ps3_module[/code] is enabled in PS3 template builds.
+	</description>
+	<methods>
+		<method name="get_sdk_version" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the SDK/toolchain identifier (PSL1GHT).
+			</description>
+		</method>
+	</methods>
+</class>

@@ -34,7 +34,12 @@
 class PS3EditorPlugin : public EditorPlugin {
 	GDCLASS(PS3EditorPlugin, EditorPlugin);
 
+	String _get_scripts_root() const;
+	String _get_ps3_title_id() const;
+	String _get_emulator_root() const;
+
 	void _validate_toolchain();
+	void _install_templates();
 	void _deploy_rpcs3();
 	void _open_rpcs3_data_folder();
 

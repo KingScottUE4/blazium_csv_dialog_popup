@@ -32,7 +32,7 @@
 #include "core/math/math_funcs.h"
 
 #ifdef PS3_ENABLED
-#include <pad.h>
+#include <io/pad.h>
 #endif
 
 void PS3Pad::_bind_methods() {
@@ -53,11 +53,60 @@ int PS3Pad::get_port() const {
 float PS3Pad::get_pressure(int p_button) const {
 #ifdef PS3_ENABLED
 	padData data;
-	if (padGetData(port, &data) == 0) {
+	if (ioPadGetData(port, &data) == 0) {
 		return 0.0f;
 	}
-	if (p_button >= 0 && p_button < 32) {
-		return data.button[p_button] ? 1.0f : 0.0f;
+
+	uint16_t pressure = 0;
+	switch (p_button) {
+		case PAD_CTRL_CROSS:
+			pressure = data.PRE_CROSS;
+			break;
+		case PAD_CTRL_CIRCLE:
+			pressure = data.PRE_CIRCLE;
+			break;
+		case PAD_CTRL_TRIANGLE:
+			pressure = data.PRE_TRIANGLE;
+			break;
+		case PAD_CTRL_SQUARE:
+			pressure = data.PRE_SQUARE;
+			break;
+		case PAD_CTRL_L1:
+			pressure = data.PRE_L1;
+			break;
+		case PAD_CTRL_R1:
+			pressure = data.PRE_R1;
+			break;
+		case PAD_CTRL_L2:
+			pressure = data.PRE_L2;
+			break;
+		case PAD_CTRL_R2:
+			pressure = data.PRE_R2;
+			break;
+		case PAD_CTRL_UP:
+			pressure = data.PRE_UP;
+			break;
+		case PAD_CTRL_DOWN:
+			pressure = data.PRE_DOWN;
+			break;
+		case PAD_CTRL_LEFT:
+			pressure = data.PRE_LEFT;
+			break;
+		case PAD_CTRL_RIGHT:
+			pressure = data.PRE_RIGHT;
+			break;
+		default:
+			return 0.0f;
+	}
+
+	if (pressure > 0) {
+		return pressure / 255.0f;
+	}
+
+	const uint16_t digital1 = data.button[PAD_BUTTON_OFFSET_DIGITAL1];
+	const uint16_t digital2 = data.button[PAD_BUTTON_OFFSET_DIGITAL2];
+	if ((p_button & digital2) != 0 || (p_button & digital1) != 0) {
+		return 1.0f;
 	}
 #endif
 	return 0.0f;
@@ -65,9 +114,10 @@ float PS3Pad::get_pressure(int p_button) const {
 
 void PS3Pad::set_rumble(float p_weak, float p_strong) {
 #ifdef PS3_ENABLED
-	const uint8_t large = (uint8_t)CLAMP(p_strong * 255.0f, 0.0f, 255.0f);
-	const uint8_t small = (uint8_t)CLAMP(p_weak * 255.0f, 0.0f, 255.0f);
-	padSetActDirect(port, large, small);
+	padActParam act = {};
+	act.large_motor = (uint8_t)CLAMP(p_strong * 255.0f, 0.0f, 255.0f);
+	act.small_motor = p_weak > 0.0f ? 1 : 0;
+	ioPadSetActDirect(port, &act);
 #endif
 }
 

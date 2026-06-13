@@ -36,6 +36,7 @@ class EditorExportPlatformPS3 : public EditorExportPlatform {
 	GDCLASS(EditorExportPlatformPS3, EditorExportPlatform);
 
 	Ref<ImageTexture> logo;
+	Ref<ImageTexture> run_icon;
 
 	String _get_template_name(bool p_debug) const {
 		return String("ps3_") + (p_debug ? "debug" : "release") + ".ppc64";
@@ -46,6 +47,8 @@ class EditorExportPlatformPS3 : public EditorExportPlatform {
 	String _get_script_path(const String &p_script_name) const;
 	Error _run_python_script(const String &p_script, const List<String> &p_args, String *r_output = nullptr) const;
 	Error _generate_pkg(const String &p_game_dir, const String &p_title_id, const String &p_content_id, const String &p_version, const String &p_title, String *r_pkg_path) const;
+	Error _write_icon0(const String &p_game_dir) const;
+	Error _deploy_to_emulator(const Ref<EditorExportPreset> &p_preset, const String &p_game_dir, const String &p_title_id) const;
 
 public:
 	virtual String get_name() const override;
@@ -59,6 +62,12 @@ public:
 	virtual List<String> get_binary_extensions(const Ref<EditorExportPreset> &p_preset) const override;
 	virtual Error export_project(const Ref<EditorExportPreset> &p_preset, bool p_debug, const String &p_path, BitField<EditorExportPlatform::DebugFlags> p_flags = 0) override;
 	virtual Ref<Texture2D> get_logo() const override;
+	virtual Ref<Texture2D> get_run_icon() const override;
+
+	virtual int get_options_count() const override;
+	virtual String get_option_label(int p_index) const override;
+	virtual String get_option_tooltip(int p_index) const override;
+	virtual Error run(const Ref<EditorExportPreset> &p_preset, int p_device, BitField<EditorExportPlatform::DebugFlags> p_debug_flags) override;
 
 	virtual void get_platform_features(List<String> *r_features) const override {
 		r_features->push_back("ps3");

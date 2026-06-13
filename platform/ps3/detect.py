@@ -21,6 +21,17 @@ def _get_psl1ght():
     return os.environ.get("PSL1GHT", _get_ps3dev())
 
 
+def _find_lv2_ld(ps3dev):
+    candidates = [
+        os.path.join(ps3dev, "ppu", "lib", "lv2.ld"),
+        os.path.join(ps3dev, "ppu", "powerpc64-ps3-elf", "lib", "lv2.ld"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return ""
+
+
 def can_build():
     ps3dev = _get_ps3dev()
     psl1ght = _get_psl1ght()
@@ -38,7 +49,14 @@ def can_build():
         print_error("ppu-gcc not found. PS3 platform disabled.")
         return False
 
-    if not os.path.isfile(os.path.join(psl1ght, "ppu", "lib", "lv2.ld")):
+    if os.system("ppu-gcc --version 2>/dev/null | head -1 | grep -qE 'GCC\\) [0-8]\\.'") == 0:
+        print_error(
+            "ppu-gcc is older than GCC 9. Blazium requires a modern PS3 toolchain (gcc-9.5+). "
+            "Build ps3toolchain from the Blazium fork — do not downgrade engine C++ standards."
+        )
+        return False
+
+    if not _find_lv2_ld(psl1ght):
         print_error("PSL1GHT lv2.ld not found. PS3 platform disabled.")
         return False
 
@@ -50,13 +68,11 @@ def can_build():
 
 
 def get_opts():
-    from SCons.Variables import BoolVariable, EnumVariable
+    from SCons.Variables import BoolVariable
 
     return [
         BoolVariable("norsx", "Use NoRSX software framebuffer", True),
         BoolVariable("rsx", "Enable RSX/GCM hardware renderer (experimental)", False),
-        EnumVariable("debug_symbols", "Add debugging symbols to release builds", "yes", ("yes", "no", "full")),
-        BoolVariable("separate_debug_symbols", "Create a separate file containing debugging symbols", False),
     ]
 
 
@@ -127,7 +143,9 @@ def configure(env: "SConsEnvironment"):
     env.Append(
         CPPPATH=[
             os.path.join(psl1ght, "ppu", "include"),
+            os.path.join(ps3dev, "ppu", "powerpc64-ps3-elf", "include"),
             os.path.join(portlibs, "include"),
+            os.path.join(portlibs, "include", "freetype2"),
         ]
     )
     env.Append(
@@ -155,18 +173,25 @@ def configure(env: "SConsEnvironment"):
     env.Append(LIBS=["sysbase", "c", "rt", "lv2", "pad", "sysutil", "sysmodule"])
 
     norsx_lib = os.path.join(portlibs, "lib", "libnorsx.a")
+    if not os.path.isfile(norsx_lib):
+        norsx_lib = os.path.join(portlibs, "lib", "libNoRSX.a")
     if env["norsx"] and os.path.isfile(norsx_lib):
         env.Append(CPPDEFINES=["NORSX_ENABLED"])
-        env.Append(LIBS=["norsx"])
+        env.Append(LIBS=["NoRSX"])
         print_info("PS3: NoRSX enabled from portlibs.")
     elif env["norsx"]:
         print_warning("PS3: NoRSX library not found; using software framebuffer stub.")
 
     ps3sound_lib = os.path.join(portlibs, "lib", "libps3sound.a")
+    if not os.path.isfile(ps3sound_lib):
+        ps3sound_lib = os.path.join(portlibs, "lib", "libspu_sound.a")
     if os.path.isfile(ps3sound_lib):
         env.Append(CPPDEFINES=["PS3SOUND_ENABLED"])
-        env.Append(LIBS=["ps3sound"])
-        print_info("PS3: ps3soundlib enabled from portlibs.")
+        if ps3sound_lib.endswith("libps3sound.a"):
+            env.Append(LIBS=["ps3sound"])
+        else:
+            env.Append(LIBS=["spu_sound"])
+        print_info("PS3: sound library enabled from portlibs.")
 
     if env["rsx"]:
         env.Append(CPPDEFINES=["RSX_ENABLED"])
@@ -178,11 +203,9 @@ def configure(env: "SConsEnvironment"):
 
     env.extra_suffix = ".ps3" + env.extra_suffix
 
-    if env["debug_symbols"] == "no":
-        env.Append(CCFLAGS=["-g0"])
-    elif env["debug_symbols"] == "full":
-        env.Append(CCFLAGS=["-g3"])
-    else:
+    if env["debug_symbols"]:
         env.Append(CCFLAGS=["-g1"])
+    else:
+        env.Append(CCFLAGS=["-g0"])
 
     print_info("PS3 platform configured (PS3DEV=%s, PSL1GHT=%s)" % (ps3dev, psl1ght))

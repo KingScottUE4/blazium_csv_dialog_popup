@@ -40,10 +40,12 @@
 
 #include <unistd.h>
 
-static OS_PS3 *singleton = nullptr;
+#ifdef PS3_ENABLED
+#include <sysutil/sysutil.h>
+#endif
 
 OS_PS3 *OS_PS3::get_singleton() {
-	return singleton;
+	return static_cast<OS_PS3 *>(OS::get_singleton());
 }
 
 String OS_PS3::_get_game_dir() const {
@@ -55,16 +57,10 @@ String OS_PS3::_get_game_dir() const {
 }
 
 OS_PS3::OS_PS3() {
-	if (singleton == nullptr) {
-		singleton = this;
-	}
 	AudioDriverManager::add_driver(&audio_driver);
 }
 
 OS_PS3::~OS_PS3() {
-	if (singleton == this) {
-		singleton = nullptr;
-	}
 }
 
 void OS_PS3::initialize() {
@@ -96,9 +92,15 @@ void OS_PS3::finalize() {
 }
 
 bool OS_PS3::main_loop_iterate() {
+#ifdef PS3_ENABLED
+	sysUtilCheckCallback();
+#endif
+
 	if (joypad) {
 		joypad->process();
 	}
+
+	audio_driver.mix_audio();
 
 	DisplayServer::get_singleton()->process_events();
 
@@ -116,10 +118,6 @@ void OS_PS3::initialize_joypads() {
 	if (!joypad) {
 		joypad = memnew(JoypadPS3);
 	}
-}
-
-void OS_PS3::set_joy_usage_setting(bool p_use_all) {
-	
 }
 
 String OS_PS3::get_name() const {

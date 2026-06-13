@@ -30,9 +30,11 @@
 #include "export_plugin.h"
 
 #include "logo_svg.gen.h"
+#include "run_icon_svg.gen.h"
 
 #include "core/config/project_settings.h"
 #include "editor/export/editor_export.h"
+#include "editor/editor_paths.h"
 #include "scene/resources/image_texture.h"
 
 #include "modules/svg/image_loader_svg.h"
@@ -48,9 +50,15 @@ String EditorExportPlatformPS3::get_os_name() const {
 
 void EditorExportPlatformPS3::get_preset_features(const Ref<EditorExportPreset> &p_preset, List<String> *r_features) const {
 	r_features->push_back("ppc64");
+	r_features->push_back("gl_compatibility");
 }
 
 bool EditorExportPlatformPS3::has_valid_project_configuration(const Ref<EditorExportPreset> &p_preset, String &r_error) const {
+	const String rendering_method = GLOBAL_GET("rendering/renderer/rendering_method");
+	if (rendering_method == "forward_plus" || rendering_method == "mobile") {
+		r_error = TTR("PS3 export requires Compatibility rendering. Set rendering/renderer/rendering_method to \"gl_compatibility\" in Project Settings.");
+		return false;
+	}
 	return true;
 }
 
@@ -181,6 +189,51 @@ Error EditorExportPlatformPS3::_write_param_sfo(const String &p_path, const Stri
 	return _run_python_script(script_path, args);
 }
 
+Error EditorExportPlatformPS3::_write_icon0(const String &p_game_dir) const {
+	const String icon_path = GLOBAL_GET("application/config/icon");
+	if (icon_path.is_empty()) {
+		return OK;
+	}
+
+	Ref<Image> icon;
+	if (icon_path.ends_with(".svg")) {
+		Ref<FileAccess> f = FileAccess::open(icon_path, FileAccess::READ);
+		ERR_FAIL_COND_V(f.is_null(), ERR_FILE_NOT_FOUND);
+		icon.instantiate();
+		bool upsample = false;
+		Error svg_err = ImageLoaderSVG::create_image_from_string(icon, f->get_as_text(), 1.0, upsample, false);
+		ERR_FAIL_COND_V(svg_err != OK, svg_err);
+	} else {
+		icon = Image::load_from_file(icon_path);
+	}
+	ERR_FAIL_COND_V(icon.is_null(), ERR_FILE_NOT_FOUND);
+
+	icon->resize(320, 176, Image::INTERPOLATE_LANCZOS);
+	const String dst = p_game_dir.path_join("ICON0.PNG");
+	return icon->save_png(dst);
+}
+
+Error EditorExportPlatformPS3::_deploy_to_emulator(const Ref<EditorExportPreset> &p_preset, const String &p_game_dir, const String &p_title_id) const {
+	String emulator_root = p_preset->get("application/emulator_root");
+	if (emulator_root.is_empty()) {
+		return OK;
+	}
+
+	const String script_path = _get_script_path("deploy_rpcs3.py");
+	ERR_FAIL_COND_V_MSG(!FileAccess::exists(script_path), ERR_FILE_NOT_FOUND, vformat("Missing script: %s", script_path));
+
+	List<String> args;
+	args.push_back("--export-dir");
+	args.push_back(p_game_dir.get_base_dir());
+	args.push_back("--title-id");
+	args.push_back(p_title_id);
+	args.push_back("--emulator-root");
+	args.push_back(emulator_root);
+
+	String output;
+	return _run_python_script(script_path, args, &output);
+}
+
 Error EditorExportPlatformPS3::_generate_pkg(const String &p_game_dir, const String &p_title_id, const String &p_content_id, const String &p_version, const String &p_title, String *r_pkg_path) const {
 	const String pkg_path = p_game_dir.get_base_dir().path_join(p_title_id + ".pkg");
 	List<String> args;
@@ -245,6 +298,9 @@ Error EditorExportPlatformPS3::export_project(const Ref<EditorExportPreset> &p_p
 	err = _write_param_sfo(game_dir.path_join("PARAM.SFO"), title, title_id, version, content_id);
 	ERR_FAIL_COND_V(err != OK, err);
 
+	err = _write_icon0(game_dir);
+	ERR_FAIL_COND_V(err != OK, err);
+
 	if (p_preset->get("application/generate_pkg")) {
 		String pkg_path;
 		err = _generate_pkg(game_dir, title_id, content_id, version, title, &pkg_path);
@@ -254,14 +310,8 @@ Error EditorExportPlatformPS3::export_project(const Ref<EditorExportPreset> &p_p
 
 	String emulator_root = p_preset->get("application/emulator_root");
 	if (!emulator_root.is_empty()) {
-		String rpcs3_game = emulator_root.path_join("dev_hdd0").path_join("game").path_join(title_id);
-		Ref<DirAccess> eda = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
-		if (eda->make_dir_recursive(rpcs3_game.path_join("USRDIR")) == OK) {
-			eda->copy(game_dir.path_join("EBOOT.BIN"), rpcs3_game.path_join("EBOOT.BIN"));
-			eda->copy(game_dir.path_join("PARAM.SFO"), rpcs3_game.path_join("PARAM.SFO"));
-			eda->copy(game_dir.path_join("EBOOT.pck"), rpcs3_game.path_join("EBOOT.pck"));
-			eda->copy(pck_path, rpcs3_game.path_join("USRDIR").path_join("game.pck"));
-		}
+		err = _deploy_to_emulator(p_preset, game_dir, title_id);
+		ERR_FAIL_COND_V(err != OK, err);
 	}
 
 	add_message(EXPORT_MESSAGE_INFO, TTR("Export"), vformat(TTR("PS3 export written to %s"), game_dir));
@@ -272,10 +322,50 @@ Ref<Texture2D> EditorExportPlatformPS3::get_logo() const {
 	return logo;
 }
 
+Ref<Texture2D> EditorExportPlatformPS3::get_run_icon() const {
+	return run_icon;
+}
+
+int EditorExportPlatformPS3::get_options_count() const {
+	return 1;
+}
+
+String EditorExportPlatformPS3::get_option_label(int p_index) const {
+	return TTR("Deploy to RPCS3");
+}
+
+String EditorExportPlatformPS3::get_option_tooltip(int p_index) const {
+	return TTR("Export the project and copy it to the configured RPCS3 emulator folder.");
+}
+
+Error EditorExportPlatformPS3::run(const Ref<EditorExportPreset> &p_preset, int p_device, BitField<EditorExportPlatform::DebugFlags> p_debug_flags) {
+	ERR_FAIL_COND_V(p_device != 0, ERR_UNAVAILABLE);
+
+	const String export_path = p_preset->get_export_path();
+	ERR_FAIL_COND_V_MSG(export_path.is_empty(), ERR_UNAVAILABLE, "Export path is not configured.");
+
+	Error err = export_project(p_preset, false, export_path, p_debug_flags);
+	ERR_FAIL_COND_V(err != OK, err);
+
+	String title_id = p_preset->get("application/title_id");
+	if (title_id.is_empty()) {
+		title_id = "BLAZ00001";
+	}
+
+	const String game_dir = export_path.get_basename().path_join(title_id);
+	err = _deploy_to_emulator(p_preset, game_dir, title_id);
+	return err;
+}
+
 EditorExportPlatformPS3::EditorExportPlatformPS3() {
 	Ref<Image> img;
 	img.instantiate();
 	bool upsample = false;
 	ImageLoaderSVG::create_image_from_string(img, _ps3_logo_svg, EDSCALE, upsample, false);
 	logo = ImageTexture::create_from_image(img);
+
+	Ref<Image> run_img;
+	run_img.instantiate();
+	ImageLoaderSVG::create_image_from_string(run_img, _ps3_run_icon_svg, EDSCALE, upsample, false);
+	run_icon = ImageTexture::create_from_image(run_img);
 }

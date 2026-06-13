@@ -36,8 +36,7 @@
 
 #include <ppu-types.h>
 #include <sys/process.h>
-#include <sysmodule.h>
-#include <lv2.h>
+#include <sysmodule/sysmodule.h>
 
 #undef Thread
 #undef Semaphore

@@ -36,7 +36,7 @@
 #include "main/main.h"
 #include "servers/display_server.h"
 
-#include <sysmodule.h>
+#include <sysmodule/sysmodule.h>
 #include <unistd.h>
 
 static bool ps3_modules_loaded = false;
@@ -47,15 +47,13 @@ static void ps3_load_modules() {
 	}
 	sysModuleLoad(SYSMODULE_FS);
 	sysModuleLoad(SYSMODULE_IO);
-	sysModuleLoad(SYSMODULE_PAD);
 	sysModuleLoad(SYSMODULE_SYSUTIL);
 	sysModuleLoad(SYSMODULE_AUDIO);
 	ps3_modules_loaded = true;
 }
 
-static String _find_main_pack() {
-	const String exec_path = OS_PS3::get_singleton()->get_executable_path();
-	const String game_dir = exec_path.get_base_dir();
+static String _find_main_pack(const String &p_exec_path) {
+	const String game_dir = p_exec_path.get_base_dir();
 	const String usrdir_pack = game_dir.path_join("USRDIR").path_join("game.pck");
 	if (FileAccess::exists(usrdir_pack)) {
 		return usrdir_pack;
@@ -79,7 +77,7 @@ int main(int argc, char *argv[]) {
 		print_line(vformat("PS3: cwd %s", cwd));
 	}
 
-	const String main_pack = _find_main_pack();
+	const String main_pack = _find_main_pack(os.get_executable_path());
 	if (!main_pack.is_empty()) {
 		print_line(vformat("PS3: loading pack %s", main_pack));
 	}
@@ -87,13 +85,13 @@ int main(int argc, char *argv[]) {
 	LocalVector<CharString> arg_storage;
 	LocalVector<char *> new_argv;
 
-	arg_storage.push_back(String::utf8(argv[0]));
+	arg_storage.push_back(CharString(argv[0]));
 	if (!main_pack.is_empty()) {
-		arg_storage.push_back("--main-pack");
+		arg_storage.push_back(CharString("--main-pack"));
 		arg_storage.push_back(main_pack.utf8());
 	}
 	for (int i = 1; i < argc; i++) {
-		arg_storage.push_back(String::utf8(argv[i]));
+		arg_storage.push_back(CharString(argv[i]));
 	}
 
 	for (uint32_t i = 0; i < arg_storage.size(); i++) {
@@ -113,7 +111,7 @@ int main(int argc, char *argv[]) {
 	int ret = Main::start();
 	os.set_exit_code(ret);
 
-	while (sysProcessExit() == 0) {
+	while (true) {
 		if (!os.main_loop_iterate()) {
 			break;
 		}
