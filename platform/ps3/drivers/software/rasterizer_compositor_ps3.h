@@ -5,6 +5,27 @@
 /*                             BLAZIUM ENGINE                             */
 /*                          https://blazium.app                           */
 /**************************************************************************/
+/* Copyright (c) 2024-present Blazium Engine contributors.                */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #pragma once
 
@@ -26,6 +47,7 @@ private:
 	uint64_t frame = 1;
 	double delta = 0;
 	double time = 0;
+	bool blitted_this_frame = false;
 
 protected:
 	RasterizerCanvasPS3 canvas;
@@ -60,6 +82,7 @@ public:
 		frame++;
 		delta = frame_step;
 		time += frame_step;
+		blitted_this_frame = false;
 	}
 
 	void blit_render_targets_to_screen(int p_screen, const BlitToScreen *p_render_targets, int p_amount) override;

@@ -50,7 +50,7 @@ def _read_tail(path: Path, max_bytes: int = 512_000) -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
+def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Path | None) -> int:
     print("RPCS3 boot validation")
     print(f"Log: {log_path}")
     print(f"Wait: {wait_seconds}s (recommended first-run min-wait: {min_wait}s)")
@@ -112,6 +112,22 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
     print(f"  Booted from dev_hdd0 game path: {'yes' if boot_from_hdd0 else 'no'}")
     print("")
 
+    boot_log_text = ""
+    if boot_log_path and boot_log_path.is_file():
+        boot_log_text = boot_log_path.read_text(encoding="utf-8", errors="replace")
+        print(f"boot.log ({boot_log_path}):")
+        for line in boot_log_text.strip().splitlines()[-12:]:
+            print(f"  {line}")
+        print("")
+        for milestone in (
+            "boot_splash_presented",
+            "norsx_first_frame_presented",
+            "main_setup_end",
+            "first_main_loop_iterate",
+        ):
+            print(f"  boot.log {milestone}: {'yes' if milestone in boot_log_text else 'no'}")
+        print("")
+
     ok = llvm_recompiler and not invalid_ppu_enum and not invalid_enum_any and not boot_from_export
     if boot_ok:
         ok = ok and not missing_db_config
@@ -167,8 +183,14 @@ def main() -> int:
     )
     parser.add_argument("--wait", type=int, default=30, help="Seconds to wait for Boot successful")
     parser.add_argument("--min-wait", type=int, default=180, help="Recommended minimum session length for first run")
+    parser.add_argument(
+        "--boot-log",
+        type=Path,
+        default=Path(__file__).resolve().parents[4] / "ps3_emulator" / "dev_hdd0" / "game" / "BLAZ00001" / "USRDIR" / "boot.log",
+        help="Path to USRDIR/boot.log written by the game",
+    )
     args = parser.parse_args()
-    return validate(args.log, args.wait, args.min_wait)
+    return validate(args.log, args.wait, args.min_wait, args.boot_log)
 
 
 if __name__ == "__main__":

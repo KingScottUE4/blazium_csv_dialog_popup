@@ -99,19 +99,24 @@ void DisplayServerPS3::process_events() {
 }
 
 void DisplayServerPS3::swap_buffers() {
-	framebuffer.present();
+	NoRSXFramebuffer *fb = ps3_framebuffer_get_shared();
+	if (fb) {
+		fb->present();
+	}
 }
 
 DisplayServerPS3::DisplayServerPS3() {
 	native_menu = memnew(NativeMenu);
-	framebuffer.initialize();
-	framebuffer.clear(0xFF202040);
-	framebuffer.present();
+	NoRSXFramebuffer *fb = ps3_framebuffer_get_shared();
+	if (fb) {
+		fb->initialize();
+		fb->clear(NoRSXFramebuffer::SPLASH_COLOR);
+		fb->present();
+	}
 	Input::get_singleton()->set_event_dispatch_function(_dispatch_input_events);
 }
 
 DisplayServerPS3::~DisplayServerPS3() {
-	framebuffer.shutdown();
 	if (native_menu) {
 		memdelete(native_menu);
 		native_menu = nullptr;

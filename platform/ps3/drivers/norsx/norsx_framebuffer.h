@@ -29,12 +29,14 @@
 
 #pragma once
 
+#include "core/error/error_list.h"
 #include "core/templates/vector.h"
 
 class NoRSXFramebuffer {
 public:
 	static const int WIDTH = 1280;
 	static const int HEIGHT = 720;
+	static const uint32_t SPLASH_COLOR = 0xFF202040;
 
 private:
 	Vector<uint8_t> buffer;
@@ -49,3 +51,6 @@ public:
 	int get_stride() const { return WIDTH * 4; }
 	bool is_initialized() const { return initialized; }
 };
+
+NoRSXFramebuffer *ps3_framebuffer_get_shared();
+void ps3_framebuffer_shutdown_shared();

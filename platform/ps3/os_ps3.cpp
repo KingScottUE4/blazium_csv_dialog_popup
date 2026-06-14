@@ -147,7 +147,7 @@ String OS_PS3::get_version_alias() const {
 }
 
 String OS_PS3::get_executable_path() const {
-	// LV2 has no /proc/self/exe; homebrew runs from EBOOT.BIN under the game directory.
+	
 	return _get_game_dir().path_join("EBOOT.BIN");
 }
 

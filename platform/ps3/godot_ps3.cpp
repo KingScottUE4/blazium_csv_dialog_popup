@@ -28,7 +28,9 @@
 /**************************************************************************/
 
 #include "os_ps3.h"
+#include "platform/ps3/ps3_boot_log.h"
 #include "platform/ps3/ps3_boot_splash.h"
+#include "drivers/norsx/norsx_framebuffer.h"
 #include "platform/ps3/ps3_wrapper.h"
 
 #include "core/config/engine.h"
@@ -51,8 +53,11 @@ static void ps3_load_modules() {
 	sysModuleLoad(SYSMODULE_SYSUTIL);
 	sysModuleLoad(SYSMODULE_AUDIO);
 	sysModuleLoad(SYSMODULE_GCM_SYS);
+#ifdef SYSMODULE_RSX
+	sysModuleLoad(SYSMODULE_RSX);
+#endif
 	ps3_modules_loaded = true;
-	print_line("PS3: modules loaded");
+	ps3_boot_log("modules_loaded");
 }
 
 static int64_t _pack_file_size(const String &p_path) {
@@ -87,15 +92,15 @@ int main(int argc, char *argv[]) {
 
 	char cwd[1024];
 	if (getcwd(cwd, sizeof(cwd))) {
-		print_line(vformat("PS3: cwd %s", cwd));
+		ps3_boot_logf("cwd", String(cwd));
 	}
 
 	const String main_pack = _find_main_pack(os.get_executable_path());
 	if (!main_pack.is_empty()) {
 		const int64_t pack_size = _pack_file_size(main_pack);
-		print_line(vformat("PS3: loading pack %s (%d bytes)", main_pack, pack_size));
+		ps3_boot_logf("loading_pack", vformat("%s (%d bytes)", main_pack, pack_size));
 	} else {
-		print_line("PS3: warning: no main pack found");
+		ps3_boot_log("warning_no_main_pack");
 	}
 
 	LocalVector<CharString> arg_storage;
@@ -114,17 +119,18 @@ int main(int argc, char *argv[]) {
 		new_argv.push_back(arg_storage[i].ptrw());
 	}
 
-	print_line("PS3: entering Main::setup (may take several minutes on RPCS3 interpreter)");
-	print_line("PS3: Main::setup begin");
+	ps3_boot_splash_set_setup_in_progress(true);
+	ps3_boot_log("main_setup_begin");
 	Error err = Main::setup(new_argv[0], new_argv.size() - 1, &new_argv[1]);
+	ps3_boot_splash_set_setup_in_progress(false);
 	if (err != OK) {
-		print_line(vformat("PS3: Main::setup failed (error %d)", err));
+		ps3_boot_logf("main_setup_failed", vformat("error %d", err));
 		if (err == ERR_HELP) {
 			return EXIT_SUCCESS;
 		}
 		return EXIT_FAILURE;
 	}
-	print_line("PS3: Main::setup end");
+	ps3_boot_log("main_setup_end");
 
 	if (DisplayServer::get_singleton()) {
 		DisplayServer::get_singleton()->swap_buffers();
@@ -132,7 +138,7 @@ int main(int argc, char *argv[]) {
 
 	ResourceLoader::set_abort_on_missing_resources(false);
 
-	print_line("PS3: Main::start");
+	ps3_boot_log("main_start");
 	int ret = Main::start();
 	os.set_exit_code(ret);
 
@@ -143,12 +149,13 @@ int main(int argc, char *argv[]) {
 		}
 		frame_count++;
 		if (frame_count == 1) {
-			print_line("PS3: first main_loop_iterate");
+			ps3_boot_log("first_main_loop_iterate");
 		} else if (frame_count % 60 == 0) {
-			print_line(vformat("PS3: frame %d", frame_count));
+			ps3_boot_logf("frame", vformat("%d", frame_count));
 		}
 	}
 
 	Main::cleanup();
+	ps3_framebuffer_shutdown_shared();
 	return os.get_exit_code();
 }

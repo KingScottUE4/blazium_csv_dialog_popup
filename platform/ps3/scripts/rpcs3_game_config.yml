@@ -6,3 +6,5 @@ Core:
   Debug Console Mode: true
 Miscellaneous:
   Show PPU compilation hint: false
+Video:
+  Write Color Buffers: true
