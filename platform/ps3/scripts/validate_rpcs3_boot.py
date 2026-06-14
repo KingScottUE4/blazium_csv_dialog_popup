@@ -9,10 +9,42 @@ import time
 from pathlib import Path
 
 
-def _read_tail(path: Path, max_bytes: int = 256_000) -> str:
+def _read_bytes(path: Path) -> bytes:
+    sources = [path]
+    copy_path = path.with_name(path.stem + "_validate_read" + path.suffix)
+    try:
+        import shutil
+        shutil.copy2(path, copy_path)
+        sources.append(copy_path)
+    except OSError:
+        pass
+
+    for source in sources:
+        for _ in range(5):
+            try:
+                return source.read_bytes()
+            except PermissionError:
+                time.sleep(0.5)
+    return b""
+
+
+def _read_head(path: Path, max_bytes: int = 512_000) -> str:
     if not path.is_file():
         return ""
-    data = path.read_bytes()
+    data = _read_bytes(path)
+    if not data:
+        return ""
+    if len(data) > max_bytes:
+        data = data[:max_bytes]
+    return data.decode("utf-8", errors="replace")
+
+
+def _read_tail(path: Path, max_bytes: int = 512_000) -> str:
+    if not path.is_file():
+        return ""
+    data = _read_bytes(path)
+    if not data:
+        return ""
     if len(data) > max_bytes:
         data = data[-max_bytes:]
     return data.decode("utf-8", errors="replace")
@@ -47,52 +79,81 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
             break
         time.sleep(2)
 
-    text = _read_tail(log_path)
-    boot_ok = "GUI: Boot successful" in text
-    llvm_recompiler = "LLVM Recompiler" in text
-    llvm_precompile = "LLVM Precompilation: true" in text
-    interpreter = "Interpreter (static)" in text
-    jump_warnings = text.count("Jump table not found")
-    empty_title_id = "empty title_id" in text or "title_id=''" in text
-    missing_db_config = "Cannot retrieve database config for empty title_id" in text
+    text_tail = _read_tail(log_path)
+    text_head = _read_head(log_path)
+    text = text_head + "\n" + text_tail
+    boot_ok = "GUI: Boot successful" in text_tail
+    llvm_recompiler = "PPU Decoder: Recompiler (LLVM)" in text_head
+    llvm_compiling = "PPU: LLVM: Compiling" in text_tail
+    invalid_ppu_enum = "try_to_enum_value('LLVM Recompiler', 'PPU Decoder'): invalid enum" in text
+    invalid_enum_any = "invalid enum or integer" in text and "PPU Decoder" in text
+    llvm_precompile = "LLVM Precompilation: true" in text_head
+    interpreter = "PPU Decoder: Interpreter (static)" in text_head
+    jump_warnings = text_tail.count("Jump table not found")
     boot_from_export = "exported_game/ps3_export" in text or "ps3_export/BLAZ00001" in text
+    boot_game_line = next((line for line in text_head.splitlines() if "Emulator::BootGame:" in line), "")
+    empty_title_id = "title_id=''" in boot_game_line or "title_id=\"\"" in boot_game_line
+    missing_db_config = "Cannot retrieve database config for empty title_id" in text_head
     title_id_ok = "title_id='BLAZ00001'" in text or 'title_id="BLAZ00001"' in text
+    boot_from_hdd0 = "dev_hdd0/game/BLAZ00001" in boot_game_line
 
     print("RPCS3.log results:")
     print(f"  Boot successful: {'yes' if boot_ok else 'no'}")
-    print(f"  PPU LLVM Recompiler: {'yes' if llvm_recompiler else 'no'}")
+    print(f"  PPU Recompiler (LLVM): {'yes' if llvm_recompiler else 'no'}")
+    print(f"  LLVM compile in progress: {'yes' if llvm_compiling else 'no'}")
     print(f"  Interpreter (static): {'yes (slow fallback)' if interpreter else 'no'}")
+    print(f"  Invalid PPU Decoder enum: {'yes (bad)' if invalid_ppu_enum or invalid_enum_any else 'no (good)'}")
     print(f"  LLVM precompilation enabled: {'yes (optional)' if llvm_precompile else 'no (good)'}")
     print(f"  Jump table warnings: {jump_warnings}")
     print(f"  TITLE_ID BLAZ00001 in log: {'yes' if title_id_ok else 'no'}")
     print(f"  Empty title_id detected: {'yes (bad)' if empty_title_id else 'no (good)'}")
     print(f"  Missing database config: {'yes (bad)' if missing_db_config else 'no (good)'}")
     print(f"  Booted from export folder: {'yes (bad)' if boot_from_export else 'no (good)'}")
+    print(f"  Booted from dev_hdd0 game path: {'yes' if boot_from_hdd0 else 'no'}")
     print("")
 
-    ok = boot_ok and not missing_db_config and not boot_from_export
-    if interpreter and not llvm_recompiler:
+    ok = llvm_recompiler and not invalid_ppu_enum and not invalid_enum_any and not boot_from_export
+    if boot_ok:
+        ok = ok and not missing_db_config
+    elif llvm_compiling and llvm_recompiler:
+        print("INFO: PPU LLVM cache still building — first boot on large templates can take 10-20 minutes.")
+    if invalid_ppu_enum or invalid_enum_any:
+        print("FAIL: PPU Decoder config rejected by RPCS3 (use Recompiler (LLVM), not LLVM Recompiler).")
+        print("      Redeploy via deploy_rpcs3.py.")
+        ok = False
+    if interpreter and not llvm_recompiler and title_id_ok:
+        print("FAIL: Interpreter (static) active for game-list launch — expect 8+ minute init.")
+        print("      Redeploy rpcs3_game_config.yml (Recompiler (LLVM)) via deploy_rpcs3.py.")
+        ok = False
+    elif interpreter and not llvm_recompiler:
         print("WARN: Interpreter (static) is active — expect 8+ minute init on large templates.")
-        print("      Redeploy rpcs3_game_config.yml (LLVM Recompiler) via deploy_rpcs3.py.")
+        print("      Redeploy rpcs3_game_config.yml (Recompiler (LLVM)) via deploy_rpcs3.py.")
     if jump_warnings > 50 and interpreter:
         print(f"WARN: {jump_warnings} jump-table warnings under interpreter mode.")
     if boot_from_export:
         print("FAIL: Booted export folder. Use launch_rpcs3.py or RPCS3 game list.")
         ok = False
-    if empty_title_id and not title_id_ok:
+    if empty_title_id and boot_from_hdd0:
+        print("WARN: TITLE_ID empty in BootGame line — PARAM.SFO may be unread; per-folder config.yml still applies.")
+    elif empty_title_id and not title_id_ok:
         print("WARN: TITLE_ID not applied — launch dev_hdd0/game/BLAZ00001, not export folder.")
     if wait_seconds < min_wait:
         print(f"WARN: --wait {wait_seconds}s is below recommended --min-wait {min_wait}s for first LLVM boot.")
 
     if ok:
-        print("PASS: RPCS3 boot looks healthy. Check TTY tab for PS3 milestones and visible UI.")
+        if boot_ok:
+            print("PASS: RPCS3 boot looks healthy. Check TTY tab for PS3 milestones and visible UI.")
+        else:
+            print("PASS: RPCS3 config and LLVM path look correct. Wait for LLVM compile to finish, then check TTY.")
         return 0
 
     print("FAIL: RPCS3 boot validation failed.")
-    if not boot_ok:
+    if not boot_ok and not llvm_compiling:
         print("  - Wait longer or confirm RPCS3 started the game.")
     if missing_db_config or boot_from_export:
         print("  - Deploy and launch via launch_rpcs3.py / game list so TITLE_ID config applies.")
+    if invalid_ppu_enum or invalid_enum_any:
+        print("  - Fix PPU Decoder to Recompiler (LLVM) in rpcs3_game_config.yml and redeploy.")
     return 1
 
 

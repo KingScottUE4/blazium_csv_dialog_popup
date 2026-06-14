@@ -41,6 +41,7 @@ class PS3EditorPlugin : public EditorPlugin {
 	void _validate_toolchain();
 	void _install_templates();
 	void _deploy_rpcs3();
+	void _launch_rpcs3();
 	void _open_rpcs3_data_folder();
 
 public:

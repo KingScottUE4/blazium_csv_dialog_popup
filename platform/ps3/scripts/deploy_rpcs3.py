@@ -11,6 +11,9 @@ import time
 from pathlib import Path
 
 
+VALID_PPU_DECODERS = frozenset({"Recompiler (LLVM)", "Interpreter (static)"})
+
+
 def _load_game_config(config_src: Path) -> str:
     lines = []
     for line in config_src.read_text(encoding="utf-8").splitlines():
@@ -18,6 +21,24 @@ def _load_game_config(config_src: Path) -> str:
             continue
         lines.append(line)
     return "\n".join(lines).strip()
+
+
+def _validate_ppu_decoder(config_src: Path) -> str | None:
+    for line in config_src.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("PPU Decoder:"):
+            continue
+        value = stripped.split(":", 1)[1].strip()
+        if value not in VALID_PPU_DECODERS:
+            print(
+                f"error: invalid PPU Decoder value {value!r}; "
+                f"expected one of {sorted(VALID_PPU_DECODERS)}",
+                file=sys.stderr,
+            )
+            return None
+        return value
+    print("error: rpcs3_game_config.yml missing PPU Decoder setting", file=sys.stderr)
+    return None
 
 
 def _update_config_database(emulator_root: Path, title_id: str, config_yaml: str) -> None:
@@ -53,7 +74,12 @@ def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
     shutil.copytree(src, dst)
 
     config_src = Path(__file__).resolve().parent / "rpcs3_game_config.yml"
+    ppu_decoder = None
     if config_src.is_file():
+        ppu_decoder = _validate_ppu_decoder(config_src)
+        if ppu_decoder is None:
+            return 1
+
         config_dst = emulator_root / "config" / f"{title_id}.yml"
         config_dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(config_src, config_dst)
@@ -66,7 +92,9 @@ def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
     print(f"Deployed {src} -> {dst}")
     print(f"Launch {title_id} from the RPCS3 game list (not Boot Game on the export folder).")
     print("Or run: python launch_rpcs3.py --emulator-root ... --title-id ...")
-    print("Use PPU LLVM Recompiler and Debug Console Mode for TTY output.")
+    if ppu_decoder:
+        print(f"Expected log line: PPU Decoder: {ppu_decoder}")
+    print("Use Debug Console Mode for TTY output (PS3 milestones).")
     print(f"Validate: python validate_rpcs3_boot.py (see also validate_ps3_export.py)")
     return 0
 

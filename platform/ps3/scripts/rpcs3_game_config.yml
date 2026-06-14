@@ -1,7 +1,7 @@
 # RPCS3 per-game overrides for Blazium PS3 homebrew (dev_hdd0 launches).
-# PPU LLVM Recompiler is required for practical boot times on large templates.
+# PPU Recompiler (LLVM) is required for practical boot times on large templates.
 Core:
-  PPU Decoder: LLVM Recompiler
+  PPU Decoder: Recompiler (LLVM)
   LLVM Precompilation: false
   Debug Console Mode: true
 Miscellaneous:

@@ -49,6 +49,7 @@ PS3EditorPlugin::PS3EditorPlugin() {
 	add_tool_menu_item("PS3: Validate Toolchain", callable_mp(this, &PS3EditorPlugin::_validate_toolchain));
 	add_tool_menu_item("PS3: Install Templates", callable_mp(this, &PS3EditorPlugin::_install_templates));
 	add_tool_menu_item("PS3: Deploy to RPCS3", callable_mp(this, &PS3EditorPlugin::_deploy_rpcs3));
+	add_tool_menu_item("PS3: Launch in RPCS3", callable_mp(this, &PS3EditorPlugin::_launch_rpcs3));
 	add_tool_menu_item("PS3: Open RPCS3 Data Folder", callable_mp(this, &PS3EditorPlugin::_open_rpcs3_data_folder));
 }
 
@@ -181,6 +182,34 @@ void PS3EditorPlugin::_deploy_rpcs3() {
 	}
 
 	EditorNode::get_singleton()->show_warning(output, TTR("PS3 Deploy"));
+}
+
+void PS3EditorPlugin::_launch_rpcs3() {
+	const String title_id = _get_ps3_title_id();
+	const String emulator_root = _get_emulator_root();
+	const String script_path = _get_scripts_root().path_join("launch_rpcs3.py");
+
+	if (!FileAccess::exists(script_path)) {
+		EditorNode::get_singleton()->show_warning(vformat(TTR("Missing script: %s"), script_path));
+		return;
+	}
+
+	List<String> args;
+	args.push_back(script_path);
+	args.push_back("--emulator-root");
+	args.push_back(emulator_root);
+	args.push_back("--title-id");
+	args.push_back(title_id);
+
+	String output;
+	int exit_code = 0;
+	Error err = OS::get_singleton()->execute("py", args, &output, &exit_code, true);
+	if (err != OK || exit_code != 0) {
+		EditorNode::get_singleton()->show_warning(vformat(TTR("RPCS3 launch failed.\n%s\n\nLaunch %s from the RPCS3 game list (not Boot Game on the export folder)."), output, title_id));
+		return;
+	}
+
+	EditorNode::get_singleton()->show_warning(output, TTR("PS3 Launch"));
 }
 
 void PS3EditorPlugin::_open_rpcs3_data_folder() {

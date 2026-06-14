@@ -21,6 +21,7 @@ def _find_rpcs3_exe(explicit: str | None) -> Path | None:
 
     candidates = [
         Path(os.environ.get("RPCS3_EXE", "")),
+        Path(__file__).resolve().parents[4] / "ps3_emulator" / "rpcs3.exe",
         Path(r"C:\Program Files\RPCS3\rpcs3.exe"),
         Path(r"C:\Program Files (x86)\RPCS3\rpcs3.exe"),
         Path.home() / "AppData" / "Local" / "RPCS3" / "rpcs3.exe",
