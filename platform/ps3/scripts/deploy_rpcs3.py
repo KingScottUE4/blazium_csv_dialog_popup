@@ -22,8 +22,15 @@ def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
         shutil.rmtree(dst)
     shutil.copytree(src, dst)
 
+    config_src = Path(__file__).resolve().parent / "rpcs3_game_config.yml"
+    if config_src.is_file():
+        config_dst = emulator_root / "config" / f"{title_id}.yml"
+        config_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(config_src, config_dst)
+        print(f"Installed RPCS3 config {config_dst}")
+
     print(f"Deployed {src} -> {dst}")
-    print("Launch RPCS3 and enable Debug Console Mode for TTY output.")
+    print("Launch RPCS3 with PPU Interpreter (static) and Debug Console Mode for TTY output.")
     return 0
 
 

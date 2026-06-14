@@ -1,0 +1,8 @@
+# RPCS3 per-game overrides for Blazium PS3 homebrew (dev_hdd0 launches).
+# Use PPU Interpreter to avoid LLVM jump-table JIT stalls on large templates.
+Core:
+  PPU Decoder: Interpreter (static)
+  LLVM Precompilation: false
+  Debug Console Mode: true
+Miscellaneous:
+  Show PPU compilation hint: false

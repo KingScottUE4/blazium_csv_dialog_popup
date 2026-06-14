@@ -93,7 +93,20 @@ void DisplayServerPS3::process_events() {
 
 void DisplayServerPS3::swap_buffers() {
 	if (framebuffer.is_initialized()) {
-		const uint32_t color = 0xFF000040 | ((frame_counter & 0xFF) << 8);
+		const uint8_t phase = frame_counter % 3;
+		uint32_t color = 0xFF000000;
+		const uint8_t channel = 0xFF;
+		switch (phase) {
+			case 0:
+				color = 0xFF000000 | channel;
+				break;
+			case 1:
+				color = 0xFF000000 | (channel << 8);
+				break;
+			default:
+				color = 0xFF000000 | (channel << 16);
+				break;
+		}
 		framebuffer.clear(color);
 		frame_counter++;
 	}

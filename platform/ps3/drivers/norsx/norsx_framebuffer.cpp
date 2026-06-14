@@ -88,6 +88,11 @@ void NoRSXFramebuffer::present() {
 		const size_t copy_bytes = MIN((size_t)buffer.size(), (size_t)g_norsx->buffer_size);
 		memcpy(g_norsx->buffer, buffer.ptr(), copy_bytes);
 		g_norsx->Flip();
+		static bool logged_first_present = false;
+		if (!logged_first_present) {
+			print_line("PS3: NoRSX first frame presented.");
+			logged_first_present = true;
+		}
 	}
 #endif
 }
