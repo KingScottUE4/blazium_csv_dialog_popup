@@ -12,7 +12,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from rpcs3_llvm_progress import format_llvm_status, parse_llvm_progress
+from rpcs3_llvm_progress import HangMode, format_hang_advice, format_llvm_status, parse_llvm_progress
 
 
 def _read_bytes(path: Path) -> bytes:
@@ -124,6 +124,10 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     for line in format_llvm_status(llvm_progress):
         print(line)
     print("")
+    for line in format_hang_advice(llvm_progress, llvm_recompiler):
+        print(line)
+    if format_hang_advice(llvm_progress, llvm_recompiler):
+        print("")
 
     boot_log_text = ""
     if boot_log_path and boot_log_path.is_file():
@@ -143,13 +147,15 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
         print("")
 
     ok = llvm_recompiler and not invalid_ppu_enum and not invalid_enum_any and not boot_from_export
+    if llvm_progress.per_instruction_flood and llvm_recompiler and llvm_progress.compiled == 0 and llvm_progress.compiling == 0:
+        ok = False
     if boot_ok:
         ok = ok and not missing_db_config
     elif llvm_compiling and llvm_recompiler:
-        if llvm_progress.mega_module_active:
-            print("INFO: LLVM mega-module compiling — wait 5-10 min (low CPU is normal). Do not close RPCS3.")
-        else:
-            print("INFO: PPU LLVM cache still building — first boot on large templates can take 10-20 minutes.")
+        pass  # advice printed above via format_hang_advice
+    if jump_warnings > 50 and llvm_recompiler and llvm_progress.per_instruction_total > 0:
+        print(f"WARN: {jump_warnings} jump-table warnings with per-instruction LLVM fallback.")
+        ok = False
     if invalid_ppu_enum or invalid_enum_any:
         print("FAIL: PPU Decoder config rejected by RPCS3 (use Recompiler (LLVM), not LLVM Recompiler).")
         print("      Redeploy via deploy_rpcs3.py.")
@@ -185,6 +191,8 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     print("FAIL: RPCS3 boot validation failed.")
     if not boot_ok and not llvm_compiling:
         print("  - Wait longer or confirm RPCS3 started the game.")
+    if llvm_progress.hang_mode == HangMode.PER_INSTRUCTION:
+        print("  - Rebuild with build_ps3_llvm_release.sh (rpcs3_compat=no) and redeploy.")
     if missing_db_config or boot_from_export:
         print("  - Deploy and launch via launch_rpcs3.py / game list so TITLE_ID config applies.")
     if invalid_ppu_enum or invalid_enum_any:

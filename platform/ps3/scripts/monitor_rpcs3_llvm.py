@@ -12,7 +12,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from rpcs3_llvm_progress import format_llvm_status, parse_llvm_progress, read_log_text
+from rpcs3_llvm_progress import HangMode, format_hang_advice, format_llvm_status, parse_llvm_progress, read_log_text
 
 
 def monitor(log_path: Path, interval: int, once: bool) -> int:
@@ -26,14 +26,20 @@ def monitor(log_path: Path, interval: int, once: bool) -> int:
         print(f"--- {time.strftime('%H:%M:%S')} ---")
         for line in format_llvm_status(progress):
             print(line)
+        for line in format_hang_advice(progress):
+            print(line)
         print("")
 
         if once:
-            return 0
+            return 1 if progress.per_instruction_flood and progress.compiling == 0 and progress.compiled == 0 else 0
         if progress.loaded:
             print("LLVM loaded — game should be starting. Check TTY for PS3: early_init.")
             return 0
-        if progress.mega_module_active:
+        if progress.hang_mode == HangMode.PER_INSTRUCTION:
+            print("Per-instruction fallback — rebuild with build_ps3_llvm_release.sh and redeploy.")
+            if once:
+                return 1
+        elif progress.mega_module_active:
             print("Mega-module active — wait 5-10 min even if CPU looks idle.")
         elif progress.in_progress:
             print("LLVM compile in progress — first boot can take 30-40 min total.")

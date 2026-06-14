@@ -10,8 +10,8 @@ echo "== PS3 smoke test =="
 bash "$SCRIPT_DIR/validate_toolchain.sh"
 
 cd "$BLAZIUM_ROOT"
-echo "== Building PS3 release template =="
-scons platform=ps3 target=template_release arch=ppc64 module_ps3_module_enabled=yes -j"$(nproc)"
+echo "== Building PS3 LLVM release template (rpcs3_compat=no) =="
+bash "$SCRIPT_DIR/build_ps3_llvm_release.sh"
 
 echo "== Installing export templates =="
 python3 "$SCRIPT_DIR/install_templates.py" --blazium-root "$BLAZIUM_ROOT"

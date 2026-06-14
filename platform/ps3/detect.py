@@ -203,7 +203,9 @@ def configure(env: "SConsEnvironment"):
     if env.get("rpcs3_compat", True):
         env["LINKFLAGS"] = [flag for flag in env["LINKFLAGS"] if flag != "-Wl,--gc-sections"]
         env["CCFLAGS"] = [flag for flag in env["CCFLAGS"] if flag not in ("-ffunction-sections", "-fdata-sections")]
-        print_info("PS3: rpcs3_compat enabled (--gc-sections and -ffunction-sections disabled).")
+        print_info("PS3: rpcs3_compat enabled (--gc-sections disabled; use rpcs3_compat=no for RPCS3 LLVM).")
+    else:
+        print_info("PS3: rpcs3_compat disabled (--gc-sections enabled for RPCS3 LLVM jump tables).")
 
     if env.get("software_canvas", True):
         env.Append(CPPDEFINES=["SOFTWARE_CANVAS_ENABLED"])
