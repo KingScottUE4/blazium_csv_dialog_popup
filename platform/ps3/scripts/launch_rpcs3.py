@@ -55,14 +55,15 @@ def launch(emulator_root: Path, title_id: str, rpcs3_exe: str | None) -> int:
         print(f"Launch manually: RPCS3 game list -> {title_id}")
         print(f"Or set RPCS3_EXE, or pass --rpcs3-exe <path>")
         print("")
-        print("First run may take 2-5 minutes under PPU Interpreter (static).")
+        print("First run may take 1-3 minutes while PPU LLVM cache builds.")
         print("Watch the TTY tab for PS3 milestones and the dark-blue boot splash.")
+        print("Interpreter fallback: deploy rpcs3_game_config_interpreter.yml (10+ min boot).")
         return 2
 
     print(f"Launching: {exe}")
     print(f"Boot path: {game_dir}")
     print("")
-    print("Wait 2-5 minutes on first run. Watch RPCS3 TTY tab for:")
+    print("Wait 1-3 minutes on first LLVM boot. Watch RPCS3 TTY tab for:")
     print("  PS3: boot splash presented")
     print("  PS3: Main::setup end")
     print("  PS3: first main_loop_iterate")

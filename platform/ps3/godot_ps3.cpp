@@ -28,6 +28,7 @@
 /**************************************************************************/
 
 #include "os_ps3.h"
+#include "platform/ps3/ps3_boot_splash.h"
 #include "platform/ps3/ps3_wrapper.h"
 
 #include "core/config/engine.h"
@@ -35,10 +36,6 @@
 #include "core/io/resource_loader.h"
 #include "main/main.h"
 #include "servers/display_server.h"
-
-#ifdef NORSX_ENABLED
-#include "drivers/norsx/norsx_framebuffer.h"
-#endif
 
 #include <sysmodule/sysmodule.h>
 #include <unistd.h>
@@ -53,23 +50,10 @@ static void ps3_load_modules() {
 	sysModuleLoad(SYSMODULE_IO);
 	sysModuleLoad(SYSMODULE_SYSUTIL);
 	sysModuleLoad(SYSMODULE_AUDIO);
+	sysModuleLoad(SYSMODULE_GCM_SYS);
 	ps3_modules_loaded = true;
 	print_line("PS3: modules loaded");
 }
-
-#ifdef NORSX_ENABLED
-static NoRSXFramebuffer g_boot_framebuffer;
-
-static void ps3_present_boot_splash() {
-	if (g_boot_framebuffer.initialize() != OK) {
-		print_line("PS3: boot splash init failed");
-		return;
-	}
-	g_boot_framebuffer.clear(0xFF202040);
-	g_boot_framebuffer.present();
-	print_line("PS3: boot splash presented");
-}
-#endif
 
 static int64_t _pack_file_size(const String &p_path) {
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
@@ -97,9 +81,7 @@ static String _find_main_pack(const String &p_exec_path) {
 int main(int argc, char *argv[]) {
 	ps3_load_modules();
 
-#ifdef NORSX_ENABLED
-	ps3_present_boot_splash();
-#endif
+	ps3_boot_splash_present();
 
 	OS_PS3 os;
 

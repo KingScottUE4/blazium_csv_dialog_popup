@@ -6,6 +6,7 @@ Import("env")
 ps3_files = [
     "godot_ps3.cpp",
     "os_ps3.cpp",
+    "ps3_boot_splash.cpp",
     "display_server_ps3.cpp",
     "joypad_ps3.cpp",
     "joypad_ps3_state.cpp",

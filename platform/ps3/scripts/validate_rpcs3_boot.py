@@ -49,8 +49,9 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
 
     text = _read_tail(log_path)
     boot_ok = "GUI: Boot successful" in text
+    llvm_recompiler = "LLVM Recompiler" in text
     llvm_precompile = "LLVM Precompilation: true" in text
-    interpreter = "PPU Decoder: Interpreter (static)" in text or "Interpreter (static)" in text
+    interpreter = "Interpreter (static)" in text
     jump_warnings = text.count("Jump table not found")
     empty_title_id = "empty title_id" in text or "title_id=''" in text
     missing_db_config = "Cannot retrieve database config for empty title_id" in text
@@ -59,8 +60,9 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
 
     print("RPCS3.log results:")
     print(f"  Boot successful: {'yes' if boot_ok else 'no'}")
-    print(f"  Interpreter (static): {'yes' if interpreter else 'no'}")
-    print(f"  LLVM precompilation enabled: {'yes (bad)' if llvm_precompile else 'no (good)'}")
+    print(f"  PPU LLVM Recompiler: {'yes' if llvm_recompiler else 'no'}")
+    print(f"  Interpreter (static): {'yes (slow fallback)' if interpreter else 'no'}")
+    print(f"  LLVM precompilation enabled: {'yes (optional)' if llvm_precompile else 'no (good)'}")
     print(f"  Jump table warnings: {jump_warnings}")
     print(f"  TITLE_ID BLAZ00001 in log: {'yes' if title_id_ok else 'no'}")
     print(f"  Empty title_id detected: {'yes (bad)' if empty_title_id else 'no (good)'}")
@@ -68,15 +70,19 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
     print(f"  Booted from export folder: {'yes (bad)' if boot_from_export else 'no (good)'}")
     print("")
 
-    ok = boot_ok and not llvm_precompile and not missing_db_config and not boot_from_export
-    if jump_warnings > 50:
-        print(f"WARN: {jump_warnings} jump-table warnings — ensure rpcs3_compat template rebuild.")
+    ok = boot_ok and not missing_db_config and not boot_from_export
+    if interpreter and not llvm_recompiler:
+        print("WARN: Interpreter (static) is active — expect 8+ minute init on large templates.")
+        print("      Redeploy rpcs3_game_config.yml (LLVM Recompiler) via deploy_rpcs3.py.")
+    if jump_warnings > 50 and interpreter:
+        print(f"WARN: {jump_warnings} jump-table warnings under interpreter mode.")
     if boot_from_export:
         print("FAIL: Booted export folder. Use launch_rpcs3.py or RPCS3 game list.")
+        ok = False
     if empty_title_id and not title_id_ok:
         print("WARN: TITLE_ID not applied — launch dev_hdd0/game/BLAZ00001, not export folder.")
     if wait_seconds < min_wait:
-        print(f"WARN: --wait {wait_seconds}s is below recommended --min-wait {min_wait}s for first interpreter boot.")
+        print(f"WARN: --wait {wait_seconds}s is below recommended --min-wait {min_wait}s for first LLVM boot.")
 
     if ok:
         print("PASS: RPCS3 boot looks healthy. Check TTY tab for PS3 milestones and visible UI.")
@@ -85,8 +91,6 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int) -> int:
     print("FAIL: RPCS3 boot validation failed.")
     if not boot_ok:
         print("  - Wait longer or confirm RPCS3 started the game.")
-    if llvm_precompile:
-        print("  - Disable LLVM Precompilation in RPCS3 config.")
     if missing_db_config or boot_from_export:
         print("  - Deploy and launch via launch_rpcs3.py / game list so TITLE_ID config applies.")
     return 1

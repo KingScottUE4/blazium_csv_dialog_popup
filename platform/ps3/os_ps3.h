@@ -79,6 +79,8 @@ public:
 
 	int get_processor_count() const override;
 
+	void delay_usec(uint32_t p_usec) const override;
+
 	OS_PS3();
 	~OS_PS3();
 };

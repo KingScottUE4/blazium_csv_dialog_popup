@@ -30,6 +30,7 @@
 #include "os_ps3.h"
 
 #include "display_server_ps3.h"
+#include "platform/ps3/ps3_boot_splash.h"
 #include "ps3_wrapper.h"
 
 #include "core/config/project_settings.h"
@@ -109,6 +110,11 @@ bool OS_PS3::main_loop_iterate() {
 	DisplayServer::get_singleton()->process_events();
 
 	return Main::iteration();
+}
+
+void OS_PS3::delay_usec(uint32_t p_usec) const {
+	ps3_boot_splash_refresh_if_due();
+	OS_Unix::delay_usec(p_usec);
 }
 
 bool OS_PS3::_check_internal_feature_support(const String &p_feature) {
