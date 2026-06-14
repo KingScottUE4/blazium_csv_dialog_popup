@@ -9,6 +9,7 @@ ps3_files = [
     "display_server_ps3.cpp",
     "joypad_ps3.cpp",
     "crash_handler_ps3.cpp",
+    "ps3_posix_stubs.c",
     "drivers/norsx/norsx_framebuffer.cpp",
     "drivers/audio/audio_driver_ps3.cpp",
 ]
@@ -23,11 +24,18 @@ prog = env.add_program("#bin/blazium", ps3_files)
 elf_target = "#bin/ps3_" + env["target"] + ".elf"
 env.Command(elf_target, prog, "cp $SOURCE $TARGET")
 
+# Placeholder NPDRM content ID for engine templates; games set their own at export time.
+PS3_TEMPLATE_CONTENT_ID = "UP0001-BLAZ00001_00-BLAZIUM000"
+
 make_self = env.WhereIs("make_self_npdrm")
 self_target = None
 if make_self:
     self_target = "#bin/ps3_" + env["target"] + ".self"
-    env.Command(self_target, elf_target, make_self + " $SOURCE $TARGET")
+    env.Command(
+        self_target,
+        elf_target,
+        make_self + " $SOURCE $TARGET " + PS3_TEMPLATE_CONTENT_ID,
+    )
 
 template_name = None
 if env["target"] == "template_release":

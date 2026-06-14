@@ -29,7 +29,22 @@
 
 #pragma once
 
-#include "core/object/object.h"
+#include "core/object/class_db.h"
+
+enum PS3PadButton {
+	PS3_PAD_DPAD_LEFT = 0,
+	PS3_PAD_DPAD_DOWN,
+	PS3_PAD_DPAD_RIGHT,
+	PS3_PAD_DPAD_UP,
+	PS3_PAD_CROSS,
+	PS3_PAD_CIRCLE,
+	PS3_PAD_TRIANGLE,
+	PS3_PAD_SQUARE,
+	PS3_PAD_L1,
+	PS3_PAD_R1,
+	PS3_PAD_L2,
+	PS3_PAD_R2,
+};
 
 class PS3Pad : public Object {
 	GDCLASS(PS3Pad, Object);

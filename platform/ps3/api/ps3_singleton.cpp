@@ -30,6 +30,7 @@
 #include "ps3_singleton.h"
 
 #include "core/config/engine.h"
+#include "core/object/class_db.h"
 
 #ifdef PS3_ENABLED
 #include <sys/process.h>
@@ -49,7 +50,7 @@ void PlayStation3::_bind_methods() {
 
 void PlayStation3::request_exit() {
 #ifdef PS3_ENABLED
-	sysProcessExit();
+	sysProcessExit(0);
 #endif
 }
 

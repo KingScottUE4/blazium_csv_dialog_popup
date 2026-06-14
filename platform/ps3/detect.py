@@ -52,7 +52,7 @@ def can_build():
     if os.system("ppu-gcc --version 2>/dev/null | head -1 | grep -qE 'GCC\\) [0-8]\\.'") == 0:
         print_error(
             "ppu-gcc is older than GCC 9. Blazium requires a modern PS3 toolchain (gcc-9.5+). "
-            "Build ps3toolchain from the Blazium fork — do not downgrade engine C++ standards."
+            "Build ps3toolchain from the Blazium fork."
         )
         return False
 
@@ -97,16 +97,26 @@ def get_flags():
         "module_raycast_enabled": False,
         "module_gdextension_enabled": False,
         "module_websocket_enabled": False,
+        "module_autowork_enabled": False,
+        "module_crowdcontrol_enabled": False,
+        "module_obsclient_enabled": False,
+        "module_socketio_enabled": False,
+        "module_justamcp_enabled": False,
         "builtin_zlib": False,
-        "builtin_freetype": False,
-        "builtin_libpng": False,
-        "builtin_libwebp": False,
+        # Portlibs ships freetype 2.4.3; HarfBuzz needs 2.13+ APIs. Use engine builtin until portlibs is upgraded.
+        "builtin_freetype": True,
+        # Portlibs libpng is too old for ThorVG's png_image simplified API.
+        "builtin_libpng": True,
+        "builtin_libwebp": True,
         "builtin_mbedtls": False,
         "builtin_miniupnpc": False,
         "builtin_enet": True,
         "builtin_bullet": True,
         "builtin_pcre2": True,
+        "builtin_pcre2_with_jit": False,
         "optimize": "speed",
+        # newlib/LV2 has no POSIX pthread gthr backend yet (libstdc++ uses gthr-single).
+        "threads": False,
     }
 
 
@@ -116,6 +126,10 @@ def configure(env: "SConsEnvironment"):
     portlibs = os.path.join(ps3dev, "portlibs", "ppu")
 
     validate_arch(env["arch"], get_name(), ["ppc64"])
+
+    ps3_include = env.Dir("#platform/ps3/include").srcnode().abspath
+    env.Prepend(CCFLAGS=["-I%s" % ps3_include])
+    env.Prepend(CXXFLAGS=["-I%s" % ps3_include, "-include", "platform/ps3/ps3_libstdcxx_compat.h"])
 
     env["ENV"]["PS3DEV"] = ps3dev
     env["ENV"]["PSL1GHT"] = psl1ght
@@ -163,21 +177,25 @@ def configure(env: "SConsEnvironment"):
             "__PPU__",
             "__powerpc64__",
             "UNIX_ENABLED",
-            "PTHREAD_ENABLED",
+            "UNIX_SOCKET_UNAVAILABLE",
+            "PTHREAD_NO_RENAME",
+            "HB_NO_MT",
+            "JPH_PLATFORM_LINUX",
         ]
     )
 
-    env.Append(CCFLAGS=["-mcpu=cell", "-ffunction-sections", "-fdata-sections"])
-    env.Append(LINKFLAGS=["-m elf64ppc", "-Wl,--gc-sections"])
+    env.Append(CCFLAGS=["-mcpu=cell", "-ffunction-sections", "-fdata-sections", "-mno-fp-in-toc", "-mno-sum-in-toc", "-mminimal-toc"])
+    env.Append(LINKFLAGS=["-Wl,-melf64ppc", "-Wl,--gc-sections", "-Wl,--relax"])
 
-    env.Append(LIBS=["sysbase", "c", "rt", "lv2", "pad", "sysutil", "sysmodule"])
+    env.Append(LIBS=["sysbase", "c", "rt", "lv2", "io", "sysutil", "sysmodule"])
 
     norsx_lib = os.path.join(portlibs, "lib", "libnorsx.a")
     if not os.path.isfile(norsx_lib):
         norsx_lib = os.path.join(portlibs, "lib", "libNoRSX.a")
     if env["norsx"] and os.path.isfile(norsx_lib):
         env.Append(CPPDEFINES=["NORSX_ENABLED"])
-        env.Append(LIBS=["NoRSX"])
+        # NoRSX wraps RSX/GCM; link graphics libs even without the experimental RSX renderer.
+        env.Append(LIBS=["NoRSX", "gcm_sys", "rsx"])
         print_info("PS3: NoRSX enabled from portlibs.")
     elif env["norsx"]:
         print_warning("PS3: NoRSX library not found; using software framebuffer stub.")
@@ -197,6 +215,14 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=["RSX_ENABLED"])
         env.Append(LIBS=["gcm_sys", "rsx"])
         print_info("PS3: RSX/GCM hardware renderer enabled (experimental).")
+
+    if not env["builtin_zlib"] and os.path.isfile(os.path.join(portlibs, "lib", "libz.a")):
+        env.Append(LIBS=["z"])
+
+    if not env["builtin_mbedtls"]:
+        for lib in ("mbedtls", "mbedx509", "mbedcrypto"):
+            if os.path.isfile(os.path.join(portlibs, "lib", "lib%s.a" % lib)):
+                env.Append(LIBS=[lib])
 
     if os.path.isdir(os.path.join(portlibs, "lib", "pkgconfig")):
         env["ENV"]["PKG_CONFIG_PATH"] = os.path.join(portlibs, "lib", "pkgconfig")

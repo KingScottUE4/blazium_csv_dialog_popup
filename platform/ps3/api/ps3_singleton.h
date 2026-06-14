@@ -29,7 +29,7 @@
 
 #pragma once
 
-#include "core/object/object.h"
+#include "core/object/class_db.h"
 
 class PlayStation3 : public Object {
 	GDCLASS(PlayStation3, Object);

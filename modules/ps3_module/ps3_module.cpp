@@ -29,6 +29,8 @@
 
 #include "ps3_module.h"
 
+#include "core/object/class_db.h"
+
 void PS3Module::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_sdk_version"), &PS3Module::get_sdk_version);
 }

@@ -29,6 +29,7 @@
 
 #include "ps3_sysutil.h"
 
+#include "core/object/class_db.h"
 #include "core/string/print_string.h"
 
 #ifdef PS3_ENABLED
@@ -42,7 +43,7 @@ void PS3SystemUtil::_bind_methods() {
 void PS3SystemUtil::show_message(const String &p_message) const {
 #ifdef PS3_ENABLED
 	CharString message = p_message.utf8();
-	cellMsgDialogOpen2(MSG_DIALOG_NORMAL, message.get_data(), nullptr, nullptr, nullptr);
+	msgDialogOpen2(MSG_DIALOG_NORMAL, message.get_data(), nullptr, nullptr, nullptr);
 #else
 	print_line(vformat("PS3SystemUtil: %s", p_message));
 #endif

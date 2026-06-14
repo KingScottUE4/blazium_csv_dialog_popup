@@ -29,5 +29,7 @@
 
 #pragma once
 
+#include "modules/register_module_types.h"
+
 void initialize_ps3_module_module(ModuleInitializationLevel p_level);
 void uninitialize_ps3_module_module(ModuleInitializationLevel p_level);
