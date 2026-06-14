@@ -8,10 +8,15 @@ ps3_files = [
     "os_ps3.cpp",
     "display_server_ps3.cpp",
     "joypad_ps3.cpp",
+    "joypad_ps3_state.cpp",
     "crash_handler_ps3.cpp",
     "ps3_posix_stubs.c",
     "drivers/norsx/norsx_framebuffer.cpp",
     "drivers/audio/audio_driver_ps3.cpp",
+    "drivers/software/canvas_blit_ps3.cpp",
+    "drivers/software/ps3_texture_storage.cpp",
+    "drivers/software/rasterizer_canvas_ps3.cpp",
+    "drivers/software/rasterizer_compositor_ps3.cpp",
 ]
 
 if env.get("rsx", False):

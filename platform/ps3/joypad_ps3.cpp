@@ -28,32 +28,40 @@
 /**************************************************************************/
 
 #include "joypad_ps3.h"
+#include "joypad_ps3_state.h"
 
 #include "platform/ps3/ps3_wrapper.h"
 
-#include <io/pad.h>
-
 JoypadPS3::JoypadPS3() {
 	input = Input::get_singleton();
-	ioPadInit(1);
-	ioPadSetPortSetting(0, PAD_SETTINGS_PRESS_ON);
-	connected = true;
-	input->joy_connection_changed(0, true, "PS3 Controller");
+	JoypadPS3State::get_singleton()->initialize(0);
+	connected = JoypadPS3State::get_singleton()->is_connected();
+	if (connected) {
+		input->joy_connection_changed(0, true, "PS3 Controller");
+	}
 }
 
 void JoypadPS3::process() {
-	if (!connected || !input) {
+	if (!input) {
 		return;
 	}
 
-	padData data;
-	const s32 result = ioPadGetData(0, &data);
-	if (result == 0) {
-		input->joy_connection_changed(0, false, "PS3 Controller");
-		connected = false;
+	JoypadPS3State *state = JoypadPS3State::get_singleton();
+	if (!state->update()) {
+		if (connected) {
+			input->joy_connection_changed(0, false, "PS3 Controller");
+			connected = false;
+		}
 		return;
 	}
 
+	if (!connected) {
+		input->joy_connection_changed(0, true, "PS3 Controller");
+		connected = true;
+	}
+
+#ifdef PS3_ENABLED
+	const padData &data = state->get_data();
 	input->joy_button(0, JoyButton::A, data.BTN_CROSS != 0);
 	input->joy_button(0, JoyButton::B, data.BTN_CIRCLE != 0);
 	input->joy_button(0, JoyButton::Y, data.BTN_TRIANGLE != 0);
@@ -75,4 +83,5 @@ void JoypadPS3::process() {
 	input->joy_axis(0, JoyAxis::LEFT_Y, (data.ANA_L_V - 128) / 128.0f);
 	input->joy_axis(0, JoyAxis::RIGHT_X, (data.ANA_R_H - 128) / 128.0f);
 	input->joy_axis(0, JoyAxis::RIGHT_Y, (data.ANA_R_V - 128) / 128.0f);
+#endif
 }

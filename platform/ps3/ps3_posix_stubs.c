@@ -196,3 +196,10 @@ int mkfifo(const char *pathname, mode_t mode) {
 	errno = ENOSYS;
 	return -1;
 }
+
+long pathconf(const char *path, int name) {
+	(void)path;
+	(void)name;
+	errno = ENOSYS;
+	return -1;
+}

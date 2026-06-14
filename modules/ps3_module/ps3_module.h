@@ -39,4 +39,5 @@ protected:
 
 public:
 	String get_sdk_version() const;
+	String get_firmware_version() const;
 };

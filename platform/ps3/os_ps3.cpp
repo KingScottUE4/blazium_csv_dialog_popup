@@ -63,9 +63,13 @@ OS_PS3::OS_PS3() {
 OS_PS3::~OS_PS3() {
 }
 
+#include "core/string/print_string.h"
+
 void OS_PS3::initialize() {
+	print_line("PS3: OS initialize begin");
 	OS_Unix::initialize_core();
 	DisplayServerPS3::register_ps3_driver();
+	print_line("PS3: OS initialize end");
 }
 
 void OS_PS3::set_main_loop(MainLoop *p_main_loop) {

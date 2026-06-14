@@ -4,9 +4,15 @@
 		PS3 module entry point for SDK metadata.
 	</brief_description>
 	<description>
-		Provides basic PlayStation 3 SDK information when [code]ps3_module[/code] is enabled in PS3 template builds.
+		Provides PlayStation 3 SDK and firmware information when [code]ps3_module[/code] is enabled in PS3 template builds.
 	</description>
 	<methods>
+		<method name="get_firmware_version" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the host/emulator firmware version string when available.
+			</description>
+		</method>
 		<method name="get_sdk_version" qualifiers="const">
 			<return type="String" />
 			<description>

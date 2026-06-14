@@ -315,6 +315,7 @@ Error EditorExportPlatformPS3::export_project(const Ref<EditorExportPreset> &p_p
 	}
 
 	add_message(EXPORT_MESSAGE_INFO, TTR("Export"), vformat(TTR("PS3 export written to %s"), game_dir));
+	add_message(EXPORT_MESSAGE_INFO, TTR("Export"), TTR("Launch from the RPCS3 game list (dev_hdd0/game/) — not Boot Game on the export folder."));
 	return OK;
 }
 

@@ -39,6 +39,7 @@ protected:
 
 public:
 	void show_message(const String &p_message) const;
+	int show_message_async(const String &p_message) const;
 
 	PS3SystemUtil();
 };

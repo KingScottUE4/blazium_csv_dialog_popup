@@ -45,6 +45,8 @@ public:
 	void request_exit();
 	String get_platform_name() const;
 	int get_memory_available() const;
+	String get_title_id() const;
+	String get_content_path() const;
 
 	PlayStation3();
 	~PlayStation3();

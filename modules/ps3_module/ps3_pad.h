@@ -44,6 +44,10 @@ enum PS3PadButton {
 	PS3_PAD_R1,
 	PS3_PAD_L2,
 	PS3_PAD_R2,
+	PS3_PAD_START,
+	PS3_PAD_SELECT,
+	PS3_PAD_L3,
+	PS3_PAD_R3,
 };
 
 class PS3Pad : public Object {
@@ -59,6 +63,9 @@ public:
 	int get_port() const;
 
 	float get_pressure(int p_button) const;
+	bool is_connected() const;
+	Vector2 get_left_stick() const;
+	Vector2 get_right_stick() const;
 	void set_rumble(float p_weak, float p_strong);
 
 	PS3Pad();

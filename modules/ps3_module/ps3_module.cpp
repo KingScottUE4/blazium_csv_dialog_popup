@@ -5,36 +5,34 @@
 /*                             BLAZIUM ENGINE                             */
 /*                          https://blazium.app                           */
 /**************************************************************************/
-/* Copyright (c) 2024-present Blazium Engine contributors.                */
-/*                                                                        */
-/* Permission is hereby granted, free of charge, to any person obtaining  */
-/* a copy of this software and associated documentation files (the        */
-/* "Software"), to deal in the Software without restriction, including    */
-/* without limitation the rights to use, copy, modify, merge, publish,    */
-/* distribute, sublicense, and/or sell copies of the Software, and to     */
-/* permit persons to whom the Software is furnished to do so, subject to  */
-/* the following conditions:                                              */
-/*                                                                        */
-/* The above copyright notice and this permission notice shall be         */
-/* included in all copies or substantial portions of the Software.        */
-/*                                                                        */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
-/**************************************************************************/
 
 #include "ps3_module.h"
 
 #include "core/object/class_db.h"
 
+#ifdef PS3_ENABLED
+#include <sysutil/sysutil.h>
+#endif
+
 void PS3Module::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_sdk_version"), &PS3Module::get_sdk_version);
+	ClassDB::bind_method(D_METHOD("get_firmware_version"), &PS3Module::get_firmware_version);
 }
 
 String PS3Module::get_sdk_version() const {
+#ifdef PS3_ENABLED
 	return "PSL1GHT";
+#else
+	return "PSL1GHT";
+#endif
+}
+
+String PS3Module::get_firmware_version() const {
+#ifdef PS3_ENABLED
+	char version[64] = {};
+	if (sysUtilGetSystemParamString(0x101, version, sizeof(version)) == 0) {
+		return String(version);
+	}
+#endif
+	return "PS3";
 }

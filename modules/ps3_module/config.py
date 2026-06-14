@@ -2,7 +2,7 @@ import os
 
 
 def is_enabled():
-    return False
+    return True
 
 
 def can_build(env, platform):

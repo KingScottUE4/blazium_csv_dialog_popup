@@ -33,7 +33,7 @@
 
 #include "servers/display_server.h"
 
-#include "servers/rendering/dummy/rasterizer_dummy.h"
+class RasterizerCompositorPS3;
 
 class DisplayServerPS3 : public DisplayServer {
 private:
@@ -61,7 +61,6 @@ private:
 	}
 
 	NoRSXFramebuffer framebuffer;
-	uint32_t frame_counter = 0;
 	Size2i window_size = Size2i(NoRSXFramebuffer::WIDTH, NoRSXFramebuffer::HEIGHT);
 	NativeMenu *native_menu = nullptr;
 	Callable input_event_callback;
@@ -189,6 +188,8 @@ public:
 	void status_indicator_set_tooltip(IndicatorID p_id, const String &p_tooltip) override {}
 	void status_indicator_set_callback(IndicatorID p_id, const Callable &p_callback) override {}
 	void delete_status_indicator(IndicatorID p_id) override {}
+
+	NoRSXFramebuffer *get_framebuffer() { return &framebuffer; }
 
 	DisplayServerPS3();
 	~DisplayServerPS3();

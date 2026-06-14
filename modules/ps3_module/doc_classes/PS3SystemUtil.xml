@@ -4,14 +4,21 @@
 		PS3 system utility helpers.
 	</brief_description>
 	<description>
-		Exposes lightweight PSL1GHT system utility helpers for on-console messaging.
+		Exposes lightweight PSL1GHT system utility helpers for on-console messaging. Requires [code]sysUtilCheckCallback()[/code] to run each frame (handled automatically by the PS3 platform main loop).
 	</description>
 	<methods>
 		<method name="show_message" qualifiers="const">
 			<return type="void" />
 			<param index="0" name="message" type="String" />
 			<description>
-				Shows a system message dialog on PS3 hardware or emulator.
+				Shows a blocking system message dialog on PS3 hardware or emulator.
+			</description>
+		</method>
+		<method name="show_message_async" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="message" type="String" />
+			<description>
+				Opens a message dialog and returns status: [code]0[/code] open, [code]1[/code] closed, [code]2[/code] aborted.
 			</description>
 		</method>
 	</methods>

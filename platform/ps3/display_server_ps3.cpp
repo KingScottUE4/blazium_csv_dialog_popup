@@ -31,6 +31,9 @@
 
 #include "core/input/input.h"
 
+#include "drivers/software/rasterizer_compositor_ps3.h"
+#include "servers/rendering/dummy/rasterizer_dummy.h"
+
 #ifdef RSX_ENABLED
 #include "drivers/rsx/rsx_context.h"
 #endif
@@ -48,7 +51,11 @@ DisplayServer *DisplayServerPS3::create_func(const String &p_rendering_driver, D
 	} else
 #endif
 	{
+#if defined(NORSX_ENABLED) && defined(SOFTWARE_CANVAS_ENABLED)
+		RasterizerCompositorPS3::make_current();
+#else
 		RasterizerDummy::make_current();
+#endif
 	}
 
 	DisplayServerPS3 *ds = memnew(DisplayServerPS3());
@@ -92,24 +99,6 @@ void DisplayServerPS3::process_events() {
 }
 
 void DisplayServerPS3::swap_buffers() {
-	if (framebuffer.is_initialized()) {
-		const uint8_t phase = frame_counter % 3;
-		uint32_t color = 0xFF000000;
-		const uint8_t channel = 0xFF;
-		switch (phase) {
-			case 0:
-				color = 0xFF000000 | channel;
-				break;
-			case 1:
-				color = 0xFF000000 | (channel << 8);
-				break;
-			default:
-				color = 0xFF000000 | (channel << 16);
-				break;
-		}
-		framebuffer.clear(color);
-		frame_counter++;
-	}
 	framebuffer.present();
 }
 
@@ -117,6 +106,7 @@ DisplayServerPS3::DisplayServerPS3() {
 	native_menu = memnew(NativeMenu);
 	framebuffer.initialize();
 	framebuffer.clear(0xFF202040);
+	framebuffer.present();
 	Input::get_singleton()->set_event_dispatch_function(_dispatch_input_events);
 }
 

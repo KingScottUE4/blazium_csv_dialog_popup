@@ -4,9 +4,39 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
+import time
 from pathlib import Path
+
+
+def _load_game_config(config_src: Path) -> str:
+    lines = []
+    for line in config_src.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _update_config_database(emulator_root: Path, title_id: str, config_yaml: str) -> None:
+    db_path = emulator_root / "GuiConfigs" / "config_database.dat"
+    if not db_path.is_file():
+        print(f"warning: config database not found: {db_path}", file=sys.stderr)
+        return
+
+    try:
+        data = json.loads(db_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"warning: could not parse config database: {exc}", file=sys.stderr)
+        return
+
+    games = data.setdefault("games", {})
+    games[title_id] = {"config": config_yaml}
+    data["timestamp"] = int(time.time())
+    db_path.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    print(f"Registered {title_id} in {db_path}")
 
 
 def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
@@ -28,9 +58,15 @@ def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
         config_dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(config_src, config_dst)
         print(f"Installed RPCS3 config {config_dst}")
+        game_config_dst = dst / "config.yml"
+        shutil.copy2(config_src, game_config_dst)
+        print(f"Installed per-game config fallback {game_config_dst}")
+        _update_config_database(emulator_root, title_id, _load_game_config(config_src))
 
     print(f"Deployed {src} -> {dst}")
-    print("Launch RPCS3 with PPU Interpreter (static) and Debug Console Mode for TTY output.")
+    print(f"Launch {title_id} from the RPCS3 game list (not Boot Game on the export folder).")
+    print("Use PPU Interpreter (static) and Debug Console Mode for TTY output.")
+    print(f"Validate: python validate_rpcs3_boot.py (see also validate_ps3_export.py)")
     return 0
 
 

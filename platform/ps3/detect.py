@@ -73,6 +73,8 @@ def get_opts():
     return [
         BoolVariable("norsx", "Use NoRSX software framebuffer", True),
         BoolVariable("rsx", "Enable RSX/GCM hardware renderer (experimental)", False),
+        BoolVariable("software_canvas", "Enable PS3 CPU canvas compositor (NoRSX)", True),
+        BoolVariable("rpcs3_compat", "RPCS3 interpreter link compatibility (omit --gc-sections)", True),
     ]
 
 
@@ -102,6 +104,7 @@ def get_flags():
         "module_obsclient_enabled": False,
         "module_socketio_enabled": False,
         "module_justamcp_enabled": False,
+        "module_ps3_module_enabled": True,
         "builtin_zlib": False,
         # Portlibs ships freetype 2.4.3; HarfBuzz needs 2.13+ APIs. Use engine builtin until portlibs is upgraded.
         "builtin_freetype": True,
@@ -186,6 +189,14 @@ def configure(env: "SConsEnvironment"):
 
     env.Append(CCFLAGS=["-mcpu=cell", "-ffunction-sections", "-fdata-sections", "-mno-fp-in-toc", "-mno-sum-in-toc", "-mminimal-toc"])
     env.Append(LINKFLAGS=["-Wl,-melf64ppc", "-Wl,--gc-sections", "-Wl,--relax"])
+    if env.get("rpcs3_compat", True):
+        env["LINKFLAGS"] = [flag for flag in env["LINKFLAGS"] if flag != "-Wl,--gc-sections"]
+        env["CCFLAGS"] = [flag for flag in env["CCFLAGS"] if flag not in ("-ffunction-sections", "-fdata-sections")]
+        print_info("PS3: rpcs3_compat enabled (--gc-sections and -ffunction-sections disabled).")
+
+    if env.get("software_canvas", True):
+        env.Append(CPPDEFINES=["SOFTWARE_CANVAS_ENABLED"])
+        print_info("PS3: software canvas compositor enabled.")
 
     env.Append(LIBS=["sysbase", "c", "rt", "lv2", "io", "sysutil", "sysmodule"])
 
