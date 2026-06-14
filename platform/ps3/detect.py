@@ -105,6 +105,11 @@ def get_flags():
         "module_socketio_enabled": False,
         "module_justamcp_enabled": False,
         "module_ps3_module_enabled": True,
+        "module_jolt_physics_enabled": False,
+        "module_navigation_enabled": False,
+        "module_theora_enabled": False,
+        "module_vorbis_enabled": False,
+        "module_meshoptimizer_enabled": False,
         "builtin_zlib": False,
         # Portlibs ships freetype 2.4.3; HarfBuzz needs 2.13+ APIs. Use engine builtin until portlibs is upgraded.
         "builtin_freetype": True,

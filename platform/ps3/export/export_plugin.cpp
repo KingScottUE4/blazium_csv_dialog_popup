@@ -355,7 +355,28 @@ Error EditorExportPlatformPS3::run(const Ref<EditorExportPreset> &p_preset, int 
 
 	const String game_dir = export_path.get_basename().path_join(title_id);
 	err = _deploy_to_emulator(p_preset, game_dir, title_id);
-	return err;
+	ERR_FAIL_COND_V(err != OK, err);
+
+	const String launch_script = _get_script_path("launch_rpcs3.py");
+	if (FileAccess::exists(launch_script)) {
+		String emulator_root = p_preset->get("application/emulator_root");
+		if (!emulator_root.is_empty()) {
+			List<String> launch_args;
+			launch_args.push_back("--emulator-root");
+			launch_args.push_back(emulator_root);
+			launch_args.push_back("--title-id");
+			launch_args.push_back(title_id);
+			String launch_output;
+			Error launch_err = _run_python_script(launch_script, launch_args, &launch_output);
+			if (launch_err == OK) {
+				add_message(EXPORT_MESSAGE_INFO, TTR("Run"), TTR("RPCS3 launch requested for installed game."));
+			} else {
+				add_message(EXPORT_MESSAGE_WARNING, TTR("Run"), vformat(TTR("Export deployed but RPCS3 auto-launch failed. Launch %s from the RPCS3 game list."), title_id));
+			}
+		}
+	}
+
+	return OK;
 }
 
 EditorExportPlatformPS3::EditorExportPlatformPS3() {

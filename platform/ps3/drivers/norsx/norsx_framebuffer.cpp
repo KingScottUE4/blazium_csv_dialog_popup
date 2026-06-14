@@ -50,8 +50,10 @@ Error NoRSXFramebuffer::initialize() {
 	buffer.fill(0);
 
 #ifdef NORSX_ENABLED
-	g_norsx = memnew(NoRSX(RESOLUTION_1280x720, RESOLUTION_1280x720));
-	print_line("PS3: NoRSX initialized.");
+	if (!g_norsx) {
+		g_norsx = memnew(NoRSX(RESOLUTION_1280x720, RESOLUTION_1280x720));
+		print_line("PS3: NoRSX initialized.");
+	}
 #endif
 
 	initialized = true;

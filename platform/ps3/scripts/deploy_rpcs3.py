@@ -65,6 +65,7 @@ def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
 
     print(f"Deployed {src} -> {dst}")
     print(f"Launch {title_id} from the RPCS3 game list (not Boot Game on the export folder).")
+    print("Or run: python launch_rpcs3.py --emulator-root ... --title-id ...")
     print("Use PPU Interpreter (static) and Debug Console Mode for TTY output.")
     print(f"Validate: python validate_rpcs3_boot.py (see also validate_ps3_export.py)")
     return 0

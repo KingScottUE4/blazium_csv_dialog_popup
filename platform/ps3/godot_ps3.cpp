@@ -36,6 +36,10 @@
 #include "main/main.h"
 #include "servers/display_server.h"
 
+#ifdef NORSX_ENABLED
+#include "drivers/norsx/norsx_framebuffer.h"
+#endif
+
 #include <sysmodule/sysmodule.h>
 #include <unistd.h>
 
@@ -52,6 +56,20 @@ static void ps3_load_modules() {
 	ps3_modules_loaded = true;
 	print_line("PS3: modules loaded");
 }
+
+#ifdef NORSX_ENABLED
+static NoRSXFramebuffer g_boot_framebuffer;
+
+static void ps3_present_boot_splash() {
+	if (g_boot_framebuffer.initialize() != OK) {
+		print_line("PS3: boot splash init failed");
+		return;
+	}
+	g_boot_framebuffer.clear(0xFF202040);
+	g_boot_framebuffer.present();
+	print_line("PS3: boot splash presented");
+}
+#endif
 
 static int64_t _pack_file_size(const String &p_path) {
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
@@ -78,6 +96,10 @@ static String _find_main_pack(const String &p_exec_path) {
 
 int main(int argc, char *argv[]) {
 	ps3_load_modules();
+
+#ifdef NORSX_ENABLED
+	ps3_present_boot_splash();
+#endif
 
 	OS_PS3 os;
 
@@ -110,6 +132,7 @@ int main(int argc, char *argv[]) {
 		new_argv.push_back(arg_storage[i].ptrw());
 	}
 
+	print_line("PS3: entering Main::setup (may take several minutes on RPCS3 interpreter)");
 	print_line("PS3: Main::setup begin");
 	Error err = Main::setup(new_argv[0], new_argv.size() - 1, &new_argv[1]);
 	if (err != OK) {
