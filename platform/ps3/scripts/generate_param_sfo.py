@@ -8,10 +8,14 @@ import struct
 import sys
 from pathlib import Path
 
-SFO_MAGIC = 0x00465350
+SFO_MAGIC = 0x46535000  # "\0PSF" little-endian
 SFO_VERSION = 0x00000101
-FMT_UTF8 = 0x0004
+FMT_UTF8 = 0x0204
 FMT_INT = 0x0404
+
+
+def _align4(n: int) -> int:
+    return (n + 3) & ~3
 
 
 def _pack_utf8(value: str, max_len: int) -> bytes:
@@ -62,7 +66,9 @@ def build_sfo(entries: list[tuple[str, int, object]]) -> bytes:
         data_offset += len(payload)
 
     key_table_offset = header_size + index_size
-    data_table_offset = key_table_offset + len(key_blob)
+    aligned_key_len = _align4(len(key_blob))
+    key_blob.extend(b"\x00" * (aligned_key_len - len(key_blob)))
+    data_table_offset = key_table_offset + aligned_key_len
 
     header = struct.pack(
         "<IIIII",
@@ -73,7 +79,9 @@ def build_sfo(entries: list[tuple[str, int, object]]) -> bytes:
         len(entries),
     )
 
-    return header + bytes(index) + bytes(key_blob) + bytes(data_blob)
+    result = header + bytes(index) + bytes(key_blob) + bytes(data_blob)
+    assert result[:4] == b"\x00PSF"
+    return result
 
 
 def generate_param_sfo(
