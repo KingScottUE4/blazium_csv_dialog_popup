@@ -195,7 +195,8 @@ def configure(env: "SConsEnvironment"):
     if env["norsx"] and os.path.isfile(norsx_lib):
         env.Append(CPPDEFINES=["NORSX_ENABLED"])
         # NoRSX wraps RSX/GCM; link graphics libs even without the experimental RSX renderer.
-        env.Append(LIBS=["NoRSX", "gcm_sys", "rsx"])
+        # NoRSX references sysutil; static link order requires sysutil after NoRSX.
+        env.Append(LIBS=["NoRSX", "gcm_sys", "rsx", "sysutil"])
         print_info("PS3: NoRSX enabled from portlibs.")
     elif env["norsx"]:
         print_warning("PS3: NoRSX library not found; using software framebuffer stub.")

@@ -33,6 +33,8 @@
 
 #include "core/string/print_string.h"
 
+#include <cstring>
+
 #ifdef NORSX_ENABLED
 #include <NoRSX.h>
 
@@ -82,7 +84,9 @@ void NoRSXFramebuffer::present() {
 	}
 
 #ifdef NORSX_ENABLED
-	if (g_norsx) {
+	if (g_norsx && g_norsx->buffer) {
+		const size_t copy_bytes = MIN((size_t)buffer.size(), (size_t)g_norsx->buffer_size);
+		memcpy(g_norsx->buffer, buffer.ptr(), copy_bytes);
 		g_norsx->Flip();
 	}
 #endif
