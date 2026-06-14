@@ -44,6 +44,37 @@ static const char *BOOT_LOG_PATHS[] = {
 	nullptr,
 };
 
+static const char *EARLY_BOOT_LOG_PATHS[] = {
+	"/app_home/USRDIR/boot.log",
+	"/app_home/boot.log",
+	nullptr,
+};
+
+static void _append_early_log(const char *p_event) {
+	if (!p_event) {
+		return;
+	}
+	for (int i = 0; EARLY_BOOT_LOG_PATHS[i] != nullptr; i++) {
+		FILE *f = fopen(EARLY_BOOT_LOG_PATHS[i], "a");
+		if (f) {
+			fprintf(f, "%s\n", p_event);
+			fflush(f);
+			fclose(f);
+			return;
+		}
+	}
+}
+
+void ps3_boot_log_early_init() {
+	_append_early_log("early_init");
+}
+
+#if defined(__GNUC__)
+__attribute__((constructor(101))) static void _ps3_boot_log_constructor() {
+	ps3_boot_log_early_init();
+}
+#endif
+
 static void _ensure_boot_log_open() {
 	if (g_boot_log_tried_open) {
 		return;

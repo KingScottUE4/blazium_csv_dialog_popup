@@ -279,7 +279,7 @@ Error EditorExportPlatformPS3::export_project(const Ref<EditorExportPreset> &p_p
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
 	ERR_FAIL_COND_V(da->make_dir_recursive(usrdir) != OK, ERR_CANT_CREATE);
 
-	String eboot_path = game_dir.path_join("EBOOT.BIN");
+	String eboot_path = usrdir.path_join("EBOOT.BIN");
 	Error err = _copy_template(template_file, eboot_path);
 	ERR_FAIL_COND_V(err != OK, err);
 

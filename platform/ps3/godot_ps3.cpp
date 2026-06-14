@@ -51,7 +51,6 @@ static void ps3_load_modules() {
 	sysModuleLoad(SYSMODULE_FS);
 	sysModuleLoad(SYSMODULE_IO);
 	sysModuleLoad(SYSMODULE_SYSUTIL);
-	sysModuleLoad(SYSMODULE_AUDIO);
 	sysModuleLoad(SYSMODULE_GCM_SYS);
 #ifdef SYSMODULE_RSX
 	sysModuleLoad(SYSMODULE_RSX);

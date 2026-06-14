@@ -8,6 +8,12 @@ import sys
 import time
 from pathlib import Path
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from rpcs3_llvm_progress import format_llvm_status, parse_llvm_progress
+
 
 def _read_bytes(path: Path) -> bytes:
     sources = [path]
@@ -94,8 +100,10 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     boot_game_line = next((line for line in text_head.splitlines() if "Emulator::BootGame:" in line), "")
     empty_title_id = "title_id=''" in boot_game_line or "title_id=\"\"" in boot_game_line
     missing_db_config = "Cannot retrieve database config for empty title_id" in text_head
-    title_id_ok = "title_id='BLAZ00001'" in text or 'title_id="BLAZ00001"' in text
+    title_id_ok = "title_id='BLAZ00001'" in text or 'title_id="BLAZ00001"' in text or "Serial: BLAZ00001" in text
     boot_from_hdd0 = "dev_hdd0/game/BLAZ00001" in boot_game_line
+    paramsfo_enoent = "CELL_ENOENT" in text and "_sys_process_get_paramsfo" in text
+    llvm_progress = parse_llvm_progress(text)
 
     print("RPCS3.log results:")
     print(f"  Boot successful: {'yes' if boot_ok else 'no'}")
@@ -103,13 +111,18 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     print(f"  LLVM compile in progress: {'yes' if llvm_compiling else 'no'}")
     print(f"  Interpreter (static): {'yes (slow fallback)' if interpreter else 'no'}")
     print(f"  Invalid PPU Decoder enum: {'yes (bad)' if invalid_ppu_enum or invalid_enum_any else 'no (good)'}")
-    print(f"  LLVM precompilation enabled: {'yes (optional)' if llvm_precompile else 'no (good)'}")
+    print(f"  LLVM precompilation enabled: {'yes' if llvm_precompile else 'no'}")
     print(f"  Jump table warnings: {jump_warnings}")
     print(f"  TITLE_ID BLAZ00001 in log: {'yes' if title_id_ok else 'no'}")
     print(f"  Empty title_id detected: {'yes (bad)' if empty_title_id else 'no (good)'}")
     print(f"  Missing database config: {'yes (bad)' if missing_db_config else 'no (good)'}")
     print(f"  Booted from export folder: {'yes (bad)' if boot_from_export else 'no (good)'}")
     print(f"  Booted from dev_hdd0 game path: {'yes' if boot_from_hdd0 else 'no'}")
+    print(f"  PARAM.SFO ENOENT: {'yes (bad)' if paramsfo_enoent else 'no (good)'}")
+    print("")
+    print("LLVM progress:")
+    for line in format_llvm_status(llvm_progress):
+        print(line)
     print("")
 
     boot_log_text = ""
@@ -120,6 +133,7 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
             print(f"  {line}")
         print("")
         for milestone in (
+            "early_init",
             "boot_splash_presented",
             "norsx_first_frame_presented",
             "main_setup_end",
@@ -132,7 +146,10 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     if boot_ok:
         ok = ok and not missing_db_config
     elif llvm_compiling and llvm_recompiler:
-        print("INFO: PPU LLVM cache still building — first boot on large templates can take 10-20 minutes.")
+        if llvm_progress.mega_module_active:
+            print("INFO: LLVM mega-module compiling — wait 5-10 min (low CPU is normal). Do not close RPCS3.")
+        else:
+            print("INFO: PPU LLVM cache still building — first boot on large templates can take 10-20 minutes.")
     if invalid_ppu_enum or invalid_enum_any:
         print("FAIL: PPU Decoder config rejected by RPCS3 (use Recompiler (LLVM), not LLVM Recompiler).")
         print("      Redeploy via deploy_rpcs3.py.")
@@ -149,8 +166,10 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     if boot_from_export:
         print("FAIL: Booted export folder. Use launch_rpcs3.py or RPCS3 game list.")
         ok = False
-    if empty_title_id and boot_from_hdd0:
+    if empty_title_id and boot_from_hdd0 and not title_id_ok:
         print("WARN: TITLE_ID empty in BootGame line — PARAM.SFO may be unread; per-folder config.yml still applies.")
+        if paramsfo_enoent:
+            print("      PARAM.SFO ENOENT detected — redeploy with validate_ps3_export.py passing first.")
     elif empty_title_id and not title_id_ok:
         print("WARN: TITLE_ID not applied — launch dev_hdd0/game/BLAZ00001, not export folder.")
     if wait_seconds < min_wait:

@@ -10,6 +10,12 @@ import sys
 import time
 from pathlib import Path
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from validate_ps3_export import validate_export
+
 
 VALID_PPU_DECODERS = frozenset({"Recompiler (LLVM)", "Interpreter (static)"})
 
@@ -64,6 +70,11 @@ def deploy(export_dir: Path, title_id: str, emulator_root: Path) -> int:
     src = export_dir / title_id
     if not src.is_dir():
         print(f"error: export directory not found: {src}", file=sys.stderr)
+        return 1
+
+    # Preflight: require EBOOT, PARAM.SFO, and USRDIR/game.pck before copying.
+    if validate_export(src, title_id) != 0:
+        print("error: export validation failed; fix export before deploy.", file=sys.stderr)
         return 1
 
     dst = emulator_root / "dev_hdd0" / "game" / title_id

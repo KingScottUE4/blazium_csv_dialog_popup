@@ -33,3 +33,4 @@
 
 void ps3_boot_log(const char *p_event);
 void ps3_boot_logf(const char *p_event, const String &p_detail);
+void ps3_boot_log_early_init();

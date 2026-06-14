@@ -2,7 +2,7 @@
 # PPU Recompiler (LLVM) is required for practical boot times on large templates.
 Core:
   PPU Decoder: Recompiler (LLVM)
-  LLVM Precompilation: false
+  LLVM Precompilation: true
   Debug Console Mode: true
 Miscellaneous:
   Show PPU compilation hint: false

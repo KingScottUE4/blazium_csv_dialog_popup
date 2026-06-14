@@ -38,7 +38,7 @@ def _find_rpcs3_exe(explicit: str | None) -> Path | None:
 
 def launch(emulator_root: Path, title_id: str, rpcs3_exe: str | None) -> int:
     game_dir = emulator_root / "dev_hdd0" / "game" / title_id
-    eboot = game_dir / "EBOOT.BIN"
+    eboot = game_dir / "USRDIR" / "EBOOT.BIN"
 
     print("RPCS3 launch helper")
     print(f"  Emulator root: {emulator_root}")
@@ -56,22 +56,29 @@ def launch(emulator_root: Path, title_id: str, rpcs3_exe: str | None) -> int:
         print(f"Launch manually: RPCS3 game list -> {title_id}")
         print(f"Or set RPCS3_EXE, or pass --rpcs3-exe <path>")
         print("")
-        print("First run may take 1-3 minutes while PPU LLVM cache builds.")
+        print("First LLVM boot on a 24 MB template can take 30-40 minutes.")
+        print("The last mega-module (GHTAMzWrMaH4uqsLwAwr9h) may sit at low CPU for 5-10 min — do not close RPCS3.")
+        print("Cached second boot should reach the game within a few minutes.")
         print("Watch the TTY tab for PS3 milestones and the dark-blue boot splash.")
         print("Interpreter fallback: deploy rpcs3_game_config_interpreter.yml (10+ min boot).")
         return 2
 
     print(f"Launching: {exe}")
-    print(f"Boot path: {game_dir}")
+    print(f"Boot path: {eboot}")
     print("")
-    print("Wait 1-3 minutes on first LLVM boot. Watch RPCS3 TTY tab for:")
-    print("  PS3: boot splash presented")
+    print("LLVM boot timing:")
+    print("  First boot: up to 30-40 min (last mega-module looks idle for 5-10 min)")
+    print("  Cached boot: a few minutes — watch for LLVM: Loaded module in RPCS3.log")
+    print("Watch RPCS3 TTY tab for:")
+    print("  PS3: early_init")
+    print("  PS3: modules_loaded")
+    print("  PS3: boot_splash_presented")
     print("  PS3: Main::setup end")
-    print("  PS3: first main_loop_iterate")
+    print("  PS3: first_main_loop_iterate")
     print("")
 
     try:
-        subprocess.Popen([str(exe), str(game_dir)])
+        subprocess.Popen([str(exe), str(eboot)])
     except OSError as exc:
         print(f"error: failed to start RPCS3: {exc}", file=sys.stderr)
         return 1

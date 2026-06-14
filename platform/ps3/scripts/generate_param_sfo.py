@@ -95,6 +95,7 @@ def generate_param_sfo(
         ("APP_TYPE", FMT_INT, 1),
         ("APP_VER", FMT_UTF8, version),
         ("ATTRIBUTE", FMT_INT, 0),
+        ("BOOTABLE", FMT_INT, 1),
         ("CATEGORY", FMT_UTF8, "HG"),
         ("CONTENT_ID", FMT_UTF8, content_id),
         ("FORMAT", FMT_UTF8, "HD"),

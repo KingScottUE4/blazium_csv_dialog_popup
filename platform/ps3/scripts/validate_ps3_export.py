@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 SFO_MAGIC = b"\x00PSF"
-REQUIRED_FILES = ("EBOOT.BIN", "EBOOT.pck", "PARAM.SFO")
+REQUIRED_FILES = ("EBOOT.pck", "PARAM.SFO")
 
 
 def _read_sfo_title_id(path: Path) -> str | None:
@@ -58,6 +58,13 @@ def validate_export(game_dir: Path, expected_title_id: str) -> int:
         else:
             print(f"  FAIL: missing {name}")
             ok = False
+
+    usrdir_eboot = game_dir / "USRDIR" / "EBOOT.BIN"
+    if usrdir_eboot.is_file():
+        print(f"  OK: USRDIR/EBOOT.BIN ({usrdir_eboot.stat().st_size} bytes)")
+    else:
+        print("  FAIL: missing USRDIR/EBOOT.BIN")
+        ok = False
 
     usrdir_pack = game_dir / "USRDIR" / "game.pck"
     if usrdir_pack.is_file():

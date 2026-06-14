@@ -30,5 +30,5 @@ fi
 echo ""
 echo "RPCS3 validation:"
 echo "  1. Enable Debug Console Mode in RPCS3"
-echo "  2. Launch dev_hdd0/game/BLAZ00001/EBOOT.BIN"
+echo "  2. Launch dev_hdd0/game/BLAZ00001/USRDIR/EBOOT.BIN"
 echo "  3. Confirm TTY shows PS3 boot logs and pack loading"
