@@ -64,7 +64,7 @@ def launch(emulator_root: Path, title_id: str, rpcs3_exe: str | None) -> int:
         return 2
 
     print(f"Launching: {exe}")
-    print(f"Boot path: {eboot}")
+    print(f"Boot path: {game_dir}")
     print("")
     print("LLVM boot timing:")
     print("  First boot: up to 30-40 min (last mega-module looks idle for 5-10 min)")
@@ -78,7 +78,7 @@ def launch(emulator_root: Path, title_id: str, rpcs3_exe: str | None) -> int:
     print("")
 
     try:
-        subprocess.Popen([str(exe), str(eboot)])
+        subprocess.Popen([str(exe), str(game_dir)])
     except OSError as exc:
         print(f"error: failed to start RPCS3: {exc}", file=sys.stderr)
         return 1

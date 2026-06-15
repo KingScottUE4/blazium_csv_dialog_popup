@@ -50,7 +50,10 @@ def assemble(
 
     pck_dst = usrdir / "game.pck"
     if game_pck and game_pck.is_file():
-        shutil.copy2(game_pck, pck_dst)
+        if game_pck.resolve() != pck_dst.resolve():
+            shutil.copy2(game_pck, pck_dst)
+        else:
+            print(f"Keeping existing game.pck at {pck_dst}")
     else:
         pck_dst.write_bytes(b"GDPC\x03\x00\x00\x00\x00\x00\x00\x00")
         print("warning: no game.pck supplied; wrote minimal placeholder pack")

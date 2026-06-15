@@ -17,17 +17,32 @@ if ($SkipBuild -ne "1") {
     exit $LASTEXITCODE
 }
 
-$exportCandidates = @(
-    (Join-Path $RepoRoot "exported_game\ps3_export"),
-    (Join-Path $RepoRoot "ps3_test\export\ps3")
-)
-
 $exportDir = $null
-foreach ($candidate in $exportCandidates) {
-    $gameDir = Join-Path $candidate "$TitleId\USRDIR"
-    if (Test-Path $gameDir) {
-        $exportDir = $candidate
-        break
+$editorCandidates = @(
+    (Join-Path $RepoRoot "blazium\bin\blazium.windows.editor.x86_64.exe"),
+    (Join-Path $RepoRoot "blazium\bin\blazium.windows.editor.x86_64.console.exe")
+)
+$hasEditor = $false
+foreach ($c in $editorCandidates) { if (Test-Path $c) { $hasEditor = $true; break } }
+
+if ($hasEditor) {
+    & (Join-Path $ScriptDir "export_ps3_headless.ps1")
+    if ($LASTEXITCODE -eq 0) {
+        $exportDir = Join-Path $RepoRoot "exported_game\ps3_export"
+    }
+}
+
+if (-not $exportDir) {
+    $exportCandidates = @(
+        (Join-Path $RepoRoot "exported_game\ps3_export"),
+        (Join-Path $RepoRoot "ps3_test\export\ps3")
+    )
+    foreach ($candidate in $exportCandidates) {
+        $gameDir = Join-Path $candidate "$TitleId\USRDIR"
+        if (Test-Path $gameDir) {
+            $exportDir = $candidate
+            break
+        }
     }
 }
 
