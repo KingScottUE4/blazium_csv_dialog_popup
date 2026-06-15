@@ -39,7 +39,7 @@
 #endif
 
 extern "C" {
-void ps3_boot_log_trace(const char *p_event);
+void ps3_boot_log_set_event(const char *p_event);
 }
 
 static FILE *g_boot_log_file = nullptr;
@@ -108,6 +108,7 @@ void ps3_boot_log(const char *p_event) {
 	}
 
 	print_line(vformat("PS3: %s", p_event));
+	ps3_boot_log_set_event(p_event);
 	_ensure_boot_log_open();
 	if (!g_boot_log_file) {
 		_append_via_fopen_paths(BOOT_LOG_PATHS, p_event);
@@ -125,6 +126,7 @@ void ps3_boot_logf(const char *p_event, const String &p_detail) {
 
 	const String line = vformat("%s %s", p_event, p_detail);
 	print_line(vformat("PS3: %s", line));
+	ps3_boot_log_set_event(line.utf8().get_data());
 	_ensure_boot_log_open();
 	if (!g_boot_log_file) {
 		_append_via_fopen_paths(BOOT_LOG_PATHS, line.utf8().get_data());

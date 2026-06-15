@@ -40,4 +40,6 @@ protected:
 public:
 	String get_sdk_version() const;
 	String get_firmware_version() const;
+	String get_boot_phase() const;
+	int get_memory_available_mb() const;
 };

@@ -1,39 +1,38 @@
 /**************************************************************************/
 /*  spu_job_queue.cpp                                                     */
 /**************************************************************************/
-/*                         This file is part of:                          */
-/*                             BLAZIUM ENGINE                             */
-/*                          https://blazium.app                           */
-/**************************************************************************/
-/* Copyright (c) 2024-present Blazium Engine contributors.                */
-/*                                                                        */
-/* Permission is hereby granted, free of charge, to any person obtaining  */
-/* a copy of this software and associated documentation files (the        */
-/* "Software"), to deal in the Software without restriction, including    */
-/* without limitation the rights to use, copy, modify, merge, publish,    */
-/* distribute, sublicense, and/or sell copies of the Software, and to     */
-/* permit persons to whom the Software is furnished to do so, subject to  */
-/* the following conditions:                                              */
-/*                                                                        */
-/* The above copyright notice and this permission notice shall be         */
-/* included in all copies or substantial portions of the Software.        */
-/*                                                                        */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
-/**************************************************************************/
 
 #include "spu_job_queue.h"
 
-void SPUJobQueue::enqueue(const SPUJob &p_job) {
-	pending.push_back(p_job);
+#include <cstring>
+
+#define SPU_JOB_QUEUE_MAX 32
+
+static SPUJob g_pending[SPU_JOB_QUEUE_MAX];
+static int g_pending_count = 0;
+
+void spu_job_queue_enqueue(const SPUJob *p_job) {
+	if (!p_job || g_pending_count >= SPU_JOB_QUEUE_MAX) {
+		return;
+	}
+	g_pending[g_pending_count++] = *p_job;
 }
 
-void SPUJobQueue::process_all() {
-	
-	pending.clear();
+void spu_job_queue_process_all(void) {
+	for (int i = 0; i < g_pending_count; i++) {
+		const SPUJob *job = &g_pending[i];
+		if (job->data && job->size > 0) {
+			// M9: PPU fallback until SPU ELF jobs are linked.
+			(void)job;
+		}
+	}
+	g_pending_count = 0;
+}
+
+int spu_job_queue_has_jobs(void) {
+	return g_pending_count > 0;
+}
+
+void spu_job_queue_flush_canvas(void) {
+	spu_job_queue_process_all();
 }

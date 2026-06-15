@@ -41,10 +41,13 @@ jobs:
       - name: Validate toolchain
         run: bash platform/ps3/scripts/validate_toolchain.sh
 
-      - name: Build PS3 templates
-        run: |
-          scons platform=ps3 target=template_release arch=ppc64 module_ps3_module_enabled=yes -j$(nproc)
-          scons platform=ps3 target=template_debug arch=ppc64 module_ps3_module_enabled=yes -j$(nproc)
+      - name: Build PS3 llvm_release template
+        run: bash platform/ps3/scripts/build_ps3_llvm_release.sh
+
+      - name: Smoke test (export validate)
+        run: bash platform/ps3/scripts/smoke_test.sh
+        env:
+          SKIP_BUILD: "1"
 
       - name: Upload template artifact
         uses: actions/upload-artifact@v4

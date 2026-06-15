@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <netdb.h>
 
 int ioctl(int fd, unsigned long request, ...) {
 	(void)fd;
@@ -202,4 +203,28 @@ long pathconf(const char *path, int name) {
 	(void)name;
 	errno = ENOSYS;
 	return -1;
+}
+
+/* M10: incremental network module stubs (builtin_enet uses LV2 sockets when linked). */
+#ifndef EAI_FAIL
+#define EAI_FAIL (-1)
+#endif
+
+int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
+	(void)node;
+	(void)service;
+	(void)hints;
+	if (res) {
+		*res = NULL;
+	}
+	return EAI_FAIL;
+}
+
+void freeaddrinfo(struct addrinfo *res) {
+	(void)res;
+}
+
+const char *gai_strerror(int errcode) {
+	(void)errcode;
+	return "getaddrinfo unavailable on PS3";
 }

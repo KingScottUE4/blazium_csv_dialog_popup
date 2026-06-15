@@ -28,4 +28,5 @@ public:
 	static void clear_clip(State &p_state);
 	static void fill_rect(State &p_state, const Rect2i &p_rect, uint32_t p_color);
 	static void blit_image_rect(State &p_state, const Ref<Image> &p_image, const Rect2i &p_dst, const Rect2i &p_src, const Color &p_modulate, bool p_flip_h, bool p_flip_v);
+	static void flush_spu_jobs();
 };

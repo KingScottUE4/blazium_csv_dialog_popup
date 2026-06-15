@@ -75,6 +75,7 @@ def get_opts():
         BoolVariable("rsx", "Enable RSX/GCM hardware renderer (experimental)", False),
         BoolVariable("software_canvas", "Enable PS3 CPU canvas compositor (NoRSX)", True),
         BoolVariable("rpcs3_compat", "RPCS3 interpreter link compatibility (omit --gc-sections)", True),
+        BoolVariable("spu_jobs", "Enable SPU job queue (PPU fallback in M9)", True),
     ]
 
 
@@ -116,7 +117,11 @@ def get_flags():
         "module_gridmap_enabled": False,
         "module_csg_enabled": False,
         "module_enet_server_enabled": False,
+        "module_sqlite_enabled": False,
+        "module_jsonrpc_enabled": False,
+        "module_multiplayer_enabled": False,
         "builtin_zlib": False,
+        "builtin_bullet": False,
         # Portlibs ships freetype 2.4.3; HarfBuzz needs 2.13+ APIs. Use engine builtin until portlibs is upgraded.
         "builtin_freetype": True,
         # Portlibs libpng is too old for ThorVG's png_image simplified API.
@@ -125,7 +130,6 @@ def get_flags():
         "builtin_mbedtls": False,
         "builtin_miniupnpc": False,
         "builtin_enet": True,
-        "builtin_bullet": True,
         "builtin_pcre2": True,
         "builtin_pcre2_with_jit": False,
         "optimize": "speed",
@@ -241,6 +245,10 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=["RSX_ENABLED"])
         env.Append(LIBS=["gcm_sys", "rsx"])
         print_info("PS3: RSX/GCM hardware renderer enabled (experimental).")
+
+    if env.get("spu_jobs", True):
+        env.Append(CPPDEFINES=["SPU_JOBS_ENABLED"])
+        print_info("PS3: SPU job queue enabled (PPU fallback until SPU ELF linked).")
 
     if not env["builtin_zlib"] and os.path.isfile(os.path.join(portlibs, "lib", "libz.a")):
         env.Append(LIBS=["z"])

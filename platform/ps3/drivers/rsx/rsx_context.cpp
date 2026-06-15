@@ -1,31 +1,6 @@
 /**************************************************************************/
 /*  rsx_context.cpp                                                       */
 /**************************************************************************/
-/*                         This file is part of:                          */
-/*                             BLAZIUM ENGINE                             */
-/*                          https://blazium.app                           */
-/**************************************************************************/
-/* Copyright (c) 2024-present Blazium Engine contributors.                */
-/*                                                                        */
-/* Permission is hereby granted, free of charge, to any person obtaining  */
-/* a copy of this software and associated documentation files (the        */
-/* "Software"), to deal in the Software without restriction, including    */
-/* without limitation the rights to use, copy, modify, merge, publish,    */
-/* distribute, sublicense, and/or sell copies of the Software, and to     */
-/* permit persons to whom the Software is furnished to do so, subject to  */
-/* the following conditions:                                              */
-/*                                                                        */
-/* The above copyright notice and this permission notice shall be         */
-/* included in all copies or substantial portions of the Software.        */
-/*                                                                        */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
-/**************************************************************************/
 
 #include "rsx_context.h"
 
@@ -33,14 +8,23 @@
 #include "servers/rendering/dummy/rasterizer_dummy.h"
 
 #ifdef RSX_ENABLED
+#include <sysmodule/sysmodule.h>
 #include <rsx/rsx.h>
 #include <gcm_sys.h>
 #endif
 
+static bool g_rsx_initialized = false;
+
 void RSXContext::make_current() {
 #ifdef RSX_ENABLED
-	print_line("PS3: RSX/GCM context initializing (experimental).");
-	
+	if (!g_rsx_initialized) {
+		sysModuleLoad(SYSMODULE_GCM_SYS);
+		sysModuleLoad(SYSMODULE_RSX);
+		gcmInitBody(GCM_CONTEXT_RSX);
+		rsxInit(0x200000, 0x1000000, 0, GCM_CONTEXT_RSX);
+		g_rsx_initialized = true;
+		print_line("PS3: RSX/GCM context initialized (experimental).");
+	}
 	RasterizerDummy::make_current();
 #else
 	RasterizerDummy::make_current();
@@ -49,8 +33,16 @@ void RSXContext::make_current() {
 
 bool RSXContext::is_available() {
 #ifdef RSX_ENABLED
-	return true;
+	return g_rsx_initialized;
 #else
 	return false;
+#endif
+}
+
+void RSXContext::present_stub() {
+#ifdef RSX_ENABLED
+	if (g_rsx_initialized) {
+		rsxSetFlipStatus(GCM_TRUE);
+	}
 #endif
 }

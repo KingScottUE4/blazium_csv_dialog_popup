@@ -103,6 +103,19 @@ String PS3EditorPlugin::_get_emulator_root() const {
 	return ProjectSettings::get_singleton()->get_resource_path().path_join("..").path_join("..").path_join("ps3_emulator");
 }
 
+String PS3EditorPlugin::_get_export_dir() const {
+	for (int i = 0; i < EditorExport::get_singleton()->get_export_preset_count(); i++) {
+		Ref<EditorExportPreset> preset = EditorExport::get_singleton()->get_export_preset(i);
+		if (preset.is_valid() && preset->get_platform()->get_name() == "PS3") {
+			const String export_path = preset->get_export_path();
+			if (!export_path.is_empty()) {
+				return export_path.get_basename();
+			}
+		}
+	}
+	return ProjectSettings::get_singleton()->get_resource_path().path_join("export").path_join("ps3");
+}
+
 void PS3EditorPlugin::_validate_toolchain() {
 	String output;
 	int exit_code = 0;
@@ -155,7 +168,7 @@ void PS3EditorPlugin::_install_templates() {
 
 void PS3EditorPlugin::_deploy_rpcs3() {
 	const String title_id = _get_ps3_title_id();
-	const String export_dir = ProjectSettings::get_singleton()->get_resource_path().path_join("export").path_join("ps3");
+	const String export_dir = _get_export_dir();
 	const String emulator_root = _get_emulator_root();
 	const String script_path = _get_scripts_root().path_join("deploy_rpcs3.py");
 

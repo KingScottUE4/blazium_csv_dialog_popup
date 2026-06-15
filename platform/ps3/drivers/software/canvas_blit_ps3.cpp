@@ -10,6 +10,12 @@
 
 #include "core/math/math_funcs.h"
 
+#ifdef SPU_JOBS_ENABLED
+extern "C" {
+#include "platform/ps3/spu/spu_job_queue.h"
+}
+#endif
+
 uint32_t CanvasBlitPS3::color_to_argb(const Color &p_color) {
 	const uint8_t a = (uint8_t)CLAMP(int(p_color.a * 255.0f), 0, 255);
 	const uint8_t r = (uint8_t)CLAMP(int(p_color.r * 255.0f), 0, 255);
@@ -164,4 +170,10 @@ void CanvasBlitPS3::blit_image_rect(State &p_state, const Ref<Image> &p_image, c
 			_blend_pixel(&row[x], pixel);
 		}
 	}
+}
+
+void CanvasBlitPS3::flush_spu_jobs() {
+#ifdef SPU_JOBS_ENABLED
+	spu_job_queue_flush_canvas();
+#endif
 }

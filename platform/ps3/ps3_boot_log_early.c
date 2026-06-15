@@ -9,8 +9,25 @@
 #define PS3_TITLE_ID "BLAZ00001"
 #endif
 
+static char g_ps3_last_boot_event[64] = "boot_pending";
+
 static char g_hdd0_boot_log_path[128];
 static int g_hdd0_boot_log_path_ready = 0;
+
+static void _set_boot_event(const char *p_event) {
+	if (!p_event) {
+		return;
+	}
+	snprintf(g_ps3_last_boot_event, sizeof(g_ps3_last_boot_event), "%s", p_event);
+}
+
+const char *ps3_boot_last_event(void) {
+	return g_ps3_last_boot_event;
+}
+
+void ps3_boot_log_set_event(const char *p_event) {
+	_set_boot_event(p_event);
+}
 
 static void _ensure_hdd0_boot_log_path(void) {
 	if (g_hdd0_boot_log_path_ready) {
@@ -57,6 +74,7 @@ void ps3_boot_log_trace(const char *p_event) {
 	if (!p_event) {
 		return;
 	}
+	_set_boot_event(p_event);
 	printf("PS3: %s\n", p_event);
 	fflush(stdout);
 	_append_via_fopen(p_event);

@@ -7,6 +7,12 @@
 		Exposes lightweight PSL1GHT system utility helpers for on-console messaging. Requires [code]sysUtilCheckCallback()[/code] to run each frame (handled automatically by the PS3 platform main loop).
 	</description>
 	<methods>
+		<method name="poll_message_async" qualifiers="const">
+			<return type="int" />
+			<description>
+				Polls an async dialog opened by [method show_message_async]. Returns [code]0[/code] while open, [code]1[/code] when closed, [code]2[/code] when aborted, [code]-1[/code] when no dialog is active.
+			</description>
+		</method>
 		<method name="show_message" qualifiers="const">
 			<return type="void" />
 			<param index="0" name="message" type="String" />
@@ -18,7 +24,7 @@
 			<return type="int" />
 			<param index="0" name="message" type="String" />
 			<description>
-				Opens a message dialog and returns status: [code]0[/code] open, [code]1[/code] closed, [code]2[/code] aborted.
+				Opens a non-blocking message dialog. Poll with [method poll_message_async] each frame.
 			</description>
 		</method>
 	</methods>

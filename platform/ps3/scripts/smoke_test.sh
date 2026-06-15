@@ -10,21 +10,38 @@ echo "== PS3 smoke test =="
 bash "$SCRIPT_DIR/validate_toolchain.sh"
 
 cd "$BLAZIUM_ROOT"
-echo "== Building PS3 LLVM release template (rpcs3_compat=no) =="
-bash "$SCRIPT_DIR/build_ps3_llvm_release.sh"
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+    echo "== Building PS3 LLVM release template (rpcs3_compat=no) =="
+    bash "$SCRIPT_DIR/build_ps3_llvm_release.sh"
 
-echo "== Installing export templates =="
-python3 "$SCRIPT_DIR/install_templates.py" --blazium-root "$BLAZIUM_ROOT"
+    echo "== Installing export templates =="
+    python3 "$SCRIPT_DIR/install_templates.py" --blazium-root "$BLAZIUM_ROOT"
+else
+    echo "SKIP_BUILD=1 — using existing template"
+fi
 
 TEST_ROOT="/mnt/d/projects/console_support/ps3_test"
-if [ -d "$TEST_ROOT/export/ps3" ]; then
-    echo "== Deploying test export to RPCS3 =="
+EXPORT_CANDIDATES=(
+    "/mnt/d/projects/console_support/exported_game/ps3_export"
+    "$TEST_ROOT/export/ps3"
+)
+
+EXPORT_DIR=""
+for candidate in "${EXPORT_CANDIDATES[@]}"; do
+    if [ -d "$candidate/BLAZ00001" ]; then
+        EXPORT_DIR="$candidate"
+        break
+    fi
+done
+
+if [ -n "$EXPORT_DIR" ]; then
+    echo "== Deploying test export to RPCS3 from $EXPORT_DIR =="
     python3 "$SCRIPT_DIR/deploy_rpcs3.py" \
-        --export-dir "$TEST_ROOT/export/ps3" \
+        --export-dir "$EXPORT_DIR" \
         --title-id BLAZ00001 \
         --emulator-root "/mnt/d/projects/console_support/ps3_emulator"
 else
-    echo "note: export ps3_test first (Project -> Export -> PS3), then re-run smoke_test.sh"
+    echo "note: export ps3_test first (Project -> Export -> PS3) or run recover_ps3_deploy.sh"
 fi
 
 echo ""

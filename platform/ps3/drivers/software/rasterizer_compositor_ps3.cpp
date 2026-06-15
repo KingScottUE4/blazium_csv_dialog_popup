@@ -78,6 +78,7 @@ void RasterizerCompositorPS3::end_frame(bool p_swap_buffers) {
 				fb->clear(NoRSXFramebuffer::SPLASH_COLOR);
 			}
 		}
+		CanvasBlitPS3::flush_spu_jobs();
 		DisplayServer::get_singleton()->swap_buffers();
 	}
 }

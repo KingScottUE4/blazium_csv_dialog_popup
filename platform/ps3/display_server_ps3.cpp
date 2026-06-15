@@ -99,6 +99,12 @@ void DisplayServerPS3::process_events() {
 }
 
 void DisplayServerPS3::swap_buffers() {
+#ifdef RSX_ENABLED
+	if (RSXContext::is_available()) {
+		RSXContext::present_stub();
+		return;
+	}
+#endif
 	NoRSXFramebuffer *fb = ps3_framebuffer_get_shared();
 	if (fb) {
 		fb->present();

@@ -22,6 +22,11 @@ ps3_files = [
     "drivers/software/rasterizer_compositor_ps3.cpp",
 ]
 
+if env.get("spu_jobs", True):
+    ps3_files += [
+        "spu/spu_job_queue.cpp",
+    ]
+
 if env.get("rsx", False):
     ps3_files += [
         "drivers/rsx/rsx_context.cpp",

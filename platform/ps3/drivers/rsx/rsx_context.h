@@ -35,4 +35,5 @@ class RSXContext {
 public:
 	static void make_current();
 	static bool is_available();
+	static void present_stub();
 };

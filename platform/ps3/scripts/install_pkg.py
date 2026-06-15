@@ -49,6 +49,15 @@ def build_pkg_from_game(game_dir: Path, content_id: str, output: Path | None) ->
 
 
 def deploy_game(game_dir: Path, title_id: str, emulator_root: Path) -> int:
+    validate_script = Path(__file__).resolve().parent / "validate_ps3_export.py"
+    if validate_script.is_file():
+        result = subprocess.run(
+            [sys.executable, str(validate_script), "--game-dir", str(game_dir)],
+            check=False,
+        )
+        if result.returncode != 0:
+            return result.returncode
+
     dst = emulator_root / "dev_hdd0" / "game" / title_id
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():

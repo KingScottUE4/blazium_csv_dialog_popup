@@ -37,6 +37,7 @@ class PS3EditorPlugin : public EditorPlugin {
 	String _get_scripts_root() const;
 	String _get_ps3_title_id() const;
 	String _get_emulator_root() const;
+	String _get_export_dir() const;
 
 	void _validate_toolchain();
 	void _install_templates();
