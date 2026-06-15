@@ -199,6 +199,7 @@ def configure(env: "SConsEnvironment"):
     )
 
     env.Append(CCFLAGS=["-mcpu=cell", "-ffunction-sections", "-fdata-sections", "-mno-fp-in-toc", "-mno-sum-in-toc", "-mminimal-toc"])
+    env.Append(CXXFLAGS=["-fno-threadsafe-statics", "-fno-use-cxa-atexit"])
     env.Append(LINKFLAGS=["-Wl,-melf64ppc", "-Wl,--gc-sections", "-Wl,--relax"])
     if env.get("rpcs3_compat", True):
         env["LINKFLAGS"] = [flag for flag in env["LINKFLAGS"] if flag != "-Wl,--gc-sections"]

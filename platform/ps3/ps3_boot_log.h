@@ -33,4 +33,12 @@
 
 void ps3_boot_log(const char *p_event);
 void ps3_boot_logf(const char *p_event, const String &p_detail);
-void ps3_boot_log_early_init();
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+void ps3_boot_log_trace(const char *p_event);
+void ps3_boot_log_early_init(void);
+#ifdef __cplusplus
+}
+#endif

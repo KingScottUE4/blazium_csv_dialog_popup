@@ -103,7 +103,26 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     title_id_ok = "title_id='BLAZ00001'" in text or 'title_id="BLAZ00001"' in text or "Serial: BLAZ00001" in text
     boot_from_hdd0 = "dev_hdd0/game/BLAZ00001" in boot_game_line
     paramsfo_enoent = "CELL_ENOENT" in text and "_sys_process_get_paramsfo" in text
-    llvm_progress = parse_llvm_progress(text)
+    boot_log_text = ""
+    if boot_log_path and boot_log_path.is_file():
+        boot_log_text = boot_log_path.read_text(encoding="utf-8", errors="replace")
+        print(f"boot.log ({boot_log_path}):")
+        for line in boot_log_text.strip().splitlines()[-12:]:
+            print(f"  {line}")
+        print("")
+        for milestone in (
+            "early_init",
+            "main_entry",
+            "modules_loaded",
+            "boot_splash_presented",
+            "norsx_first_frame_presented",
+            "main_setup_end",
+            "first_main_loop_iterate",
+        ):
+            print(f"  boot.log {milestone}: {'yes' if milestone in boot_log_text else 'no'}")
+        print("")
+
+    llvm_progress = parse_llvm_progress(text, boot_log_text)
 
     print("RPCS3.log results:")
     print(f"  Boot successful: {'yes' if boot_ok else 'no'}")
@@ -127,23 +146,6 @@ def validate(log_path: Path, wait_seconds: int, min_wait: int, boot_log_path: Pa
     for line in format_hang_advice(llvm_progress, llvm_recompiler):
         print(line)
     if format_hang_advice(llvm_progress, llvm_recompiler):
-        print("")
-
-    boot_log_text = ""
-    if boot_log_path and boot_log_path.is_file():
-        boot_log_text = boot_log_path.read_text(encoding="utf-8", errors="replace")
-        print(f"boot.log ({boot_log_path}):")
-        for line in boot_log_text.strip().splitlines()[-12:]:
-            print(f"  {line}")
-        print("")
-        for milestone in (
-            "early_init",
-            "boot_splash_presented",
-            "norsx_first_frame_presented",
-            "main_setup_end",
-            "first_main_loop_iterate",
-        ):
-            print(f"  boot.log {milestone}: {'yes' if milestone in boot_log_text else 'no'}")
         print("")
 
     ok = llvm_recompiler and not invalid_ppu_enum and not invalid_enum_any and not boot_from_export

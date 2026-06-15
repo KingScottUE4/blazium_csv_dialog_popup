@@ -83,6 +83,8 @@ static String _find_main_pack(const String &p_exec_path) {
 }
 
 int main(int argc, char *argv[]) {
+	ps3_boot_log_trace("main_entry");
+
 	ps3_load_modules();
 
 	ps3_boot_splash_present();

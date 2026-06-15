@@ -18,6 +18,12 @@ JUMP_TABLE_RE = re.compile(r"Jump table not found")
 PER_INSTR_TOTAL_RE = re.compile(r"(\d+) instructions will be compiled on per-instruction basis in total")
 PER_INSTR_BLOCK_RE = re.compile(r"compiled on per-instruction basis")
 POST_LLVM_REGISTER_RE = re.compile(r'_sys_prx_register_module\(name=.*_sysProcessElf')
+TIMESTAMP_RE = re.compile(r'(\d+):(\d+):(\d+)\.(\d+)')
+EARLY_INIT_RE = re.compile(r'PS3:\s*early_init|(^|\n)early_init(\n|$)')
+MAIN_ENTRY_RE = re.compile(r'PS3:\s*main_entry|(^|\n)main_entry(\n|$)')
+POST_LLVM_WARN_SECONDS = 300
+POST_LLVM_FAIL_SECONDS = 600
+BOOT_SESSION_RE = re.compile(r"Booting application from command line:", re.IGNORECASE)
 
 
 class HangMode:
@@ -40,6 +46,10 @@ class LlvmProgress:
     per_instruction_total: int = 0
     per_instruction_blocks: int = 0
     post_llvm_register_seen: bool = False
+    llvm_loaded_at: float | None = None
+    post_register_at: float | None = None
+    early_init_seen: bool = False
+    main_entry_seen: bool = False
     hang_mode: str = HangMode.NONE
 
     @property
@@ -51,7 +61,29 @@ class LlvmProgress:
         return self.per_instruction_total >= PER_INSTRUCTION_THRESHOLD
 
 
-def parse_llvm_progress(log_text: str) -> LlvmProgress:
+def parse_log_timestamp(line: str) -> float | None:
+    match = TIMESTAMP_RE.search(line)
+    if not match:
+        return None
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+    seconds = int(match.group(3))
+    fraction = int(match.group(4))
+    return hours * 3600 + minutes * 60 + seconds + fraction / 1_000_000
+
+
+def extract_latest_session(log_text: str) -> str:
+    """Keep only the most recent RPCS3 boot session from a cumulative log."""
+    if not log_text:
+        return ""
+    starts = [m.start() for m in BOOT_SESSION_RE.finditer(log_text)]
+    if not starts:
+        return log_text
+    return log_text[starts[-1] :]
+
+
+def parse_llvm_progress(log_text: str, boot_log_text: str = "") -> LlvmProgress:
+    log_text = extract_latest_session(log_text)
     progress = LlvmProgress()
     last_compile_line = ""
 
@@ -66,6 +98,9 @@ def parse_llvm_progress(log_text: str) -> LlvmProgress:
         if LOADED_RE.search(line):
             progress.loaded = True
             progress.compiling = 0
+            ts = parse_log_timestamp(line)
+            if ts is not None:
+                progress.llvm_loaded_at = ts
 
         mega_match = MEGA_RE.search(line)
         if mega_match:
@@ -89,6 +124,20 @@ def parse_llvm_progress(log_text: str) -> LlvmProgress:
 
         if POST_LLVM_REGISTER_RE.search(line):
             progress.post_llvm_register_seen = True
+            ts = parse_log_timestamp(line)
+            if ts is not None:
+                progress.post_register_at = ts
+
+        if EARLY_INIT_RE.search(line):
+            progress.early_init_seen = True
+        if MAIN_ENTRY_RE.search(line):
+            progress.main_entry_seen = True
+
+    if boot_log_text:
+        if "early_init" in boot_log_text:
+            progress.early_init_seen = True
+        if "main_entry" in boot_log_text:
+            progress.main_entry_seen = True
 
     if last_compile_line:
         progress.last_compiling_line = last_compile_line
@@ -100,10 +149,10 @@ def parse_llvm_progress(log_text: str) -> LlvmProgress:
 
 
 def classify_hang_mode(progress: LlvmProgress) -> str:
-    if progress.compiling > 0 or progress.compiled > 0:
-        return HangMode.LLVM_MEGA
-    if progress.loaded and progress.post_llvm_register_seen:
+    if progress.loaded and progress.post_llvm_register_seen and not progress.early_init_seen:
         return HangMode.POST_LLVM_INIT
+    if progress.compiling > 0 or (progress.compiled > 0 and not progress.loaded):
+        return HangMode.LLVM_MEGA
     if progress.per_instruction_flood:
         return HangMode.PER_INSTRUCTION
     if progress.per_instruction_total > 0 and progress.jump_table_warnings > 50 and not progress.loaded:
@@ -116,6 +165,9 @@ def format_llvm_status(progress: LlvmProgress) -> list[str]:
         f"  LLVM modules compiled: {progress.compiled}",
         f"  LLVM modules in progress: {progress.compiling}",
         f"  LLVM loaded into main_thread: {'yes' if progress.loaded else 'no'}",
+        f"  Post-LLVM _sysProcessElf register: {'yes' if progress.post_llvm_register_seen else 'no'}",
+        f"  early_init seen: {'yes' if progress.early_init_seen else 'no'}",
+        f"  main_entry seen: {'yes' if progress.main_entry_seen else 'no'}",
         f"  Jump table warnings: {progress.jump_table_warnings}",
         f"  Per-instruction blocks: {progress.per_instruction_blocks}",
     ]
@@ -132,7 +184,7 @@ def format_llvm_status(progress: LlvmProgress) -> list[str]:
     elif progress.hang_mode == HangMode.LLVM_MEGA:
         lines.append("  Hang mode: LLVM mega-module compile (wait 5-10 min)")
     elif progress.hang_mode == HangMode.POST_LLVM_INIT:
-        lines.append("  Hang mode: post-LLVM CRT init (check USRDIR/boot.log for early_init)")
+        lines.append("  Hang mode: post-LLVM CRT init stall (NOT LLVM compile — check TTY/boot.log for early_init)")
     if progress.last_compiling_line:
         short = progress.last_compiling_line
         if len(short) > 120:
@@ -154,12 +206,19 @@ def format_hang_advice(progress: LlvmProgress, llvm_recompiler: bool = True) -> 
         else:
             advice.append("INFO: PPU LLVM cache still building — first boot can take 30-40 min total.")
     elif progress.hang_mode == HangMode.POST_LLVM_INIT:
-        advice.append("WARN: Post-LLVM init stall — check TTY and USRDIR/boot.log for early_init / modules_loaded.")
+        advice.append(
+            "WARN: Post-LLVM CRT init stall — LLVM compile is DONE. "
+            "Wait 10+ min or check TTY/boot.log for early_init / main_entry."
+        )
+        advice.append("      Do NOT close RPCS3 thinking LLVM is stuck on the last PPU file.")
+        advice.append(
+            "      Stuck PC 0x033c526c (prior session) = .text padding after a branch — CRT/static init before main()."
+        )
     if progress.per_instruction_flood and llvm_recompiler and progress.compiled == 0 and progress.compiling == 0:
         advice.append(
             f"FAIL: {progress.per_instruction_total:,} instructions queued for per-instruction compile with LLVM config."
         )
-    elif progress.per_instruction_total > 1_000_000 and (progress.compiling > 0 or progress.compiled > 0):
+    elif progress.per_instruction_total > 1_000_000 and (progress.compiling > 0 or (progress.compiled > 0 and not progress.loaded)):
         advice.append(
             f"INFO: Per-instruction analysis reported {progress.per_instruction_total:,} blocks; LLVM module compile is in progress."
         )

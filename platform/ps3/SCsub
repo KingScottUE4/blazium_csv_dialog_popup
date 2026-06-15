@@ -7,6 +7,7 @@ ps3_files = [
     "godot_ps3.cpp",
     "os_ps3.cpp",
     "ps3_boot_splash.cpp",
+    "ps3_boot_log_early.c",
     "ps3_boot_log.cpp",
     "display_server_ps3.cpp",
     "joypad_ps3.cpp",
