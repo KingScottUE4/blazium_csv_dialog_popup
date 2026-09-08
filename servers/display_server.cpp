@@ -605,6 +605,10 @@ void DisplayServer::show_window(WindowID p_id) {
 	ERR_FAIL_MSG("Sub-windows not supported by this display server.");
 }
 
+void DisplayServer::hide_window(WindowID p_id) {
+	ERR_FAIL_MSG("Hiding windows is not supported by this display server.");
+}
+
 void DisplayServer::delete_sub_window(WindowID p_id) {
 	ERR_FAIL_MSG("Sub-windows not supported by this display server.");
 }

@@ -1909,6 +1909,15 @@ void DisplayServerX11::show_window(WindowID p_id) {
 	_validate_mode_on_map(p_id);
 }
 
+void DisplayServerX11::hide_window(WindowID p_id) {
+	_THREAD_SAFE_METHOD_
+
+	ERR_FAIL_COND(!windows.has(p_id));
+	const WindowData &wd = windows[p_id];
+	XUnmapWindow(x11_display, wd.x11_window);
+	XSync(x11_display, False);
+}
+
 void DisplayServerX11::delete_sub_window(WindowID p_id) {
 	_THREAD_SAFE_METHOD_
 
