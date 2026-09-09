@@ -2682,6 +2682,7 @@
 			If [code]true[/code], allows hiding the main (root) window with [method Window.hide] or [member Window.visible]. When [code]false[/code] or unset, changing visibility of the main window is declined.
 			Enable this only for tools that need system-tray hide. Games should leave it off.
 			[b]Note:[/b] Hiding keeps the native window alive; it does not destroy [constant DisplayServer.MAIN_WINDOW_ID].
+			[b]Note:[/b] This setting is ignored on iOS, Android, and Web. Main-window hide/show is only implemented on Windows, Linux, and macOS.
 		</member>
 		<member name="display/window/size/always_on_top" type="bool" setter="" getter="" default="false">
 			Forces the main window to be always on top.
