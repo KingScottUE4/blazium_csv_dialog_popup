@@ -16,8 +16,9 @@ concurrency:
 
 jobs:
   build-windows:
-    # Windows 10 with latest image
-    runs-on: windows-latest
+    # Xbox + MSVC /O2 + tests can OOM or starve windows-latest (2025) runners.
+    # Pin those jobs to windows-2022 and cap -j so the hosted agent keeps heartbeat.
+    runs-on: ${{ matrix.os || 'windows-latest' }}
     name: ${{ matrix.name }}
     timeout-minutes: 120
     strategy:
@@ -99,6 +100,7 @@ jobs:
             bin: ./bin/blazium.windows.editor.tests.x86_64.exe
             compiler: msvc
             xbox_module_test: true
+            os: windows-2022
             cache-limit: 1
 
           - name: Template w/ Xbox Module (target=template_release, tests=yes, module_xbox_module_enabled=yes)
@@ -109,6 +111,7 @@ jobs:
             bin: ./bin/blazium.windows.template_release.tests.x86_64.exe
             compiler: msvc
             xbox_module_test: true
+            os: windows-2022
             cache-limit: 1
 
     steps:
@@ -226,11 +229,11 @@ jobs:
         if: matrix.xbox_module_test
         shell: cmd
         run: |
-          echo Building Xbox module with MSVC: platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }}
+          echo Building Xbox module with MSVC: platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }} -j2 verbose=no
           if not "${{ matrix.target }}"=="editor" rmdir /s /q editor 2>nul
           if not "${{ github.event.number }}"=="" (set BUILD_NAME=gh-${{ github.event.number }}) else (set BUILD_NAME=gh)
           where cl
-          scons platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }} "cache_path=${{ github.workspace }}/.scons_cache/" cache_limit=${{ matrix.cache-limit }}
+          scons platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }} -j2 verbose=no "cache_path=${{ github.workspace }}/.scons_cache/" cache_limit=${{ matrix.cache-limit }}
           if errorlevel 1 exit /b 1
 
       - name: Compilation
