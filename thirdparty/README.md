@@ -234,8 +234,12 @@ Files extracted from upstream source:
 - All `.c` files in the main directory (except `unix.c` and `win32.c`)
 - The `include/enet/` folder as `enet/` (except `unix.h` and `win32.h`)
 - `LICENSE` file
-- Added 3 files `enet_godot.cpp`, `enet/enet_godot.h`, and `enet/enet_godot_ext.h`,
-  providing ENet socket implementation using Godot classes, allowing IPv6 and DTLS.
+- Added 4 files `enet_godot.cpp`, `enet/enet_godot.h`, `enet/enet_godot_ext.h`,
+  and `enet/enet_godot_socket.h`, providing ENet socket implementation using
+  Godot classes, allowing IPv6 and DTLS. `enet_godot_socket.h` exposes
+  `ENetGodotSocket` and a thread-local `enet_set_socket_create_fn` hook so a
+  module can install a custom backend for one `enet_host_create` without
+  changing default UDP/DTLS sockets.
 
 Patches:
 

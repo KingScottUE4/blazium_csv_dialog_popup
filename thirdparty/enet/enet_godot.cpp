@@ -42,20 +42,17 @@
 
 // This must be last for windows to compile (tested with MinGW)
 #include "enet/enet.h"
+#include "enet/enet_godot_socket.h"
 
-/// Abstract ENet interface for UDP/DTLS.
-class ENetGodotSocket {
-public:
-	virtual Error bind(IPAddress p_ip, uint16_t p_port) = 0;
-	virtual Error get_socket_address(IPAddress *r_ip, uint16_t *r_port) = 0;
-	virtual Error sendto(const uint8_t *p_buffer, int p_len, int &r_sent, IPAddress p_ip, uint16_t p_port) = 0;
-	virtual Error recvfrom(uint8_t *p_buffer, int p_len, int &r_read, IPAddress &r_ip, uint16_t &r_port) = 0;
-	virtual int set_option(ENetSocketOption p_option, int p_value) = 0;
-	virtual void close() = 0;
-	virtual void set_refuse_new_connections(bool p_enable) {} /* Only used by dtls server */
-	virtual bool can_upgrade() { return false; } /* Only true in ENetUDP */
-	virtual ~ENetGodotSocket() {}
-};
+thread_local ENetSocketCreateFn _enet_socket_create_fn = nullptr;
+
+void enet_set_socket_create_fn(ENetSocketCreateFn p_fn) {
+	_enet_socket_create_fn = p_fn;
+}
+
+ENetSocketCreateFn enet_get_socket_create_fn() {
+	return _enet_socket_create_fn;
+}
 
 class ENetDTLSClient;
 class ENetDTLSServer;
@@ -111,7 +108,7 @@ public:
 		return sock->recvfrom(p_buffer, p_len, r_read, r_ip, r_port);
 	}
 
-	int set_option(ENetSocketOption p_option, int p_value) {
+	int set_option(int p_option, int p_value) {
 		switch (p_option) {
 			case ENET_SOCKOPT_NONBLOCK: {
 				sock->set_blocking_enabled(p_value ? false : true);
@@ -244,7 +241,7 @@ public:
 		return err;
 	}
 
-	int set_option(ENetSocketOption p_option, int p_value) {
+	int set_option(int p_option, int p_value) {
 		return -1;
 	}
 
@@ -380,7 +377,7 @@ public:
 		return err; // OK, ERR_BUSY, or possibly an error.
 	}
 
-	int set_option(ENetSocketOption p_option, int p_value) {
+	int set_option(int p_option, int p_value) {
 		return -1;
 	}
 
@@ -439,6 +436,12 @@ int enet_address_get_host(const ENetAddress *address, char *name, size_t nameLen
 }
 
 ENetSocket enet_socket_create(ENetSocketType type) {
+	if (_enet_socket_create_fn) {
+		ENetGodotSocket *custom = _enet_socket_create_fn();
+		if (custom) {
+			return custom;
+		}
+	}
 	ENetUDP *socket = memnew(ENetUDP);
 
 	return socket;
