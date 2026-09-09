@@ -8,7 +8,8 @@ def configure(env):
 
 
 def is_enabled():
-    return True
+    # Disabled by default. Enable with: module_games_enet_webrtc_enabled=yes
+    return False
 
 
 def get_doc_classes():
