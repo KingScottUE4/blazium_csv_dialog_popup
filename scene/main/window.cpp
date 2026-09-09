@@ -881,6 +881,7 @@ void Window::set_visible(bool p_visible) {
 	}
 
 	if (!get_parent()) {
+#if defined(WINDOWS_ENABLED) || defined(LINUXBSD_ENABLED) || defined(MACOS_ENABLED)
 		if (!GLOBAL_GET("display/window/size/allow_hide_main_window")) {
 			ERR_FAIL_MSG("Can't change visibility of main window.");
 		}
@@ -903,6 +904,9 @@ void Window::set_visible(bool p_visible) {
 		emit_signal(SceneStringName(visibility_changed));
 		RS::get_singleton()->viewport_set_active(get_viewport_rid(), visible);
 		return;
+#else
+		ERR_FAIL_MSG("Can't change visibility of main window.");
+#endif
 	}
 
 	visible = p_visible;

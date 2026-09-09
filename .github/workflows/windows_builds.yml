@@ -16,7 +16,9 @@ concurrency:
 
 jobs:
   build-windows:
-    # Windows 10 with latest image
+    # Windows 10 with latest image. Xbox jobs stay here because the Gaming GDK
+    # (and winget) are present; windows-2022 fails the GDK step. Cap Xbox SCons
+    # at -j2 so MSVC /O2 + tests do not starve the hosted runner.
     runs-on: windows-latest
     name: ${{ matrix.name }}
     timeout-minutes: 120
@@ -155,6 +157,14 @@ jobs:
             "gdk_path=`"$EditionRoot`"" >> $env:GITHUB_ENV
           }
 
+          function Resolve-Winget {
+            $cmd = Get-Command winget -ErrorAction SilentlyContinue
+            if ($cmd) { return $cmd.Source }
+            $winapps = Join-Path $env:LocalAppData 'Microsoft\WindowsApps\winget.exe'
+            if (Test-Path $winapps) { return $winapps }
+            return $null
+          }
+
           $editionRoot = Get-GdkEditionRoot
           if ($editionRoot) {
             Write-Host 'GDK already present; skipping winget install.'
@@ -162,17 +172,23 @@ jobs:
             exit 0
           }
 
-          Write-Host 'Repairing winget sources before GDK install...'
-          winget source disable msstore 2>$null
+          $winget = Resolve-Winget
+          if (-not $winget) {
+            Write-Error 'Microsoft Gaming GDK is not installed and winget is not available on this runner.'
+            exit 1
+          }
+
+          Write-Host "Repairing winget sources before GDK install ($winget)..."
+          & $winget source disable msstore 2>$null
           Import-Module Appx -UseWindowsPowerShell -ErrorAction SilentlyContinue
           Add-AppxPackage -Path "https://cdn.winget.microsoft.com/cache/source.msix" -ErrorAction SilentlyContinue
-          winget source update --accept-source-agreements
+          & $winget source update --accept-source-agreements
 
           $alreadyInstalledCodes = @(0, 2316632107, -1978335189)
           $maxAttempts = 3
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             Write-Host "Installing Microsoft Gaming GDK via winget (attempt $attempt/$maxAttempts)..."
-            winget install --id Microsoft.Gaming.GDK `
+            & $winget install --id Microsoft.Gaming.GDK `
               --accept-package-agreements --accept-source-agreements --disable-interactivity
             $exitCode = $LASTEXITCODE
             if ($alreadyInstalledCodes -contains $exitCode) {
@@ -226,11 +242,11 @@ jobs:
         if: matrix.xbox_module_test
         shell: cmd
         run: |
-          echo Building Xbox module with MSVC: platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }}
+          echo Building Xbox module with MSVC: platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }} -j2 verbose=no
           if not "${{ matrix.target }}"=="editor" rmdir /s /q editor 2>nul
           if not "${{ github.event.number }}"=="" (set BUILD_NAME=gh-${{ github.event.number }}) else (set BUILD_NAME=gh)
           where cl
-          scons platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }} "cache_path=${{ github.workspace }}/.scons_cache/" cache_limit=${{ matrix.cache-limit }}
+          scons platform=windows target=${{ matrix.target }} tests=${{ matrix.tests }} use_mingw=no ${{ env.SCONSFLAGS }} ${{ matrix.sconsflags }} -j2 verbose=no "cache_path=${{ github.workspace }}/.scons_cache/" cache_limit=${{ matrix.cache-limit }}
           if errorlevel 1 exit /b 1
 
       - name: Compilation
