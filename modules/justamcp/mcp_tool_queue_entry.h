@@ -125,10 +125,10 @@ struct MCPToolQueueEntry {
 	bool wait_for_completion(int p_timeout_ms) const {
 #ifdef THREADS_ENABLED
 		waiter_count.fetch_add(1, std::memory_order_acq_rel);
-		THREADING_NAMESPACE::unique_lock<THREADING_NAMESPACE::mutex> lock(completion_mutex);
 #ifdef TESTS_ENABLED
 		test_wait_entered.store(true, std::memory_order_release);
 #endif
+		THREADING_NAMESPACE::unique_lock<THREADING_NAMESPACE::mutex> lock(completion_mutex);
 		const bool ready = completion_cv.wait_for(lock, std::chrono::milliseconds(p_timeout_ms), [this]() {
 			return completion_ready;
 		});

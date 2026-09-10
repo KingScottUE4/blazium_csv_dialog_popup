@@ -147,7 +147,7 @@ void JustAMCPServer::_on_request_cancelled(const Variant &p_request_id, const St
 			task_id_to_cancel = target->task_id;
 		}
 
-		if (target->is_task_augmented && target->task_id.is_empty()) {
+		if (target->is_task_augmented && !target->pending_task_dispatch && target->task_id.is_empty()) {
 			defer_cleanup_to_dispatcher = true;
 		}
 	}
@@ -174,7 +174,7 @@ void JustAMCPServer::_on_request_cancelled(const Variant &p_request_id, const St
 				return;
 			}
 
-			if (still->is_task_augmented && still->task_id.is_empty()) {
+			if (still->is_task_augmented && !still->pending_task_dispatch && still->task_id.is_empty()) {
 				return;
 			}
 		}
