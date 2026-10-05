@@ -123,6 +123,7 @@ void Steam::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("inventory_definitions_updated"));
 
 	_bind_workshop_methods();
+	_bind_leaderboard_methods();
 }
 
 Steam *Steam::get_singleton() {
@@ -302,7 +303,14 @@ void Steam::_dispatch_callbacks() {
 						workshop_pending_calls.erase(call_completed->m_hAsyncCall);
 					}
 
-					if (has_result && !(is_workshop_call && failed)) {
+					LeaderboardCallResult *leaderboard_call = leaderboard_calls.getptr(call_completed->m_hAsyncCall);
+					if (leaderboard_call) {
+						// Picked up by _wait_for_leaderboard_call().
+						leaderboard_call->done = true;
+						leaderboard_call->failed = !has_result || failed;
+						leaderboard_call->callback_id = call_completed->m_iCallback;
+						leaderboard_call->data = result;
+					} else if (has_result && !(is_workshop_call && failed)) {
 						_handle_callback(call_completed->m_iCallback, result.ptr(), (int)call_completed->m_cubParam);
 					} else if (is_workshop_call) {
 						// IO failure (e.g. Steam servers unreachable): still report back to the game.
@@ -423,6 +431,7 @@ void Steam::shutdown() {
 	steam_inventory = nullptr;
 	steam_ugc = nullptr;
 	_clear_workshop_state();
+	leaderboard_calls.clear();
 	steam_pipe = 0;
 	manual_dispatch_enabled = false;
 	stats_received = false;

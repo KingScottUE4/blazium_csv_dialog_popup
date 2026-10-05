@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SteamLeaderboardEntry" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		One entry of a Steam leaderboard.
+	</brief_description>
+	<description>
+		Returned by [method Steam.download_leaderboard_entries] and [method Steam.download_leaderboard_entries_for_users].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_details" qualifiers="const">
+			<return type="PackedInt32Array" />
+			<description>
+				Returns the extra integers uploaded with the score. See [method Steam.upload_leaderboard_score].
+			</description>
+		</method>
+		<method name="get_global_rank" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the entry's global rank, starting at [code]1[/code].
+			</description>
+		</method>
+		<method name="get_persona_name" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the user's Steam display name, as known to the Steam client when the entries were downloaded. May be empty or [code][unknown][/code] for users the client has no information about yet.
+			</description>
+		</method>
+		<method name="get_score" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the entry's score.
+			</description>
+		</method>
+		<method name="get_steam_id" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the Steam ID of the user who owns this entry.
+			</description>
+		</method>
+		<method name="get_ugc_handle" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the handle of user-generated content attached to the entry, or [code]0[/code] if there is none.
+			</description>
+		</method>
+		<method name="is_local_user" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if this entry belongs to the local user.
+			</description>
+		</method>
+	</methods>
+</class>

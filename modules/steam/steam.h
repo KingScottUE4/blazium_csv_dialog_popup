@@ -34,10 +34,12 @@
 #include "steam_auth_result.h"
 #include "steam_inventory_item.h"
 #include "steam_item_definition.h"
+#include "steam_leaderboard_entry.h"
 #include "steam_workshop_item.h"
 
 #include "core/object/object.h"
 #include "core/variant/type_info.h"
+#include "core/variant/typed_array.h"
 
 class SteamAuthClient;
 
@@ -59,6 +61,26 @@ public:
 	};
 
 	// Values mirror the Steamworks SDK enums so they can be passed through.
+	// Values mirror ELeaderboardSortMethod / ELeaderboardDisplayType / ELeaderboardDataRequest.
+	enum LeaderboardSortMethod {
+		LEADERBOARD_SORT_NONE = 0,
+		LEADERBOARD_SORT_ASCENDING = 1,
+		LEADERBOARD_SORT_DESCENDING = 2,
+	};
+
+	enum LeaderboardDisplayType {
+		LEADERBOARD_DISPLAY_NONE = 0,
+		LEADERBOARD_DISPLAY_NUMERIC = 1,
+		LEADERBOARD_DISPLAY_TIME_SECONDS = 2,
+		LEADERBOARD_DISPLAY_TIME_MILLISECONDS = 3,
+	};
+
+	enum LeaderboardDataRequest {
+		LEADERBOARD_GLOBAL = 0,
+		LEADERBOARD_GLOBAL_AROUND_USER = 1,
+		LEADERBOARD_FRIENDS = 2,
+	};
+
 	enum WorkshopFileType {
 		WORKSHOP_FILE_TYPE_COMMUNITY = 0,
 		WORKSHOP_FILE_TYPE_MICROTRANSACTION = 1,
@@ -221,6 +243,16 @@ private:
 		WORKSHOP_QUERY_RETURN_ADDITIONAL_PREVIEWS = 1 << 3,
 	};
 	HashMap<uint64_t, WorkshopPendingCall> workshop_pending_calls;
+
+	// Leaderboard async call results, keyed by SteamAPICall_t. The public
+	// leaderboard methods block until their result arrives (or times out).
+	struct LeaderboardCallResult {
+		bool done = false;
+		bool failed = false;
+		int callback_id = 0;
+		Vector<uint8_t> data;
+	};
+	HashMap<uint64_t, LeaderboardCallResult> leaderboard_calls;
 	HashMap<uint64_t, uint32_t> workshop_query_return_flags;
 
 	Vector<String> debug_log;
@@ -243,6 +275,11 @@ private:
 	Ref<SteamItemDefinition> _build_item_definition(int p_def_id) const;
 	Ref<Image> _fetch_image_from_url(const String &p_url) const;
 	bool _wait_for_inventory_definitions(double p_timeout_sec);
+
+	static void _bind_leaderboard_methods();
+	bool _ensure_leaderboards_ready() const;
+	bool _wait_for_leaderboard_call(SteamAPICallHandle_t p_call, int p_callback_id, int p_min_size, Vector<uint8_t> &r_data);
+	TypedArray<SteamLeaderboardEntry> _collect_leaderboard_entries(const Vector<uint8_t> &p_result);
 
 	static void _bind_workshop_methods();
 	bool _ensure_workshop_ready() const;
@@ -333,6 +370,17 @@ public:
 	PackedByteArray serialize_inventory_result(int p_result_handle);
 	int deserialize_inventory(const PackedByteArray &p_bytes, uint64_t p_expected_steam_id = 0);
 
+	// Steam leaderboards (ISteamUserStats).
+	bool has_leaderboard_support() const;
+	int64_t find_leaderboard(const String &p_name, bool p_create = false, LeaderboardSortMethod p_sort = LEADERBOARD_SORT_ASCENDING, LeaderboardDisplayType p_display = LEADERBOARD_DISPLAY_TIME_MILLISECONDS);
+	Dictionary upload_leaderboard_score(int64_t p_handle, int p_score, bool p_keep_best = true, const PackedInt32Array &p_details = PackedInt32Array());
+	TypedArray<SteamLeaderboardEntry> download_leaderboard_entries(int64_t p_handle, LeaderboardDataRequest p_request = LEADERBOARD_GLOBAL, int p_range_start = 1, int p_range_end = 10);
+	TypedArray<SteamLeaderboardEntry> download_leaderboard_entries_for_users(int64_t p_handle, const PackedInt64Array &p_steam_ids);
+	int get_leaderboard_entry_count(int64_t p_handle) const;
+	String get_leaderboard_name(int64_t p_handle) const;
+	LeaderboardSortMethod get_leaderboard_sort_method(int64_t p_handle) const;
+	LeaderboardDisplayType get_leaderboard_display_type(int64_t p_handle) const;
+
 	// Steam Workshop (ISteamUGC).
 	bool has_workshop_support() const;
 	int get_num_subscribed_items(bool p_include_locally_disabled = false) const;
@@ -383,6 +431,9 @@ public:
 
 VARIANT_ENUM_CAST(Steam::TicketState);
 VARIANT_ENUM_CAST(Steam::AvatarSize);
+VARIANT_ENUM_CAST(Steam::LeaderboardSortMethod);
+VARIANT_ENUM_CAST(Steam::LeaderboardDisplayType);
+VARIANT_ENUM_CAST(Steam::LeaderboardDataRequest);
 VARIANT_ENUM_CAST(Steam::WorkshopFileType);
 VARIANT_ENUM_CAST(Steam::WorkshopVisibility);
 VARIANT_BITFIELD_CAST(Steam::WorkshopItemState);

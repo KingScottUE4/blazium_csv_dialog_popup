@@ -32,6 +32,7 @@
 #include "../steam.h"
 #include "../steam_api_loader.h"
 #include "../steam_inventory_item.h"
+#include "../steam_leaderboard_entry.h"
 #include "../steam_workshop_item.h"
 
 #include "core/io/image.h"
@@ -196,6 +197,54 @@ TEST_CASE("[Steam] workshop callback struct layouts") {
 	CHECK(offsetof(SteamUGCDetails, m_ulSteamIDOwner) == 8160);
 #endif
 	CHECK(offsetof(SteamUGCQueryCompleted, m_rgchNextCursor) == 21);
+}
+
+TEST_CASE("[Steam] leaderboard methods no-op without init") {
+	Steam *steam = Steam::get_singleton();
+	REQUIRE(steam != nullptr);
+	CHECK_FALSE(steam->has_leaderboard_support());
+	CHECK(steam->find_leaderboard("track_1_time") == 0);
+	CHECK(steam->find_leaderboard("track_1_time", true) == 0);
+	const Dictionary upload = steam->upload_leaderboard_score(1, 12345);
+	CHECK_FALSE(bool(upload["success"]));
+	CHECK_FALSE(bool(upload["score_changed"]));
+	CHECK(int(upload["global_rank_new"]) == 0);
+	CHECK(steam->download_leaderboard_entries(1).is_empty());
+	CHECK(steam->download_leaderboard_entries(1, Steam::LEADERBOARD_GLOBAL_AROUND_USER, -4, 5).is_empty());
+	CHECK(steam->download_leaderboard_entries_for_users(1, PackedInt64Array({ 76561197960287930 })).is_empty());
+	CHECK(steam->get_leaderboard_entry_count(1) == 0);
+	CHECK(steam->get_leaderboard_name(1).is_empty());
+	CHECK(steam->get_leaderboard_sort_method(1) == Steam::LEADERBOARD_SORT_NONE);
+	CHECK(steam->get_leaderboard_display_type(1) == Steam::LEADERBOARD_DISPLAY_NONE);
+}
+
+TEST_CASE("[Steam] leaderboard entry without init") {
+	Ref<SteamLeaderboardEntry> entry;
+	entry.instantiate();
+	entry->set_steam_id(76561197960287930);
+	entry->set_global_rank(3);
+	entry->set_score(61234);
+	entry->set_details(PackedInt32Array({ 1, 2, 3 }));
+	CHECK(entry->get_steam_id() == 76561197960287930);
+	CHECK(entry->get_global_rank() == 3);
+	CHECK(entry->get_score() == 61234);
+	CHECK(entry->get_details().size() == 3);
+	CHECK_FALSE(entry->is_local_user());
+}
+
+TEST_CASE("[Steam] leaderboard callback struct layouts") {
+	// CSteamID is byte-packed, and LeaderboardScoreUploaded_t has a 64-bit
+	// handle after a uint8; both depend on Steamworks' per-platform packing.
+	CHECK(offsetof(SteamLeaderboardEntryData, m_nGlobalRank) == 8);
+	CHECK(offsetof(SteamLeaderboardEntryData, m_cDetails) == 16);
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+	CHECK(offsetof(SteamLeaderboardEntryData, m_hUGC) == 20);
+	CHECK(offsetof(SteamLeaderboardScoreUploaded, m_hSteamLeaderboard) == 4);
+#else
+	CHECK(offsetof(SteamLeaderboardEntryData, m_hUGC) == 24);
+	CHECK(offsetof(SteamLeaderboardScoreUploaded, m_hSteamLeaderboard) == 8);
+#endif
+	CHECK(offsetof(SteamLeaderboardScoresDownloaded, m_cEntryCount) == 16);
 }
 
 TEST_CASE("[Steam] singleton registration") {

@@ -54,6 +54,7 @@ private:
 	bool stats_loaded = false;
 	bool inventory_loaded = false;
 	bool workshop_loaded = false;
+	bool leaderboard_loaded = false;
 
 	// Core API
 	typedef int (*SteamAPI_InitFlatFn)(char *p_out_err_msg);
@@ -179,6 +180,17 @@ private:
 	typedef SteamAPICallHandle_t (*ISteamUGC_StopPlaytimeTrackingForAllItemsFn)(ISteamUGCPtr p_self);
 	typedef bool (*ISteamUGC_ShowWorkshopEULAFn)(ISteamUGCPtr p_self);
 	typedef uint32_t (*ISteamUtils_GetAppIDFn)(ISteamUtilsPtr p_self);
+
+	// ISteamUserStats leaderboard flat API. Enum parameters are passed as int.
+	typedef SteamAPICallHandle_t (*ISteamUserStats_FindOrCreateLeaderboardFn)(ISteamUserStatsPtr p_self, const char *p_name, int p_sort_method, int p_display_type);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_FindLeaderboardFn)(ISteamUserStatsPtr p_self, const char *p_name);
+	typedef const char *(*ISteamUserStats_GetLeaderboardNameFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard);
+	typedef int (*ISteamUserStats_GetLeaderboardIntFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_DownloadLeaderboardEntriesFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, int p_request, int p_range_start, int p_range_end);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_DownloadLeaderboardEntriesForUsersFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, uint64_t *p_users, int p_count);
+	typedef bool (*ISteamUserStats_GetDownloadedLeaderboardEntryFn)(ISteamUserStatsPtr p_self, SteamLeaderboardEntries_t p_entries, int p_index, SteamLeaderboardEntryData *p_entry, int32_t *p_details, int p_details_max);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_UploadLeaderboardScoreFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, int p_upload_method, int32_t p_score, const int32_t *p_details, int p_details_count);
+	typedef const char *(*ISteamFriends_GetFriendPersonaNameFn)(ISteamFriendsPtr p_self, uint64_t p_steam_id);
 
 	SteamAPI_InitFlatFn fn_init_flat = nullptr;
 	SteamAPI_ShutdownFn fn_shutdown = nullptr;
@@ -321,6 +333,18 @@ private:
 	ISteamUGC_PlaytimeTrackingFn fn_ugc_stop_playtime_tracking = nullptr;
 	ISteamUGC_StopPlaytimeTrackingForAllItemsFn fn_ugc_stop_playtime_tracking_for_all_items = nullptr;
 	ISteamUGC_ShowWorkshopEULAFn fn_ugc_show_workshop_eula = nullptr;
+
+	ISteamUserStats_FindOrCreateLeaderboardFn fn_find_or_create_leaderboard = nullptr;
+	ISteamUserStats_FindLeaderboardFn fn_find_leaderboard = nullptr;
+	ISteamUserStats_GetLeaderboardNameFn fn_get_leaderboard_name = nullptr;
+	ISteamUserStats_GetLeaderboardIntFn fn_get_leaderboard_entry_count = nullptr;
+	ISteamUserStats_GetLeaderboardIntFn fn_get_leaderboard_sort_method = nullptr;
+	ISteamUserStats_GetLeaderboardIntFn fn_get_leaderboard_display_type = nullptr;
+	ISteamUserStats_DownloadLeaderboardEntriesFn fn_download_leaderboard_entries = nullptr;
+	ISteamUserStats_DownloadLeaderboardEntriesForUsersFn fn_download_leaderboard_entries_for_users = nullptr;
+	ISteamUserStats_GetDownloadedLeaderboardEntryFn fn_get_downloaded_leaderboard_entry = nullptr;
+	ISteamUserStats_UploadLeaderboardScoreFn fn_upload_leaderboard_score = nullptr;
+	ISteamFriends_GetFriendPersonaNameFn fn_get_friend_persona_name = nullptr;
 	// Optional: lets the Workshop resolve the running app ID on its own.
 	SteamAPI_SteamUtilsFn fn_ugc_steam_utils = nullptr;
 	ISteamUtils_GetAppIDFn fn_utils_get_app_id = nullptr;
@@ -329,6 +353,7 @@ private:
 	bool _load_stats_symbols();
 	bool _load_inventory_symbols();
 	bool _load_workshop_symbols();
+	bool _load_leaderboard_symbols();
 	void _clear_workshop_symbols();
 
 public:
@@ -340,6 +365,7 @@ public:
 	bool has_stats_support() const { return stats_loaded; }
 	bool has_inventory_support() const { return inventory_loaded; }
 	bool has_workshop_support() const { return workshop_loaded; }
+	bool has_leaderboard_support() const { return leaderboard_loaded; }
 
 	int init_flat(String &r_err_msg);
 	void shutdown();
@@ -492,4 +518,18 @@ public:
 	SteamAPICallHandle_t ugc_stop_playtime_tracking(ISteamUGCPtr p_ugc, const Vector<SteamPublishedFileId_t> &p_file_ids) const;
 	SteamAPICallHandle_t ugc_stop_playtime_tracking_for_all_items(ISteamUGCPtr p_ugc) const;
 	bool ugc_show_workshop_eula(ISteamUGCPtr p_ugc) const;
+
+	// Steam leaderboards (ISteamUserStats). All wrappers return a safe failure
+	// value when the symbols are unavailable.
+	SteamAPICallHandle_t find_or_create_leaderboard(ISteamUserStatsPtr p_stats, const char *p_name, int p_sort_method, int p_display_type) const;
+	SteamAPICallHandle_t find_leaderboard(ISteamUserStatsPtr p_stats, const char *p_name) const;
+	String get_leaderboard_name(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	int get_leaderboard_entry_count(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	int get_leaderboard_sort_method(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	int get_leaderboard_display_type(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	SteamAPICallHandle_t download_leaderboard_entries(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, int p_request, int p_range_start, int p_range_end) const;
+	SteamAPICallHandle_t download_leaderboard_entries_for_users(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, const Vector<uint64_t> &p_users) const;
+	bool get_downloaded_leaderboard_entry(ISteamUserStatsPtr p_stats, SteamLeaderboardEntries_t p_entries, int p_index, SteamLeaderboardEntryData &r_entry, Vector<int32_t> &r_details) const;
+	SteamAPICallHandle_t upload_leaderboard_score(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, int p_upload_method, int32_t p_score, const Vector<int32_t> &p_details) const;
+	String get_friend_persona_name(ISteamFriendsPtr p_friends, uint64_t p_steam_id) const;
 };

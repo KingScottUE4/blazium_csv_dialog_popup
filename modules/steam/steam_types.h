@@ -342,3 +342,77 @@ static_assert(sizeof(SteamUGCDownloadItemResult) == 24, "DownloadItemResult layo
 #endif
 static_assert(sizeof(SteamUGCQueryCompleted) == 280, "SteamUGCQueryCompleted layout mismatch");
 #endif
+
+// -----------------------------------------------------------------------------
+// Steam leaderboards (ISteamUserStats) types.
+// -----------------------------------------------------------------------------
+
+enum {
+	STEAM_LEADERBOARD_FIND_RESULT_CALLBACK = STEAM_USER_STATS_CALLBACKS_BASE + 4,
+	STEAM_LEADERBOARD_SCORES_DOWNLOADED_CALLBACK = STEAM_USER_STATS_CALLBACKS_BASE + 5,
+	STEAM_LEADERBOARD_SCORE_UPLOADED_CALLBACK = STEAM_USER_STATS_CALLBACKS_BASE + 6,
+};
+
+typedef uint64_t SteamLeaderboard_t;
+typedef uint64_t SteamLeaderboardEntries_t;
+
+static constexpr int STEAM_LEADERBOARD_NAME_MAX = 128; // k_cchLeaderboardNameMax
+static constexpr int STEAM_LEADERBOARD_DETAILS_MAX = 64; // k_cLeaderboardDetailsMax
+
+// Same per-platform callback packing as the Workshop structs above.
+#ifdef STEAM_UGC_CALLBACK_PACK_SMALL
+#pragma pack(push, 4)
+#else
+#pragma pack(push, 8)
+#endif
+
+struct SteamLeaderboardEntryData {
+	// CSteamID is a byte-packed 64-bit value, so it has an alignment of 1.
+	uint8_t m_steamIDUser[8];
+	int32_t m_nGlobalRank;
+	int32_t m_nScore;
+	int32_t m_cDetails;
+	SteamUGCHandle_t m_hUGC;
+};
+
+struct SteamLeaderboardFindResult {
+	enum { k_iCallback = STEAM_LEADERBOARD_FIND_RESULT_CALLBACK };
+
+	SteamLeaderboard_t m_hSteamLeaderboard;
+	uint8_t m_bLeaderboardFound;
+};
+
+struct SteamLeaderboardScoresDownloaded {
+	enum { k_iCallback = STEAM_LEADERBOARD_SCORES_DOWNLOADED_CALLBACK };
+
+	SteamLeaderboard_t m_hSteamLeaderboard;
+	SteamLeaderboardEntries_t m_hSteamLeaderboardEntries;
+	int m_cEntryCount;
+};
+
+struct SteamLeaderboardScoreUploaded {
+	enum { k_iCallback = STEAM_LEADERBOARD_SCORE_UPLOADED_CALLBACK };
+
+	uint8_t m_bSuccess;
+	SteamLeaderboard_t m_hSteamLeaderboard;
+	int32_t m_nScore;
+	uint8_t m_bScoreChanged;
+	int m_nGlobalRankNew;
+	int m_nGlobalRankPrevious;
+};
+
+#pragma pack(pop)
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#ifdef STEAM_UGC_CALLBACK_PACK_SMALL
+static_assert(sizeof(SteamLeaderboardEntryData) == 28, "LeaderboardEntry_t layout mismatch");
+static_assert(sizeof(SteamLeaderboardFindResult) == 12, "LeaderboardFindResult_t layout mismatch");
+static_assert(sizeof(SteamLeaderboardScoresDownloaded) == 20, "LeaderboardScoresDownloaded_t layout mismatch");
+static_assert(sizeof(SteamLeaderboardScoreUploaded) == 28, "LeaderboardScoreUploaded_t layout mismatch");
+#else
+static_assert(sizeof(SteamLeaderboardEntryData) == 32, "LeaderboardEntry_t layout mismatch");
+static_assert(sizeof(SteamLeaderboardFindResult) == 16, "LeaderboardFindResult_t layout mismatch");
+static_assert(sizeof(SteamLeaderboardScoresDownloaded) == 24, "LeaderboardScoresDownloaded_t layout mismatch");
+static_assert(sizeof(SteamLeaderboardScoreUploaded) == 32, "LeaderboardScoreUploaded_t layout mismatch");
+#endif
+#endif

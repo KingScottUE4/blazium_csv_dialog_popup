@@ -171,6 +171,7 @@ bool SteamAPILoader::try_load() {
 
 	loaded = true;
 	stats_loaded = _load_stats_symbols();
+	leaderboard_loaded = stats_loaded && _load_leaderboard_symbols();
 	inventory_loaded = _load_inventory_symbols();
 	workshop_loaded = _load_workshop_symbols();
 	if (!workshop_loaded) {
@@ -371,6 +372,18 @@ void SteamAPILoader::unload() {
 	fn_get_steam_id = nullptr;
 	stats_loaded = false;
 	inventory_loaded = false;
+	leaderboard_loaded = false;
+	fn_find_or_create_leaderboard = nullptr;
+	fn_find_leaderboard = nullptr;
+	fn_get_leaderboard_name = nullptr;
+	fn_get_leaderboard_entry_count = nullptr;
+	fn_get_leaderboard_sort_method = nullptr;
+	fn_get_leaderboard_display_type = nullptr;
+	fn_download_leaderboard_entries = nullptr;
+	fn_download_leaderboard_entries_for_users = nullptr;
+	fn_get_downloaded_leaderboard_entry = nullptr;
+	fn_upload_leaderboard_score = nullptr;
+	fn_get_friend_persona_name = nullptr;
 	_clear_workshop_symbols();
 	fn_steam_user_stats = nullptr;
 	fn_request_current_stats = nullptr;

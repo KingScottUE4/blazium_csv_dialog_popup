@@ -155,6 +155,27 @@
 				Starts downloading or updating a Workshop item. If [param high_priority] is [code]true[/code], the item is moved to the front of the download queue and other downloads are suspended until it completes. [signal workshop_item_downloaded] is emitted when the download finishes. Returns [code]false[/code] if the request could not be made.
 			</description>
 		</method>
+		<method name="download_leaderboard_entries">
+			<return type="SteamLeaderboardEntry[]" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="request" type="int" enum="Steam.LeaderboardDataRequest" default="0" />
+			<param index="2" name="range_start" type="int" default="1" />
+			<param index="3" name="range_end" type="int" default="10" />
+			<description>
+				Downloads entries from the leaderboard [param handle] and blocks until Steam answers (up to 10 seconds). Returns an empty array on failure.
+				- [constant LEADERBOARD_GLOBAL]: ranks [param range_start] to [param range_end], starting at [code]1[/code].
+				- [constant LEADERBOARD_GLOBAL_AROUND_USER]: entries relative to the local user; for example [code]-4, 5[/code] returns 4 entries above the user, the user, and 5 below.
+				- [constant LEADERBOARD_FRIENDS]: all of the local user's friends; the range is ignored.
+			</description>
+		</method>
+		<method name="download_leaderboard_entries_for_users">
+			<return type="SteamLeaderboardEntry[]" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="steam_ids" type="PackedInt64Array" />
+			<description>
+				Downloads the entries of specific users (by Steam ID) from the leaderboard [param handle] and blocks until Steam answers (up to 10 seconds). At most 100 users can be requested at once. Users without an entry are left out.
+			</description>
+		</method>
 		<method name="exchange_items">
 			<return type="bool" />
 			<param index="0" name="generate_def_ids" type="PackedInt32Array" />
@@ -168,6 +189,20 @@
 			<return type="Array" />
 			<param index="0" name="def_id" type="int" />
 			<description>
+			</description>
+		</method>
+		<method name="find_leaderboard">
+			<return type="int" />
+			<param index="0" name="name" type="String" />
+			<param index="1" name="create" type="bool" default="false" />
+			<param index="2" name="sort" type="int" enum="Steam.LeaderboardSortMethod" default="1" />
+			<param index="3" name="display" type="int" enum="Steam.LeaderboardDisplayType" default="3" />
+			<description>
+				Looks up a leaderboard by its API name and returns its handle, or [code]0[/code] if it doesn't exist or the request timed out. Blocks until Steam answers (up to 10 seconds).
+				If [param create] is [code]true[/code], the leaderboard is created when missing, using [param sort] and [param display]. Leaderboards can also be created on the Steamworks partner site, in which case [param sort] and [param display] are ignored.
+				[codeblock]
+				var board := Steam.find_leaderboard("track_1_time", true, Steam.LEADERBOARD_SORT_ASCENDING, Steam.LEADERBOARD_DISPLAY_TIME_MILLISECONDS)
+				[/codeblock]
 			</description>
 		</method>
 		<method name="get_achievement" qualifiers="const">
@@ -288,6 +323,34 @@
 			<description>
 			</description>
 		</method>
+		<method name="get_leaderboard_display_type" qualifiers="const">
+			<return type="int" enum="Steam.LeaderboardDisplayType" />
+			<param index="0" name="handle" type="int" />
+			<description>
+				Returns how scores in the leaderboard [param handle] should be displayed.
+			</description>
+		</method>
+		<method name="get_leaderboard_entry_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="handle" type="int" />
+			<description>
+				Returns the total number of entries in the leaderboard [param handle].
+			</description>
+		</method>
+		<method name="get_leaderboard_name" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="handle" type="int" />
+			<description>
+				Returns the API name of the leaderboard [param handle].
+			</description>
+		</method>
+		<method name="get_leaderboard_sort_method" qualifiers="const">
+			<return type="int" enum="Steam.LeaderboardSortMethod" />
+			<param index="0" name="handle" type="int" />
+			<description>
+				Returns how the leaderboard [param handle] is sorted.
+			</description>
+		</method>
 		<method name="get_local_steam_id" qualifiers="const">
 			<return type="int" />
 			<description>
@@ -360,6 +423,12 @@
 		<method name="has_inventory_support" qualifiers="const">
 			<return type="bool" />
 			<description>
+			</description>
+		</method>
+		<method name="has_leaderboard_support" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the loaded Steam API library exposes the leaderboard functions of [code]ISteamUserStats[/code].
 			</description>
 		</method>
 		<method name="has_workshop_support" qualifiers="const">
@@ -755,6 +824,18 @@
 			<param index="0" name="published_file_id" type="int" />
 			<description>
 				Unsubscribes the local user from a Workshop item. The item is removed after the game quits. Emits [signal workshop_item_unsubscribed] when Steam responds. Returns [code]false[/code] if the request could not be sent.
+			</description>
+		</method>
+		<method name="upload_leaderboard_score">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="score" type="int" />
+			<param index="2" name="keep_best" type="bool" default="true" />
+			<param index="3" name="details" type="PackedInt32Array" default="PackedInt32Array()" />
+			<description>
+				Uploads a score for the local user to the leaderboard [param handle] and blocks until Steam answers (up to 10 seconds). If [param keep_best] is [code]true[/code], Steam keeps the user's previous score when it's better; otherwise the score is always replaced. [param details] can hold up to 64 extra integers (for example split times), returned with [method download_leaderboard_entries].
+				Returns a [Dictionary] with the keys [code]success[/code] ([bool]), [code]score_changed[/code] ([bool]), [code]global_rank_new[/code] ([int]) and [code]global_rank_previous[/code] ([int], [code]0[/code] if the user had no entry).
+				[b]Note:[/b] Steam rate-limits uploads to about 10 per 10 minutes per leaderboard.
 			</description>
 		</method>
 	</methods>
@@ -1155,6 +1236,36 @@
 		</constant>
 		<constant name="WORKSHOP_PREVIEW_TYPE_CLIP" value="5" enum="WorkshopPreviewType">
 			A Steam clip ID.
+		</constant>
+		<constant name="LEADERBOARD_SORT_NONE" value="0" enum="LeaderboardSortMethod">
+			No sort method. Not valid for creating a leaderboard.
+		</constant>
+		<constant name="LEADERBOARD_SORT_ASCENDING" value="1" enum="LeaderboardSortMethod">
+			Lowest score ranks first (for example lap times).
+		</constant>
+		<constant name="LEADERBOARD_SORT_DESCENDING" value="2" enum="LeaderboardSortMethod">
+			Highest score ranks first (for example points).
+		</constant>
+		<constant name="LEADERBOARD_DISPLAY_NONE" value="0" enum="LeaderboardDisplayType">
+			No display type. Not valid for creating a leaderboard.
+		</constant>
+		<constant name="LEADERBOARD_DISPLAY_NUMERIC" value="1" enum="LeaderboardDisplayType">
+			Scores are plain numbers.
+		</constant>
+		<constant name="LEADERBOARD_DISPLAY_TIME_SECONDS" value="2" enum="LeaderboardDisplayType">
+			Scores are times in seconds.
+		</constant>
+		<constant name="LEADERBOARD_DISPLAY_TIME_MILLISECONDS" value="3" enum="LeaderboardDisplayType">
+			Scores are times in milliseconds.
+		</constant>
+		<constant name="LEADERBOARD_GLOBAL" value="0" enum="LeaderboardDataRequest">
+			Entries by global rank.
+		</constant>
+		<constant name="LEADERBOARD_GLOBAL_AROUND_USER" value="1" enum="LeaderboardDataRequest">
+			Entries around the local user's rank.
+		</constant>
+		<constant name="LEADERBOARD_FRIENDS" value="2" enum="LeaderboardDataRequest">
+			Entries of the local user's friends.
 		</constant>
 	</constants>
 </class>

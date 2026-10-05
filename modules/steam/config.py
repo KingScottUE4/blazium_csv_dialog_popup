@@ -14,6 +14,7 @@ def get_doc_classes():
         "SteamInventoryItem",
         "SteamItemDefinition",
         "SteamWorkshopItem",
+        "SteamLeaderboardEntry",
         "SteamEditorPlugin",
     ]
 
