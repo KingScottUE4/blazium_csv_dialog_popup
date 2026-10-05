@@ -13,6 +13,7 @@ def get_doc_classes():
         "SteamAchievementInfo",
         "SteamInventoryItem",
         "SteamItemDefinition",
+        "SteamWorkshopItem",
         "SteamEditorPlugin",
     ]
 

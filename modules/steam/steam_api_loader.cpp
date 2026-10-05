@@ -36,12 +36,12 @@
 
 #include <cstring>
 
-bool SteamAPILoader::_load_symbol(const char *p_name, void *&r_symbol) {
+bool SteamAPILoader::_load_symbol(const char *p_name, void *&r_symbol, bool p_optional) {
 	r_symbol = nullptr;
 	if (!library_handle) {
 		return false;
 	}
-	Error err = OS::get_singleton()->get_dynamic_library_symbol_handle(library_handle, p_name, r_symbol);
+	Error err = OS::get_singleton()->get_dynamic_library_symbol_handle(library_handle, p_name, r_symbol, p_optional);
 	return err == OK && r_symbol != nullptr;
 }
 
@@ -172,6 +172,10 @@ bool SteamAPILoader::try_load() {
 	loaded = true;
 	stats_loaded = _load_stats_symbols();
 	inventory_loaded = _load_inventory_symbols();
+	workshop_loaded = _load_workshop_symbols();
+	if (!workshop_loaded) {
+		_clear_workshop_symbols();
+	}
 	return true;
 }
 
@@ -305,9 +309,9 @@ bool SteamAPILoader::_load_inventory_symbols() {
 	fn_steam_inventory = (SteamAPI_SteamInventoryFn)symbol;
 
 #define LOAD_INV_SYM(name, field, type) \
-	if (!_load_symbol(name, symbol)) {  \
-		return false;                   \
-	}                                   \
+	if (!_load_symbol(name, symbol)) { \
+		return false; \
+	} \
 	field = (type)symbol;
 
 	LOAD_INV_SYM("SteamAPI_ISteamInventory_GetResultStatus", fn_inventory_get_result_status, ISteamInventory_GetResultStatusFn);
@@ -367,6 +371,7 @@ void SteamAPILoader::unload() {
 	fn_get_steam_id = nullptr;
 	stats_loaded = false;
 	inventory_loaded = false;
+	_clear_workshop_symbols();
 	fn_steam_user_stats = nullptr;
 	fn_request_current_stats = nullptr;
 	fn_get_achievement = nullptr;

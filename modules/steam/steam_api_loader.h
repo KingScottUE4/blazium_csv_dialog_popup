@@ -29,14 +29,13 @@
 
 #pragma once
 
+#include "steam_types.h"
+
 #include "core/error/error_list.h"
+#include "core/io/image.h"
 #include "core/object/ref_counted.h"
 #include "core/string/ustring.h"
 #include "core/templates/vector.h"
-
-#include "core/io/image.h"
-
-#include "steam_types.h"
 
 class SteamAPILoader {
 public:
@@ -47,12 +46,14 @@ public:
 	typedef void *ISteamFriendsPtr;
 	typedef void *ISteamUtilsPtr;
 	typedef void *ISteamInventoryPtr;
+	typedef void *ISteamUGCPtr;
 
 private:
 	void *library_handle = nullptr;
 	bool loaded = false;
 	bool stats_loaded = false;
 	bool inventory_loaded = false;
+	bool workshop_loaded = false;
 
 	// Core API
 	typedef int (*SteamAPI_InitFlatFn)(char *p_out_err_msg);
@@ -135,6 +136,50 @@ private:
 	typedef bool (*ISteamInventory_TriggerItemDropFn)(ISteamInventoryPtr p_self, SteamInventoryResult_t *p_result, SteamItemDef_t p_drop_list_definition);
 	typedef bool (*ISteamInventory_GetEligiblePromoItemDefinitionIDsFn)(ISteamInventoryPtr p_self, uint64_t p_steam_id, SteamItemDef_t *p_item_def_ids, uint32_t *p_count);
 
+	// ISteamUGC flat API (Steam Workshop). Enum parameters are passed as int.
+	typedef ISteamUGCPtr (*SteamAPI_SteamUGCFn)();
+	typedef SteamUGCQueryHandle_t (*ISteamUGC_CreateQueryUserUGCRequestFn)(ISteamUGCPtr p_self, uint32_t p_account_id, int p_list_type, int p_matching_type, int p_sort_order, uint32_t p_creator_app_id, uint32_t p_consumer_app_id, uint32_t p_page);
+	typedef SteamUGCQueryHandle_t (*ISteamUGC_CreateQueryAllUGCRequestPageFn)(ISteamUGCPtr p_self, int p_query_type, int p_matching_type, uint32_t p_creator_app_id, uint32_t p_consumer_app_id, uint32_t p_page);
+	typedef SteamUGCQueryHandle_t (*ISteamUGC_CreateQueryAllUGCRequestCursorFn)(ISteamUGCPtr p_self, int p_query_type, int p_matching_type, uint32_t p_creator_app_id, uint32_t p_consumer_app_id, const char *p_cursor);
+	typedef SteamUGCQueryHandle_t (*ISteamUGC_CreateQueryUGCDetailsRequestFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t *p_file_ids, uint32_t p_count);
+	typedef SteamAPICallHandle_t (*ISteamUGC_SendQueryUGCRequestFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle);
+	typedef bool (*ISteamUGC_GetQueryUGCResultFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index, SteamUGCDetails *p_details);
+	typedef bool (*ISteamUGC_GetQueryUGCStringFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index, char *p_buffer, uint32_t p_buffer_size);
+	typedef bool (*ISteamUGC_GetQueryUGCChildrenFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index, SteamPublishedFileId_t *p_file_ids, uint32_t p_max_entries);
+	typedef bool (*ISteamUGC_GetQueryUGCStatisticFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index, int p_stat_type, uint64_t *p_value);
+	typedef uint32_t (*ISteamUGC_GetQueryUGCCountFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index);
+	typedef bool (*ISteamUGC_GetQueryUGCAdditionalPreviewFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index, uint32_t p_preview_index, char *p_url_or_video_id, uint32_t p_url_size, char *p_original_file_name, uint32_t p_original_file_name_size, int *p_preview_type);
+	typedef bool (*ISteamUGC_GetQueryUGCKeyValueTagFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_index, uint32_t p_tag_index, char *p_key, uint32_t p_key_size, char *p_value, uint32_t p_value_size);
+	typedef bool (*ISteamUGC_QueryHandleFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle);
+	typedef bool (*ISteamUGC_QueryHandleStringFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, const char *p_value);
+	typedef bool (*ISteamUGC_QueryHandleKeyValueFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, const char *p_key, const char *p_value);
+	typedef bool (*ISteamUGC_QueryHandleBoolFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, bool p_value);
+	typedef bool (*ISteamUGC_QueryHandleUIntFn)(ISteamUGCPtr p_self, SteamUGCQueryHandle_t p_handle, uint32_t p_value);
+	typedef SteamAPICallHandle_t (*ISteamUGC_CreateItemFn)(ISteamUGCPtr p_self, uint32_t p_consumer_app_id, int p_file_type);
+	typedef SteamUGCUpdateHandle_t (*ISteamUGC_StartItemUpdateFn)(ISteamUGCPtr p_self, uint32_t p_consumer_app_id, SteamPublishedFileId_t p_file_id);
+	typedef bool (*ISteamUGC_UpdateHandleStringFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, const char *p_value);
+	typedef bool (*ISteamUGC_UpdateHandleKeyValueFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, const char *p_key, const char *p_value);
+	typedef bool (*ISteamUGC_UpdateHandleIntFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, int p_value);
+	typedef bool (*ISteamUGC_UpdateHandleFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle);
+	typedef bool (*ISteamUGC_SetItemTagsFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, const SteamParamStringArray *p_tags, bool p_allow_admin_tags);
+	typedef bool (*ISteamUGC_AddItemPreviewFileFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, const char *p_preview_file, int p_type);
+	typedef SteamAPICallHandle_t (*ISteamUGC_SubmitItemUpdateFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, const char *p_change_note);
+	typedef int (*ISteamUGC_GetItemUpdateProgressFn)(ISteamUGCPtr p_self, SteamUGCUpdateHandle_t p_handle, uint64_t *p_bytes_processed, uint64_t *p_bytes_total);
+	typedef SteamAPICallHandle_t (*ISteamUGC_FileIdCallFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t p_file_id);
+	typedef SteamAPICallHandle_t (*ISteamUGC_SetUserItemVoteFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t p_file_id, bool p_vote_up);
+	typedef SteamAPICallHandle_t (*ISteamUGC_AppFileIdCallFn)(ISteamUGCPtr p_self, uint32_t p_app_id, SteamPublishedFileId_t p_file_id);
+	typedef uint32_t (*ISteamUGC_GetNumSubscribedItemsFn)(ISteamUGCPtr p_self, bool p_include_locally_disabled);
+	typedef uint32_t (*ISteamUGC_GetSubscribedItemsFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t *p_file_ids, uint32_t p_max_entries, bool p_include_locally_disabled);
+	typedef uint32_t (*ISteamUGC_GetItemStateFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t p_file_id);
+	typedef bool (*ISteamUGC_GetItemInstallInfoFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t p_file_id, uint64_t *p_size_on_disk, char *p_folder, uint32_t p_folder_size, uint32_t *p_timestamp);
+	typedef bool (*ISteamUGC_GetItemDownloadInfoFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t p_file_id, uint64_t *p_bytes_downloaded, uint64_t *p_bytes_total);
+	typedef bool (*ISteamUGC_DownloadItemFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t p_file_id, bool p_high_priority);
+	typedef void (*ISteamUGC_SuspendDownloadsFn)(ISteamUGCPtr p_self, bool p_suspend);
+	typedef SteamAPICallHandle_t (*ISteamUGC_PlaytimeTrackingFn)(ISteamUGCPtr p_self, SteamPublishedFileId_t *p_file_ids, uint32_t p_count);
+	typedef SteamAPICallHandle_t (*ISteamUGC_StopPlaytimeTrackingForAllItemsFn)(ISteamUGCPtr p_self);
+	typedef bool (*ISteamUGC_ShowWorkshopEULAFn)(ISteamUGCPtr p_self);
+	typedef uint32_t (*ISteamUtils_GetAppIDFn)(ISteamUtilsPtr p_self);
+
 	SteamAPI_InitFlatFn fn_init_flat = nullptr;
 	SteamAPI_ShutdownFn fn_shutdown = nullptr;
 	SteamAPI_GetHSteamPipeFn fn_get_h_steam_pipe = nullptr;
@@ -209,9 +254,82 @@ private:
 	ISteamInventory_TriggerItemDropFn fn_inventory_trigger_item_drop = nullptr;
 	ISteamInventory_GetEligiblePromoItemDefinitionIDsFn fn_inventory_get_eligible_promo_item_definition_ids = nullptr;
 
-	bool _load_symbol(const char *p_name, void *&r_symbol);
+	SteamAPI_SteamUGCFn fn_steam_ugc = nullptr;
+	ISteamUGC_CreateQueryUserUGCRequestFn fn_ugc_create_query_user_request = nullptr;
+	ISteamUGC_CreateQueryAllUGCRequestPageFn fn_ugc_create_query_all_request_page = nullptr;
+	ISteamUGC_CreateQueryAllUGCRequestCursorFn fn_ugc_create_query_all_request_cursor = nullptr;
+	ISteamUGC_CreateQueryUGCDetailsRequestFn fn_ugc_create_query_details_request = nullptr;
+	ISteamUGC_SendQueryUGCRequestFn fn_ugc_send_query_request = nullptr;
+	ISteamUGC_GetQueryUGCResultFn fn_ugc_get_query_result = nullptr;
+	ISteamUGC_GetQueryUGCStringFn fn_ugc_get_query_preview_url = nullptr;
+	ISteamUGC_GetQueryUGCStringFn fn_ugc_get_query_metadata = nullptr;
+	ISteamUGC_GetQueryUGCChildrenFn fn_ugc_get_query_children = nullptr;
+	ISteamUGC_GetQueryUGCStatisticFn fn_ugc_get_query_statistic = nullptr;
+	ISteamUGC_GetQueryUGCCountFn fn_ugc_get_query_num_additional_previews = nullptr;
+	ISteamUGC_GetQueryUGCAdditionalPreviewFn fn_ugc_get_query_additional_preview = nullptr;
+	ISteamUGC_GetQueryUGCCountFn fn_ugc_get_query_num_key_value_tags = nullptr;
+	ISteamUGC_GetQueryUGCKeyValueTagFn fn_ugc_get_query_key_value_tag = nullptr;
+	ISteamUGC_QueryHandleFn fn_ugc_release_query_request = nullptr;
+	ISteamUGC_QueryHandleStringFn fn_ugc_add_required_tag = nullptr;
+	ISteamUGC_QueryHandleStringFn fn_ugc_add_excluded_tag = nullptr;
+	ISteamUGC_QueryHandleKeyValueFn fn_ugc_add_required_key_value_tag = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_only_ids = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_key_value_tags = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_long_description = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_metadata = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_children = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_additional_previews = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_return_total_only = nullptr;
+	ISteamUGC_QueryHandleBoolFn fn_ugc_set_match_any_tag = nullptr;
+	ISteamUGC_QueryHandleStringFn fn_ugc_set_language = nullptr;
+	ISteamUGC_QueryHandleStringFn fn_ugc_set_search_text = nullptr;
+	ISteamUGC_QueryHandleStringFn fn_ugc_set_cloud_file_name_filter = nullptr;
+	ISteamUGC_QueryHandleUIntFn fn_ugc_set_allow_cached_response = nullptr;
+	ISteamUGC_QueryHandleUIntFn fn_ugc_set_ranked_by_trend_days = nullptr;
+	ISteamUGC_CreateItemFn fn_ugc_create_item = nullptr;
+	ISteamUGC_StartItemUpdateFn fn_ugc_start_item_update = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_set_item_title = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_set_item_description = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_set_item_update_language = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_set_item_metadata = nullptr;
+	ISteamUGC_UpdateHandleIntFn fn_ugc_set_item_visibility = nullptr;
+	ISteamUGC_SetItemTagsFn fn_ugc_set_item_tags = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_set_item_content = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_set_item_preview = nullptr;
+	ISteamUGC_UpdateHandleFn fn_ugc_remove_all_item_key_value_tags = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_remove_item_key_value_tags = nullptr;
+	ISteamUGC_UpdateHandleKeyValueFn fn_ugc_add_item_key_value_tag = nullptr;
+	ISteamUGC_AddItemPreviewFileFn fn_ugc_add_item_preview_file = nullptr;
+	ISteamUGC_UpdateHandleStringFn fn_ugc_add_item_preview_video = nullptr;
+	ISteamUGC_UpdateHandleIntFn fn_ugc_remove_item_preview = nullptr;
+	ISteamUGC_SubmitItemUpdateFn fn_ugc_submit_item_update = nullptr;
+	ISteamUGC_GetItemUpdateProgressFn fn_ugc_get_item_update_progress = nullptr;
+	ISteamUGC_SetUserItemVoteFn fn_ugc_set_user_item_vote = nullptr;
+	ISteamUGC_AppFileIdCallFn fn_ugc_add_item_to_favorites = nullptr;
+	ISteamUGC_AppFileIdCallFn fn_ugc_remove_item_from_favorites = nullptr;
+	ISteamUGC_FileIdCallFn fn_ugc_subscribe_item = nullptr;
+	ISteamUGC_FileIdCallFn fn_ugc_unsubscribe_item = nullptr;
+	ISteamUGC_FileIdCallFn fn_ugc_delete_item = nullptr;
+	ISteamUGC_GetNumSubscribedItemsFn fn_ugc_get_num_subscribed_items = nullptr;
+	ISteamUGC_GetSubscribedItemsFn fn_ugc_get_subscribed_items = nullptr;
+	ISteamUGC_GetItemStateFn fn_ugc_get_item_state = nullptr;
+	ISteamUGC_GetItemInstallInfoFn fn_ugc_get_item_install_info = nullptr;
+	ISteamUGC_GetItemDownloadInfoFn fn_ugc_get_item_download_info = nullptr;
+	ISteamUGC_DownloadItemFn fn_ugc_download_item = nullptr;
+	ISteamUGC_SuspendDownloadsFn fn_ugc_suspend_downloads = nullptr;
+	ISteamUGC_PlaytimeTrackingFn fn_ugc_start_playtime_tracking = nullptr;
+	ISteamUGC_PlaytimeTrackingFn fn_ugc_stop_playtime_tracking = nullptr;
+	ISteamUGC_StopPlaytimeTrackingForAllItemsFn fn_ugc_stop_playtime_tracking_for_all_items = nullptr;
+	ISteamUGC_ShowWorkshopEULAFn fn_ugc_show_workshop_eula = nullptr;
+	// Optional: lets the Workshop resolve the running app ID on its own.
+	SteamAPI_SteamUtilsFn fn_ugc_steam_utils = nullptr;
+	ISteamUtils_GetAppIDFn fn_utils_get_app_id = nullptr;
+
+	bool _load_symbol(const char *p_name, void *&r_symbol, bool p_optional = false);
 	bool _load_stats_symbols();
 	bool _load_inventory_symbols();
+	bool _load_workshop_symbols();
+	void _clear_workshop_symbols();
 
 public:
 	static constexpr int kGetTicketForWebApiResponseCallback = 168; // k_iSteamUserCallbacks(100) + 68
@@ -221,6 +339,7 @@ public:
 	bool is_loaded() const { return loaded; }
 	bool has_stats_support() const { return stats_loaded; }
 	bool has_inventory_support() const { return inventory_loaded; }
+	bool has_workshop_support() const { return workshop_loaded; }
 
 	int init_flat(String &r_err_msg);
 	void shutdown();
@@ -300,4 +419,77 @@ public:
 	bool inventory_inspect_item(ISteamInventoryPtr p_inventory, SteamInventoryResult_t &r_result, const char *p_item_token) const;
 	bool inventory_trigger_item_drop(ISteamInventoryPtr p_inventory, SteamInventoryResult_t &r_result, SteamItemDef_t p_drop_list_definition) const;
 	Vector<int32_t> inventory_get_eligible_promo_item_definition_ids(ISteamInventoryPtr p_inventory, uint64_t p_steam_id) const;
+
+	// Steam Workshop (ISteamUGC). All wrappers return a safe failure value when
+	// the symbols are unavailable.
+	ISteamUGCPtr get_steam_ugc() const;
+	uint32_t get_app_id() const;
+	SteamUGCQueryHandle_t ugc_create_query_user_request(ISteamUGCPtr p_ugc, uint32_t p_account_id, int p_list_type, int p_matching_type, int p_sort_order, uint32_t p_creator_app_id, uint32_t p_consumer_app_id, uint32_t p_page) const;
+	SteamUGCQueryHandle_t ugc_create_query_all_request_page(ISteamUGCPtr p_ugc, int p_query_type, int p_matching_type, uint32_t p_creator_app_id, uint32_t p_consumer_app_id, uint32_t p_page) const;
+	SteamUGCQueryHandle_t ugc_create_query_all_request_cursor(ISteamUGCPtr p_ugc, int p_query_type, int p_matching_type, uint32_t p_creator_app_id, uint32_t p_consumer_app_id, const char *p_cursor) const;
+	SteamUGCQueryHandle_t ugc_create_query_details_request(ISteamUGCPtr p_ugc, const Vector<SteamPublishedFileId_t> &p_file_ids) const;
+	SteamAPICallHandle_t ugc_send_query_request(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle) const;
+	bool ugc_get_query_result(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index, SteamUGCDetails &r_details) const;
+	String ugc_get_query_preview_url(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index) const;
+	String ugc_get_query_metadata(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index) const;
+	Vector<SteamPublishedFileId_t> ugc_get_query_children(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index, uint32_t p_num_children) const;
+	bool ugc_get_query_statistic(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index, int p_stat_type, uint64_t &r_value) const;
+	uint32_t ugc_get_query_num_additional_previews(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index) const;
+	bool ugc_get_query_additional_preview(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index, uint32_t p_preview_index, String &r_url_or_video_id, String &r_original_file_name, int &r_preview_type) const;
+	uint32_t ugc_get_query_num_key_value_tags(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index) const;
+	bool ugc_get_query_key_value_tag(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_index, uint32_t p_tag_index, String &r_key, String &r_value) const;
+	bool ugc_release_query_request(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle) const;
+	bool ugc_add_required_tag(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, const char *p_tag) const;
+	bool ugc_add_excluded_tag(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, const char *p_tag) const;
+	bool ugc_add_required_key_value_tag(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, const char *p_key, const char *p_value) const;
+	bool ugc_set_return_only_ids(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_return_key_value_tags(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_return_long_description(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_return_metadata(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_return_children(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_return_additional_previews(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_return_total_only(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_match_any_tag(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, bool p_value) const;
+	bool ugc_set_language(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, const char *p_language) const;
+	bool ugc_set_search_text(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, const char *p_text) const;
+	bool ugc_set_cloud_file_name_filter(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, const char *p_file_name) const;
+	bool ugc_set_allow_cached_response(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_max_age_seconds) const;
+	bool ugc_set_ranked_by_trend_days(ISteamUGCPtr p_ugc, SteamUGCQueryHandle_t p_handle, uint32_t p_days) const;
+
+	SteamAPICallHandle_t ugc_create_item(ISteamUGCPtr p_ugc, uint32_t p_consumer_app_id, int p_file_type) const;
+	SteamUGCUpdateHandle_t ugc_start_item_update(ISteamUGCPtr p_ugc, uint32_t p_consumer_app_id, SteamPublishedFileId_t p_file_id) const;
+	bool ugc_set_item_title(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_title) const;
+	bool ugc_set_item_description(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_description) const;
+	bool ugc_set_item_update_language(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_language) const;
+	bool ugc_set_item_metadata(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_metadata) const;
+	bool ugc_set_item_visibility(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, int p_visibility) const;
+	bool ugc_set_item_tags(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const Vector<String> &p_tags, bool p_allow_admin_tags) const;
+	bool ugc_set_item_content(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_content_folder) const;
+	bool ugc_set_item_preview(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_preview_file) const;
+	bool ugc_remove_all_item_key_value_tags(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle) const;
+	bool ugc_remove_item_key_value_tags(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_key) const;
+	bool ugc_add_item_key_value_tag(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_key, const char *p_value) const;
+	bool ugc_add_item_preview_file(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_preview_file, int p_type) const;
+	bool ugc_add_item_preview_video(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_video_id) const;
+	bool ugc_remove_item_preview(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, uint32_t p_index) const;
+	SteamAPICallHandle_t ugc_submit_item_update(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, const char *p_change_note) const;
+	int ugc_get_item_update_progress(ISteamUGCPtr p_ugc, SteamUGCUpdateHandle_t p_handle, uint64_t &r_bytes_processed, uint64_t &r_bytes_total) const;
+
+	SteamAPICallHandle_t ugc_set_user_item_vote(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id, bool p_vote_up) const;
+	SteamAPICallHandle_t ugc_add_item_to_favorites(ISteamUGCPtr p_ugc, uint32_t p_app_id, SteamPublishedFileId_t p_file_id) const;
+	SteamAPICallHandle_t ugc_remove_item_from_favorites(ISteamUGCPtr p_ugc, uint32_t p_app_id, SteamPublishedFileId_t p_file_id) const;
+	SteamAPICallHandle_t ugc_subscribe_item(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id) const;
+	SteamAPICallHandle_t ugc_unsubscribe_item(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id) const;
+	SteamAPICallHandle_t ugc_delete_item(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id) const;
+	Vector<SteamPublishedFileId_t> ugc_get_subscribed_items(ISteamUGCPtr p_ugc, bool p_include_locally_disabled) const;
+	uint32_t ugc_get_num_subscribed_items(ISteamUGCPtr p_ugc, bool p_include_locally_disabled) const;
+	uint32_t ugc_get_item_state(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id) const;
+	bool ugc_get_item_install_info(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id, uint64_t &r_size_on_disk, String &r_folder, uint32_t &r_timestamp) const;
+	bool ugc_get_item_download_info(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id, uint64_t &r_bytes_downloaded, uint64_t &r_bytes_total) const;
+	bool ugc_download_item(ISteamUGCPtr p_ugc, SteamPublishedFileId_t p_file_id, bool p_high_priority) const;
+	void ugc_suspend_downloads(ISteamUGCPtr p_ugc, bool p_suspend) const;
+	SteamAPICallHandle_t ugc_start_playtime_tracking(ISteamUGCPtr p_ugc, const Vector<SteamPublishedFileId_t> &p_file_ids) const;
+	SteamAPICallHandle_t ugc_stop_playtime_tracking(ISteamUGCPtr p_ugc, const Vector<SteamPublishedFileId_t> &p_file_ids) const;
+	SteamAPICallHandle_t ugc_stop_playtime_tracking_for_all_items(ISteamUGCPtr p_ugc) const;
+	bool ugc_show_workshop_eula(ISteamUGCPtr p_ugc) const;
 };
