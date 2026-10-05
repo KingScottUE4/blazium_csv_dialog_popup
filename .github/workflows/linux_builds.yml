@@ -103,13 +103,34 @@ jobs:
             artifact: false
             cache-limit: 5
 
-          - name: Template w/ Mono, release (target=template_release, tests=yes)
+          # Shippable export templates: production optimizations and no
+          # unit-test runner compiled in.
+          - name: Template (target=template_release, production=yes)
+            cache-name: linux-template
+            target: template_release
+            sconsflags: production=yes
+            bin: ./bin/blazium.linuxbsd.template_release.x86_64
+            build-mono: false
+            tests: false
+            artifact: true
+            cache-limit: 1
+
+          - name: Template (target=template_debug)
+            cache-name: linux-template-debug
+            target: template_debug
+            bin: ./bin/blazium.linuxbsd.template_debug.x86_64
+            build-mono: false
+            tests: false
+            artifact: true
+            cache-limit: 1
+
+          - name: Template w/ Mono, release (target=template_release, production=yes)
             cache-name: linux-template-mono
             target: template_release
-            sconsflags: module_mono_enabled=yes tests=yes
+            sconsflags: module_mono_enabled=yes production=yes
             bin: ./bin/blazium.linuxbsd.template_release.x86_64.mono
             build-mono: false
-            tests: true
+            tests: false
             artifact: true
             cache-limit: 1
 

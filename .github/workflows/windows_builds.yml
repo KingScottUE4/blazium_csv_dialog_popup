@@ -61,14 +61,25 @@ jobs:
             compiler: clang
             cache-limit: 1
 
-          - name: Template (target=template_release, tests=yes)
+          # Shippable export templates: production optimizations, GUI subsystem
+          # (no console window) and no unit-test runner compiled in.
+          - name: Template (target=template_release, production=yes)
             cache-name: windows-template
             target: template_release
-            tests: true
-            # Build a console binary directly. The GUI + .console.exe wrapper can hang
-            # indefinitely on CI when running --test (MSVC and MinGW).
-            sconsflags: debug_symbols=no use_mingw=no tests=yes windows_subsystem=console
+            tests: false
+            sconsflags: debug_symbols=no use_mingw=no windows_subsystem=gui production=yes
             bin: ./bin/blazium.windows.template_release.x86_64.exe
+            compiler: msvc
+            artifact: true
+            upload: true
+            cache-limit: 2
+
+          - name: Template (target=template_debug)
+            cache-name: windows-template-debug
+            target: template_debug
+            tests: false
+            sconsflags: debug_symbols=no use_mingw=no windows_subsystem=gui
+            bin: ./bin/blazium.windows.template_debug.x86_64.exe
             compiler: msvc
             artifact: true
             upload: true
