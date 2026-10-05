@@ -61,6 +61,8 @@ private:
 	void _on_load_definitions_pressed();
 	void _on_refresh_inventory_pressed();
 	void _on_add_promo_pressed();
+	void _on_list_workshop_pressed();
+	void _on_workshop_query_completed(int64_t p_query_handle, int p_result, const Array &p_items, int64_t p_total_matching_results, const String &p_next_cursor);
 	void _on_ticket_ready(const String &p_hex_ticket, int p_handle);
 	void _on_ticket_failed(const String &p_error);
 	void _setup_dock();

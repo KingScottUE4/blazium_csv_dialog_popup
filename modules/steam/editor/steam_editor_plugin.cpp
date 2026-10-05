@@ -212,6 +212,35 @@ void SteamEditorPlugin::_on_add_promo_pressed() {
 	_append_log(vformat("add_promo_item(%d) -> %s", def_id, ok ? "true" : "false"));
 }
 
+void SteamEditorPlugin::_on_list_workshop_pressed() {
+	Steam *steam = Steam::get_singleton();
+	if (!steam) {
+		_append_log("Steam singleton unavailable");
+		return;
+	}
+	const PackedInt64Array items = steam->get_subscribed_items();
+	_append_log(vformat("get_subscribed_items -> %d items", items.size()));
+	for (int i = 0; i < items.size(); i++) {
+		const int64_t state = steam->get_item_state(items[i]);
+		const Dictionary install_info = steam->get_item_install_info(items[i]);
+		_append_log(vformat("  %d state=%d folder=%s", items[i], state, install_info.get("folder", String())));
+	}
+	if (!items.is_empty()) {
+		const int64_t query = steam->query_workshop_item_details(items);
+		_append_log(vformat("query_workshop_item_details -> %d", query));
+	}
+}
+
+void SteamEditorPlugin::_on_workshop_query_completed(int64_t p_query_handle, int p_result, const Array &p_items, int64_t p_total_matching_results, const String &p_next_cursor) {
+	_append_log(vformat("Signal workshop query %d result=%d items=%d total=%d", p_query_handle, p_result, p_items.size(), p_total_matching_results));
+	for (int i = 0; i < p_items.size(); i++) {
+		Ref<SteamWorkshopItem> item = p_items[i];
+		if (item.is_valid()) {
+			_append_log(vformat("  %d \"%s\"", item->get_published_file_id(), item->get_title()));
+		}
+	}
+}
+
 void SteamEditorPlugin::_on_ticket_ready(const String &p_hex_ticket, int p_handle) {
 	last_hex_ticket = p_hex_ticket;
 	_append_log(vformat("Signal ticket ready handle=%d len=%d", p_handle, p_hex_ticket.length()));
@@ -328,6 +357,12 @@ void SteamEditorPlugin::_setup_dock() {
 	refresh_inventory_button->connect(SceneStringName(pressed), callable_mp(this, &SteamEditorPlugin::_on_refresh_inventory_pressed));
 	buttons_grid->add_child(refresh_inventory_button);
 
+	Button *list_workshop_button = memnew(Button);
+	list_workshop_button->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	list_workshop_button->set_text("Workshop Items");
+	list_workshop_button->connect(SceneStringName(pressed), callable_mp(this, &SteamEditorPlugin::_on_list_workshop_pressed));
+	buttons_grid->add_child(list_workshop_button);
+
 	Button *clear_button = memnew(Button);
 	clear_button->set_text("Clear Log");
 	clear_button->connect(SceneStringName(pressed), callable_mp(this, &SteamEditorPlugin::_on_clear_log_pressed));
@@ -356,6 +391,7 @@ void SteamEditorPlugin::_setup_dock() {
 	if (steam) {
 		steam->connect("web_api_ticket_ready", callable_mp(this, &SteamEditorPlugin::_on_ticket_ready));
 		steam->connect("web_api_ticket_failed", callable_mp(this, &SteamEditorPlugin::_on_ticket_failed));
+		steam->connect("workshop_query_completed", callable_mp(this, &SteamEditorPlugin::_on_workshop_query_completed));
 	}
 }
 
@@ -368,6 +404,7 @@ void SteamEditorPlugin::_teardown_dock() {
 	if (steam) {
 		steam->disconnect("web_api_ticket_ready", callable_mp(this, &SteamEditorPlugin::_on_ticket_ready));
 		steam->disconnect("web_api_ticket_failed", callable_mp(this, &SteamEditorPlugin::_on_ticket_failed));
+		steam->disconnect("workshop_query_completed", callable_mp(this, &SteamEditorPlugin::_on_workshop_query_completed));
 	}
 
 	remove_control_from_docks(dock_root);

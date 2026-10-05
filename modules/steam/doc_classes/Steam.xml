@@ -1,15 +1,76 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="Steam" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
-		Steamworks integration for Web API session ticket generation and backend authentication.
+		Steamworks integration: authentication tickets, achievements and stats, inventory, and Steam Workshop.
 	</brief_description>
 	<description>
 		The Steam singleton dynamically loads the Steam API library at runtime. If the library is not found, all methods fail gracefully without crashing.
 		Use [method request_web_api_ticket] to obtain a ticket for [code]ISteamUserAuth/AuthenticateUserTicket[/code], then [method authenticate_with_server] to exchange it for a JWT from your backend.
+		[b]Steam Workshop:[/b] subscribe to, query, download and publish Workshop items (user-generated content). Requests are asynchronous; results arrive through the [code]workshop_*[/code] signals while callbacks are polled every frame.
+		[codeblock]
+		func _ready():
+		    Steam.initialize(480)
+		    Steam.workshop_item_installed.connect(_on_item_installed)
+		    # Load content the user is already subscribed to.
+		    for id in Steam.get_subscribed_items():
+		        if Steam.get_item_state(id) &amp; Steam.WORKSHOP_ITEM_STATE_INSTALLED:
+		            load_mod(Steam.get_item_install_info(id)["folder"])
+		        else:
+		            Steam.download_item(id)
+
+		func _on_item_installed(published_file_id):
+		    load_mod(Steam.get_item_install_info(published_file_id)["folder"])
+
+		# Publishing: create an item, then upload its content.
+		func publish(folder):
+		    Steam.create_workshop_item()
+		    var args = await Steam.workshop_item_created # [published_file_id, result, needs_to_accept_agreement]
+		    if args[1] != 1:
+		        return
+		    var handle = Steam.start_item_update(args[0])
+		    Steam.set_item_title(handle, "My Level")
+		    Steam.set_item_content(handle, folder)
+		    Steam.set_item_preview(handle, "user://preview.png")
+		    Steam.set_item_visibility(handle, Steam.WORKSHOP_VISIBILITY_PUBLIC)
+		    Steam.submit_item_update(handle, "Initial release")
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="add_item_key_value_tag">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="key" type="String" />
+			<param index="2" name="value" type="String" />
+			<description>
+				Adds a key-value tag to the item in an update. A key can have several values. Keys and values are limited to 255 characters.
+			</description>
+		</method>
+		<method name="add_item_preview_file">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="preview_file" type="String" />
+			<param index="2" name="type" type="int" enum="Steam.WorkshopPreviewType" default="0" />
+			<description>
+				Adds an additional preview file (image, environment map, ...) to the item in an update. [code]res://[/code] and [code]user://[/code] paths are converted to absolute paths.
+			</description>
+		</method>
+		<method name="add_item_preview_video">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="video_id" type="String" />
+			<description>
+				Adds a YouTube video (by video ID) as an additional preview to the item in an update.
+			</description>
+		</method>
+		<method name="add_item_to_favorites">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Adds a Workshop item to the local user's favorites. Emits [signal workshop_favorites_changed].
+			</description>
+		</method>
 		<method name="add_promo_item">
 			<return type="bool" />
 			<param index="0" name="def_id" type="int" />
@@ -65,11 +126,33 @@
 			<description>
 			</description>
 		</method>
+		<method name="create_workshop_item">
+			<return type="bool" />
+			<param index="0" name="file_type" type="int" enum="Steam.WorkshopFileType" default="0" />
+			<description>
+				Creates a new, empty Workshop item owned by the local user. Emits [signal workshop_item_created] with the new published file ID, which can then be filled in with [method start_item_update]. Requires the app ID, either passed to [method initialize] or provided by the Steam client. Returns [code]false[/code] if the request could not be sent.
+			</description>
+		</method>
+		<method name="delete_workshop_item">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Permanently deletes a Workshop item owned by the local user. Emits [signal workshop_item_deleted]. Returns [code]false[/code] if the request could not be sent.
+			</description>
+		</method>
 		<method name="deserialize_inventory">
 			<return type="int" />
 			<param index="0" name="bytes" type="PackedByteArray" />
 			<param index="1" name="expected_steam_id" type="int" default="0" />
 			<description>
+			</description>
+		</method>
+		<method name="download_item">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="high_priority" type="bool" default="false" />
+			<description>
+				Starts downloading or updating a Workshop item. If [param high_priority] is [code]true[/code], the item is moved to the front of the download queue and other downloads are suspended until it completes. [signal workshop_item_downloaded] is emitted when the download finishes. Returns [code]false[/code] if the request could not be made.
 			</description>
 		</method>
 		<method name="exchange_items">
@@ -171,6 +254,34 @@
 			<description>
 			</description>
 		</method>
+		<method name="get_item_download_info" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Returns download progress for a Workshop item that is downloading: [code]bytes_downloaded[/code], [code]bytes_total[/code] and [code]progress[/code] (from [code]0.0[/code] to [code]1.0[/code]). Returns an empty [Dictionary] if no download information is available.
+			</description>
+		</method>
+		<method name="get_item_install_info" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Returns install information for an installed Workshop item: [code]size_on_disk[/code] (bytes), [code]folder[/code] (absolute path to the item's content) and [code]timestamp[/code] (Unix time of the installed version). Returns an empty [Dictionary] if the item is not installed.
+			</description>
+		</method>
+		<method name="get_item_state" qualifiers="const">
+			<return type="int" enum="Steam.WorkshopItemState" is_bitfield="true" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Returns the local state of a Workshop item as a combination of [enum WorkshopItemState] flags, for example [code]WORKSHOP_ITEM_STATE_SUBSCRIBED | WORKSHOP_ITEM_STATE_INSTALLED[/code].
+			</description>
+		</method>
+		<method name="get_item_update_progress" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="update_handle" type="int" />
+			<description>
+				Returns the progress of a submitted update: [code]status[/code] (a [enum WorkshopUpdateStatus] value), [code]bytes_processed[/code], [code]bytes_total[/code] and [code]progress[/code] (from [code]0.0[/code] to [code]1.0[/code]).
+			</description>
+		</method>
 		<method name="get_items_by_id">
 			<return type="Array" />
 			<param index="0" name="instance_ids" type="PackedInt64Array" />
@@ -181,6 +292,13 @@
 			<return type="int" />
 			<description>
 				Returns the local user's 64-bit Steam ID, or [code]0[/code] if unavailable.
+			</description>
+		</method>
+		<method name="get_num_subscribed_items" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="include_locally_disabled" type="bool" default="false" />
+			<description>
+				Returns the number of Workshop items the local user is subscribed to for this app. If [param include_locally_disabled] is [code]true[/code], items the user disabled locally are counted too.
 			</description>
 		</method>
 		<method name="get_pending_auth_ticket_handle" qualifiers="const">
@@ -221,6 +339,13 @@
 				Returns the current integer stat value, or [code]-1[/code] if unavailable.
 			</description>
 		</method>
+		<method name="get_subscribed_items" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="include_locally_disabled" type="bool" default="false" />
+			<description>
+				Returns the published file IDs of all Workshop items the local user is subscribed to for this app. If [param include_locally_disabled] is [code]true[/code], items the user disabled locally are included.
+			</description>
+		</method>
 		<method name="get_ticket_state" qualifiers="const">
 			<return type="int" enum="Steam.TicketState" />
 			<description>
@@ -235,6 +360,12 @@
 		<method name="has_inventory_support" qualifiers="const">
 			<return type="bool" />
 			<description>
+			</description>
+		</method>
+		<method name="has_workshop_support" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the loaded Steam API library exposes the Steam Workshop ([code]ISteamUGC[/code]) interface. Requires Steamworks SDK 1.60 or newer.
 			</description>
 		</method>
 		<method name="increment_stat_int">
@@ -287,10 +418,77 @@
 				Pumps the Steam manual callback dispatch queue.
 			</description>
 		</method>
+		<method name="query_user_workshop_items">
+			<return type="int" />
+			<param index="0" name="list_type" type="int" enum="Steam.WorkshopUserList" default="0" />
+			<param index="1" name="matching_type" type="int" enum="Steam.WorkshopMatchingType" default="2" />
+			<param index="2" name="sort_order" type="int" enum="Steam.WorkshopUserListSortOrder" default="0" />
+			<param index="3" name="page" type="int" default="1" />
+			<param index="4" name="steam_id" type="int" default="0" />
+			<param index="5" name="options" type="Dictionary" default="{}" />
+			<description>
+				Sends a query for Workshop items in one of a user's lists (published, subscribed, favorited, ...). [param steam_id] defaults to the local user. Accepts the same [param options] as [method query_workshop_items], except [code]cursor[/code]. Emits [signal workshop_query_completed]. Returns the query handle, or [code]-1[/code] on failure.
+			</description>
+		</method>
+		<method name="query_workshop_item_details">
+			<return type="int" />
+			<param index="0" name="published_file_ids" type="PackedInt64Array" />
+			<param index="1" name="options" type="Dictionary" default="{}" />
+			<description>
+				Sends a query for the details of specific Workshop items. Accepts the same [param options] as [method query_workshop_items], except [code]cursor[/code]. Emits [signal workshop_query_completed]. Returns the query handle, or [code]-1[/code] on failure.
+			</description>
+		</method>
+		<method name="query_workshop_items">
+			<return type="int" />
+			<param index="0" name="query_type" type="int" enum="Steam.WorkshopQueryType" default="0" />
+			<param index="1" name="matching_type" type="int" enum="Steam.WorkshopMatchingType" default="2" />
+			<param index="2" name="page" type="int" default="1" />
+			<param index="3" name="options" type="Dictionary" default="{}" />
+			<description>
+				Sends a query for all Workshop items of this app, ranked by [param query_type] and filtered by [param matching_type]. Results are paged ([code]50[/code] per page, starting at [code]1[/code]). Emits [signal workshop_query_completed] with the returned [SteamWorkshopItem]s. Returns the query handle, or [code]-1[/code] on failure.
+				Supported [param options] keys:
+				- [code]required_tags[/code] / [code]excluded_tags[/code] ([PackedStringArray]) and [code]match_any_tag[/code] ([bool]).
+				- [code]required_key_value_tags[/code] ([Dictionary] of [String] to [String]).
+				- [code]search_text[/code] ([String]), [code]ranked_by_trend_days[/code] ([int]), [code]language[/code] ([String], an API language code such as [code]"english"[/code]), [code]cloud_file_name_filter[/code] ([String]).
+				- [code]allow_cached_response[/code] ([int], max age in seconds).
+				- [code]return_long_description[/code], [code]return_metadata[/code], [code]return_key_value_tags[/code], [code]return_children[/code], [code]return_additional_previews[/code], [code]return_only_ids[/code], [code]return_total_only[/code] ([bool]).
+				- [code]cursor[/code] ([String]): use cursor paging instead of [param page]. Pass [code]"*"[/code] for the first page, then the [code]next_cursor[/code] from [signal workshop_query_completed].
+			</description>
+		</method>
 		<method name="refresh_current_stats">
 			<return type="bool" />
 			<description>
 				Waits for a fresh user-stats callback from Steam, for example after server-side achievement changes. Uses cached data if no callback arrives in time.
+			</description>
+		</method>
+		<method name="remove_all_item_key_value_tags">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<description>
+				Removes all existing key-value tags from the item in an update.
+			</description>
+		</method>
+		<method name="remove_item_from_favorites">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Removes a Workshop item from the local user's favorites. Emits [signal workshop_favorites_changed].
+			</description>
+		</method>
+		<method name="remove_item_key_value_tags">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="key" type="String" />
+			<description>
+				Removes all key-value tags with the given key from the item in an update.
+			</description>
+		</method>
+		<method name="remove_item_preview">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="index" type="int" />
+			<description>
+				Removes an additional preview, by index, from the item in an update.
 			</description>
 		</method>
 		<method name="remove_property">
@@ -337,6 +535,71 @@
 			<param index="0" name="enabled" type="bool" />
 			<description>
 				Enables or disables verbose debug logging.
+			</description>
+		</method>
+		<method name="set_item_content">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="content_folder" type="String" />
+			<description>
+				Sets the folder whose contents are uploaded as the item's content in an update. [code]res://[/code] and [code]user://[/code] paths are converted to absolute paths.
+			</description>
+		</method>
+		<method name="set_item_description">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="description" type="String" />
+			<description>
+				Sets the description of the item in an update started with [method start_item_update] (max 8000 characters).
+			</description>
+		</method>
+		<method name="set_item_metadata">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="metadata" type="String" />
+			<description>
+				Sets developer metadata for the item in an update. This is arbitrary text not shown to users, retrieved with [code]return_metadata[/code] in queries (max 10000 bytes on SDK 1.62+, 5000 before).
+			</description>
+		</method>
+		<method name="set_item_preview">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="preview_file" type="String" />
+			<description>
+				Sets the main preview image of the item in an update. [code]res://[/code] and [code]user://[/code] paths are converted to absolute paths. The file should be under 1 MB.
+			</description>
+		</method>
+		<method name="set_item_tags">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="tags" type="PackedStringArray" />
+			<param index="2" name="allow_admin_tags" type="bool" default="false" />
+			<description>
+				Replaces the tags of the item in an update. Tags must be defined in the app's Workshop configuration on Steamworks. If [param allow_admin_tags] is [code]true[/code], admin-only tags may be set.
+			</description>
+		</method>
+		<method name="set_item_title">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="title" type="String" />
+			<description>
+				Sets the title of the item in an update started with [method start_item_update] (max 128 characters).
+			</description>
+		</method>
+		<method name="set_item_update_language">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="language" type="String" />
+			<description>
+				Sets the language (API language code, such as [code]"english"[/code]) of the title and description set in this update.
+			</description>
+		</method>
+		<method name="set_item_visibility">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="visibility" type="int" enum="Steam.WorkshopVisibility" />
+			<description>
+				Sets the visibility of the item in an update.
 			</description>
 		</method>
 		<method name="set_property_bool">
@@ -387,15 +650,56 @@
 				Sets an integer stat to an absolute value in memory. Call [method store_stats] to persist.
 			</description>
 		</method>
+		<method name="set_user_item_vote">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="vote_up" type="bool" />
+			<description>
+				Votes a Workshop item up ([code]true[/code]) or down ([code]false[/code]). Emits [signal workshop_item_vote_set].
+			</description>
+		</method>
+		<method name="show_workshop_eula">
+			<return type="bool" />
+			<description>
+				Opens the Steam overlay showing the app's Workshop EULA. Returns [code]false[/code] if the overlay could not be opened.
+			</description>
+		</method>
 		<method name="shutdown">
 			<return type="void" />
 			<description>
 				Shuts down the Steam API session.
 			</description>
 		</method>
+		<method name="start_item_update">
+			<return type="int" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Starts an update of a Workshop item owned by the local user and returns an update handle, or [code]-1[/code] on failure. Set the changed properties with the [code]set_item_*[/code], [code]add_item_*[/code] and [code]remove_item_*[/code] methods, then call [method submit_item_update].
+			</description>
+		</method>
+		<method name="start_playtime_tracking">
+			<return type="bool" />
+			<param index="0" name="published_file_ids" type="PackedInt64Array" />
+			<description>
+				Starts tracking playtime for the given Workshop items, for example the mods loaded for the current session. Emits [signal workshop_playtime_tracking_updated].
+			</description>
+		</method>
 		<method name="start_property_update">
 			<return type="bool" />
 			<description>
+			</description>
+		</method>
+		<method name="stop_playtime_tracking">
+			<return type="bool" />
+			<param index="0" name="published_file_ids" type="PackedInt64Array" />
+			<description>
+				Stops tracking playtime for the given Workshop items. Emits [signal workshop_playtime_tracking_updated].
+			</description>
+		</method>
+		<method name="stop_playtime_tracking_for_all_items">
+			<return type="bool" />
+			<description>
+				Stops tracking playtime for all Workshop items. Emits [signal workshop_playtime_tracking_updated].
 			</description>
 		</method>
 		<method name="store_stats">
@@ -404,9 +708,31 @@
 				Uploads pending achievement and stat changes to Steam.
 			</description>
 		</method>
+		<method name="submit_item_update">
+			<return type="bool" />
+			<param index="0" name="update_handle" type="int" />
+			<param index="1" name="change_note" type="String" default="&quot;&quot;" />
+			<description>
+				Submits an update started with [method start_item_update], with an optional [param change_note] shown on the item's change log. Emits [signal workshop_item_updated] when the upload finishes. Use [method get_item_update_progress] to track progress. Returns [code]false[/code] if the request could not be sent.
+			</description>
+		</method>
 		<method name="submit_property_update">
 			<return type="bool" />
 			<description>
+			</description>
+		</method>
+		<method name="subscribe_item">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Subscribes the local user to a Workshop item. The item is downloaded and installed as soon as possible. Emits [signal workshop_item_subscribed] when Steam responds. Returns [code]false[/code] if the request could not be sent.
+			</description>
+		</method>
+		<method name="suspend_downloads">
+			<return type="void" />
+			<param index="0" name="suspend" type="bool" />
+			<description>
+				Suspends ([code]true[/code]) or resumes ([code]false[/code]) Workshop downloads, for example during gameplay. Downloads resume automatically when the game quits.
 			</description>
 		</method>
 		<method name="transfer_item_quantity">
@@ -422,6 +748,13 @@
 			<param index="0" name="drop_list_definition" type="int" />
 			<description>
 				Triggers a playtime item drop for a [code]playtimegenerator[/code] item definition. Waits for the async inventory result.
+			</description>
+		</method>
+		<method name="unsubscribe_item">
+			<return type="bool" />
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Unsubscribes the local user from a Workshop item. The item is removed after the game quits. Emits [signal workshop_item_unsubscribed] when Steam responds. Returns [code]false[/code] if the request could not be sent.
 			</description>
 		</method>
 	</methods>
@@ -454,6 +787,94 @@
 				Emitted when a Web API session ticket is ready.
 			</description>
 		</signal>
+		<signal name="workshop_favorites_changed">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<param index="2" name="was_add_request" type="bool" />
+			<description>
+				Emitted when [method add_item_to_favorites] or [method remove_item_from_favorites] completes.
+			</description>
+		</signal>
+		<signal name="workshop_item_created">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<param index="2" name="needs_to_accept_agreement" type="bool" />
+			<description>
+				Emitted when [method create_workshop_item] completes. If [param needs_to_accept_agreement] is [code]true[/code], the user must accept the Steam Workshop legal agreement before the item becomes visible; consider opening the item's page in the overlay.
+			</description>
+		</signal>
+		<signal name="workshop_item_deleted">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<description>
+				Emitted when [method delete_workshop_item] completes.
+			</description>
+		</signal>
+		<signal name="workshop_item_downloaded">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<description>
+				Emitted when a Workshop item download, for example one started with [method download_item], finishes.
+			</description>
+		</signal>
+		<signal name="workshop_item_installed">
+			<param index="0" name="published_file_id" type="int" />
+			<description>
+				Emitted when a Workshop item for this app has been installed or updated, whether or not the game requested it. Use [method get_item_install_info] to locate its content.
+			</description>
+		</signal>
+		<signal name="workshop_item_subscribed">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<description>
+				Emitted when [method subscribe_item] completes.
+			</description>
+		</signal>
+		<signal name="workshop_item_unsubscribed">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<description>
+				Emitted when [method unsubscribe_item] completes.
+			</description>
+		</signal>
+		<signal name="workshop_item_updated">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<param index="2" name="needs_to_accept_agreement" type="bool" />
+			<description>
+				Emitted when [method submit_item_update] completes. If [param needs_to_accept_agreement] is [code]true[/code], the user must accept the Steam Workshop legal agreement before the item becomes visible.
+			</description>
+		</signal>
+		<signal name="workshop_item_vote_set">
+			<param index="0" name="published_file_id" type="int" />
+			<param index="1" name="result" type="int" />
+			<param index="2" name="vote_up" type="bool" />
+			<description>
+				Emitted when [method set_user_item_vote] completes.
+			</description>
+		</signal>
+		<signal name="workshop_playtime_tracking_updated">
+			<param index="0" name="result" type="int" />
+			<param index="1" name="started" type="bool" />
+			<description>
+				Emitted when a playtime tracking request completes. [param started] is [code]true[/code] for [method start_playtime_tracking] and [code]false[/code] for the stop methods.
+			</description>
+		</signal>
+		<signal name="workshop_query_completed">
+			<param index="0" name="query_handle" type="int" />
+			<param index="1" name="result" type="int" />
+			<param index="2" name="items" type="SteamWorkshopItem[]" />
+			<param index="3" name="total_matching_results" type="int" />
+			<param index="4" name="next_cursor" type="String" />
+			<description>
+				Emitted when a query sent by [method query_workshop_items], [method query_user_workshop_items] or [method query_workshop_item_details] completes. [param items] contains [SteamWorkshopItem]s and is empty on failure. [param result] is a Steam [code]EResult[/code] code ([code]1[/code] means success). [param next_cursor] is set for cursor-based queries.
+			</description>
+		</signal>
+		<signal name="workshop_subscriptions_changed">
+			<description>
+				Emitted when the local user's list of subscribed Workshop items for this app changes.
+			</description>
+		</signal>
 	</signals>
 	<constants>
 		<constant name="TICKET_STATE_IDLE" value="0" enum="TicketState">
@@ -476,6 +897,264 @@
 		</constant>
 		<constant name="AVATAR_SIZE_LARGE" value="2" enum="AvatarSize">
 			Large avatar (184x184).
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_COMMUNITY" value="0" enum="WorkshopFileType">
+			A normal Workshop item that can be subscribed to.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_MICROTRANSACTION" value="1" enum="WorkshopFileType">
+			A Workshop item meant to be voted on for the purpose of selling in-game.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_COLLECTION" value="2" enum="WorkshopFileType">
+			A collection of Workshop items.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_ART" value="3" enum="WorkshopFileType">
+			Artwork.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_VIDEO" value="4" enum="WorkshopFileType">
+			An external video.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_SCREENSHOT" value="5" enum="WorkshopFileType">
+			A screenshot.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_WEB_GUIDE" value="9" enum="WorkshopFileType">
+			A Steam web guide.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_INTEGRATED_GUIDE" value="10" enum="WorkshopFileType">
+			An application-integrated guide.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_MERCH" value="11" enum="WorkshopFileType">
+			Workshop merchandise meant to be voted on for the purpose of being sold.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_CONTROLLER_BINDING" value="12" enum="WorkshopFileType">
+			Steam Controller bindings.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_STEAM_VIDEO" value="14" enum="WorkshopFileType">
+			A Steam video.
+		</constant>
+		<constant name="WORKSHOP_FILE_TYPE_GAME_MANAGED_ITEM" value="15" enum="WorkshopFileType">
+			An item managed completely by the game, not the user, and not shown on the web.
+		</constant>
+		<constant name="WORKSHOP_VISIBILITY_PUBLIC" value="0" enum="WorkshopVisibility">
+			Visible to everyone.
+		</constant>
+		<constant name="WORKSHOP_VISIBILITY_FRIENDS_ONLY" value="1" enum="WorkshopVisibility">
+			Visible to the owner's friends only.
+		</constant>
+		<constant name="WORKSHOP_VISIBILITY_PRIVATE" value="2" enum="WorkshopVisibility">
+			Visible to the owner only.
+		</constant>
+		<constant name="WORKSHOP_VISIBILITY_UNLISTED" value="3" enum="WorkshopVisibility">
+			Visible to everyone with the link, but not listed in searches.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_NONE" value="0" enum="WorkshopItemState" is_bitfield="true">
+			The item is not tracked by the Steam client.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_SUBSCRIBED" value="1" enum="WorkshopItemState" is_bitfield="true">
+			The local user is subscribed to the item.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_LEGACY_ITEM" value="2" enum="WorkshopItemState" is_bitfield="true">
+			The item was created with the legacy [code]ISteamRemoteStorage[/code] API.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_INSTALLED" value="4" enum="WorkshopItemState" is_bitfield="true">
+			The item is installed and usable, but may be out of date.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_NEEDS_UPDATE" value="8" enum="WorkshopItemState" is_bitfield="true">
+			The item needs an update, either because it is not installed yet or because its creator updated it.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_DOWNLOADING" value="16" enum="WorkshopItemState" is_bitfield="true">
+			The item is currently downloading.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_DOWNLOAD_PENDING" value="32" enum="WorkshopItemState" is_bitfield="true">
+			[method download_item] was called for the item; its content is not available until [signal workshop_item_downloaded] is emitted.
+		</constant>
+		<constant name="WORKSHOP_ITEM_STATE_DISABLED_LOCALLY" value="64" enum="WorkshopItemState" is_bitfield="true">
+			The user disabled the item locally, so it should not be treated as subscribed.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_VOTE" value="0" enum="WorkshopQueryType">
+			Ranked by vote score.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_PUBLICATION_DATE" value="1" enum="WorkshopQueryType">
+			Ranked by publication date, newest first.
+		</constant>
+		<constant name="WORKSHOP_QUERY_ACCEPTED_FOR_GAME_RANKED_BY_ACCEPTANCE_DATE" value="2" enum="WorkshopQueryType">
+			Items accepted for the game, ranked by acceptance date.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_TREND" value="3" enum="WorkshopQueryType">
+			Ranked by trend; see the [code]ranked_by_trend_days[/code] query option.
+		</constant>
+		<constant name="WORKSHOP_QUERY_FAVORITED_BY_FRIENDS_RANKED_BY_PUBLICATION_DATE" value="4" enum="WorkshopQueryType">
+			Items favorited by the user's friends, ranked by publication date.
+		</constant>
+		<constant name="WORKSHOP_QUERY_CREATED_BY_FRIENDS_RANKED_BY_PUBLICATION_DATE" value="5" enum="WorkshopQueryType">
+			Items created by the user's friends, ranked by publication date.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_NUM_TIMES_REPORTED" value="6" enum="WorkshopQueryType">
+			Ranked by the number of times reported.
+		</constant>
+		<constant name="WORKSHOP_QUERY_CREATED_BY_FOLLOWED_USERS_RANKED_BY_PUBLICATION_DATE" value="7" enum="WorkshopQueryType">
+			Items created by users the user follows, ranked by publication date.
+		</constant>
+		<constant name="WORKSHOP_QUERY_NOT_YET_RATED" value="8" enum="WorkshopQueryType">
+			Items the user has not rated yet.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_TOTAL_VOTES_ASC" value="9" enum="WorkshopQueryType">
+			Ranked by total number of votes, ascending.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_VOTES_UP" value="10" enum="WorkshopQueryType">
+			Ranked by number of up votes.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_TEXT_SEARCH" value="11" enum="WorkshopQueryType">
+			Ranked by relevance to the [code]search_text[/code] query option.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_TOTAL_UNIQUE_SUBSCRIPTIONS" value="12" enum="WorkshopQueryType">
+			Ranked by total unique subscriptions.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_PLAYTIME_TREND" value="13" enum="WorkshopQueryType">
+			Ranked by playtime trend.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_TOTAL_PLAYTIME" value="14" enum="WorkshopQueryType">
+			Ranked by total playtime.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_AVERAGE_PLAYTIME_TREND" value="15" enum="WorkshopQueryType">
+			Ranked by average playtime trend.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_LIFETIME_AVERAGE_PLAYTIME" value="16" enum="WorkshopQueryType">
+			Ranked by lifetime average playtime.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_PLAYTIME_SESSIONS_TREND" value="17" enum="WorkshopQueryType">
+			Ranked by playtime sessions trend.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_LIFETIME_PLAYTIME_SESSIONS" value="18" enum="WorkshopQueryType">
+			Ranked by lifetime playtime sessions.
+		</constant>
+		<constant name="WORKSHOP_QUERY_RANKED_BY_LAST_UPDATED_DATE" value="19" enum="WorkshopQueryType">
+			Ranked by last updated date, newest first.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_ITEMS" value="0" enum="WorkshopMatchingType">
+			Both microtransaction items and ready-to-use items.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_ITEMS_MTX" value="1" enum="WorkshopMatchingType">
+			Microtransaction items only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_ITEMS_READY_TO_USE" value="2" enum="WorkshopMatchingType">
+			Ready-to-use items only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_COLLECTIONS" value="3" enum="WorkshopMatchingType">
+			Collections only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_ARTWORK" value="4" enum="WorkshopMatchingType">
+			Artwork only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_VIDEOS" value="5" enum="WorkshopMatchingType">
+			Videos only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_SCREENSHOTS" value="6" enum="WorkshopMatchingType">
+			Screenshots only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_ALL_GUIDES" value="7" enum="WorkshopMatchingType">
+			Both web guides and integrated guides.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_WEB_GUIDES" value="8" enum="WorkshopMatchingType">
+			Web guides only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_INTEGRATED_GUIDES" value="9" enum="WorkshopMatchingType">
+			Integrated guides only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_USABLE_IN_GAME" value="10" enum="WorkshopMatchingType">
+			Ready-to-use items and integrated guides.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_CONTROLLER_BINDINGS" value="11" enum="WorkshopMatchingType">
+			Controller bindings only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_GAME_MANAGED_ITEMS" value="12" enum="WorkshopMatchingType">
+			Game-managed items only.
+		</constant>
+		<constant name="WORKSHOP_MATCHING_ALL" value="-1" enum="WorkshopMatchingType">
+			Everything. Only valid for [method query_user_workshop_items].
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_PUBLISHED" value="0" enum="WorkshopUserList">
+			Items the user published.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_VOTED_ON" value="1" enum="WorkshopUserList">
+			Items the user voted on.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_VOTED_UP" value="2" enum="WorkshopUserList">
+			Items the user voted up.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_VOTED_DOWN" value="3" enum="WorkshopUserList">
+			Items the user voted down.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_WILL_VOTE_LATER" value="4" enum="WorkshopUserList">
+			Deprecated by Steam; kept for completeness.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_FAVORITED" value="5" enum="WorkshopUserList">
+			Items the user favorited.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_SUBSCRIBED" value="6" enum="WorkshopUserList">
+			Items the user is subscribed to.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_USED_OR_PLAYED" value="7" enum="WorkshopUserList">
+			Items the user used or played.
+		</constant>
+		<constant name="WORKSHOP_USER_LIST_FOLLOWED" value="8" enum="WorkshopUserList">
+			Items the user follows.
+		</constant>
+		<constant name="WORKSHOP_SORT_CREATION_ORDER_DESC" value="0" enum="WorkshopUserListSortOrder">
+			Newest first.
+		</constant>
+		<constant name="WORKSHOP_SORT_CREATION_ORDER_ASC" value="1" enum="WorkshopUserListSortOrder">
+			Oldest first.
+		</constant>
+		<constant name="WORKSHOP_SORT_TITLE_ASC" value="2" enum="WorkshopUserListSortOrder">
+			Alphabetically by title.
+		</constant>
+		<constant name="WORKSHOP_SORT_LAST_UPDATED_DESC" value="3" enum="WorkshopUserListSortOrder">
+			Most recently updated first.
+		</constant>
+		<constant name="WORKSHOP_SORT_SUBSCRIPTION_DATE_DESC" value="4" enum="WorkshopUserListSortOrder">
+			Most recently subscribed first.
+		</constant>
+		<constant name="WORKSHOP_SORT_VOTE_SCORE_DESC" value="5" enum="WorkshopUserListSortOrder">
+			Highest vote score first.
+		</constant>
+		<constant name="WORKSHOP_SORT_FOR_MODERATION" value="6" enum="WorkshopUserListSortOrder">
+			Sorted for moderation.
+		</constant>
+		<constant name="WORKSHOP_UPDATE_STATUS_INVALID" value="0" enum="WorkshopUpdateStatus">
+			The update handle is invalid; the update may have finished. Wait for [signal workshop_item_updated].
+		</constant>
+		<constant name="WORKSHOP_UPDATE_STATUS_PREPARING_CONFIG" value="1" enum="WorkshopUpdateStatus">
+			Processing configuration data.
+		</constant>
+		<constant name="WORKSHOP_UPDATE_STATUS_PREPARING_CONTENT" value="2" enum="WorkshopUpdateStatus">
+			Reading and processing content files.
+		</constant>
+		<constant name="WORKSHOP_UPDATE_STATUS_UPLOADING_CONTENT" value="3" enum="WorkshopUpdateStatus">
+			Uploading content changes to Steam.
+		</constant>
+		<constant name="WORKSHOP_UPDATE_STATUS_UPLOADING_PREVIEW_FILE" value="4" enum="WorkshopUpdateStatus">
+			Uploading the new preview file.
+		</constant>
+		<constant name="WORKSHOP_UPDATE_STATUS_COMMITTING_CHANGES" value="5" enum="WorkshopUpdateStatus">
+			Committing all changes.
+		</constant>
+		<constant name="WORKSHOP_PREVIEW_TYPE_IMAGE" value="0" enum="WorkshopPreviewType">
+			A standard image file (JPG, PNG, GIF, ...).
+		</constant>
+		<constant name="WORKSHOP_PREVIEW_TYPE_YOUTUBE_VIDEO" value="1" enum="WorkshopPreviewType">
+			A YouTube video ID.
+		</constant>
+		<constant name="WORKSHOP_PREVIEW_TYPE_SKETCHFAB" value="2" enum="WorkshopPreviewType">
+			A Sketchfab model ID.
+		</constant>
+		<constant name="WORKSHOP_PREVIEW_TYPE_ENVIRONMENT_MAP_HORIZONTAL_CROSS" value="3" enum="WorkshopPreviewType">
+			An image file containing a cube map in the horizontal cross layout.
+		</constant>
+		<constant name="WORKSHOP_PREVIEW_TYPE_ENVIRONMENT_MAP_LAT_LONG" value="4" enum="WorkshopPreviewType">
+			An image file containing a latitude-longitude environment map.
+		</constant>
+		<constant name="WORKSHOP_PREVIEW_TYPE_CLIP" value="5" enum="WorkshopPreviewType">
+			A Steam clip ID.
 		</constant>
 	</constants>
 </class>
