@@ -28,6 +28,7 @@
 /**************************************************************************/
 
 #include "justamcp_scene_file_io.h"
+
 #include "../justamcp_editor_filesystem.h"
 #include "justamcp_agent_helpers.h"
 
@@ -40,7 +41,9 @@
 
 #ifdef TOOLS_ENABLED
 #include "../justamcp_editor_scene_access.h"
+
 #include "editor/editor_interface.h"
+#include "editor/editor_node.h"
 #endif
 
 String justamcp_resolve_project_path(const String &p_path) {
@@ -134,7 +137,7 @@ Dictionary justamcp_save_scene_root(Node *p_root, const String &p_path, bool p_f
 void justamcp_refresh_project_path(const String &p_path) {
 	JustAMCPEditorFilesystem::refresh_path(p_path);
 #ifdef TOOLS_ENABLED
-	if (EditorInterface::get_singleton()) {
+	if (EditorNode::get_singleton() && EditorInterface::get_singleton()) {
 		Node *edited = JustAMCPEditorSceneAccess::get_edited_root();
 		if (edited && edited->get_scene_file_path() == p_path) {
 			EditorInterface::get_singleton()->reload_scene_from_path(p_path);

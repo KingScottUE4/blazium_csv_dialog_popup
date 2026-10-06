@@ -32,7 +32,9 @@
 #include "justamcp_project_resource_provider.h"
 
 #include "../../justamcp_editor_scene_access.h"
+#include "../../justamcp_play_clock.h"
 #include "../../justamcp_server.h"
+#include "../justamcp_gap_fill.h"
 
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
@@ -76,8 +78,10 @@ bool JustAMCPProjectResourceProvider::can_read(const String &p_canonical_uri) {
 	return p_canonical_uri == "blazium://project/info" ||
 			p_canonical_uri == "blazium://project/settings" ||
 			p_canonical_uri == "blazium://editor/state" ||
+			p_canonical_uri == "blazium://editor/dialogs" ||
 			p_canonical_uri == "blazium://input_map" ||
-			p_canonical_uri == "blazium://performance";
+			p_canonical_uri == "blazium://performance" ||
+			p_canonical_uri == "blazium://play/clock";
 }
 
 Dictionary JustAMCPProjectResourceProvider::read(const String &p_uri, const String &p_canonical_uri) {
@@ -141,7 +145,19 @@ Dictionary JustAMCPProjectResourceProvider::read(const String &p_uri, const Stri
 		payload["current_scene"] = root ? root->get_scene_file_path() : String();
 		payload["is_playing"] = editor_ready ? EditorInterface::get_singleton()->is_playing_scene() : false;
 		payload["readiness"] = !root ? "no_scene" : (bool(payload["is_playing"]) ? "playing" : "ready");
+		Dictionary surface = justamcp_editor_surface_snapshot();
+		payload["camera"] = surface.get("camera", Dictionary());
+		payload["dialogs"] = surface.get("dialogs", Dictionary());
+		payload["unsaved"] = surface.get("unsaved", Dictionary());
 		return _project_json_contents(p_uri, payload);
+	}
+
+	if (p_canonical_uri == "blazium://editor/dialogs") {
+		return _project_json_contents(p_uri, justamcp_editor_list_dialogs(Dictionary()));
+	}
+
+	if (p_canonical_uri == "blazium://play/clock") {
+		return _project_json_contents(p_uri, justamcp_play_clock_snapshot());
 	}
 
 	if (p_canonical_uri == "blazium://input_map") {
@@ -191,6 +207,12 @@ Dictionary JustAMCPProjectResourceProvider::read(const String &p_uri, const Stri
 		Dictionary payload;
 		payload["monitors"] = monitors;
 		payload["missing"] = Array();
+		Dictionary clock = justamcp_play_clock_snapshot();
+		payload["time_scale"] = clock.get("time_scale", 1.0);
+		payload["frozen"] = clock.get("frozen", false);
+		payload["seed"] = clock.get("seed", 0);
+		payload["fixed_fps"] = clock.get("fixed_fps", 0);
+		payload["paused"] = clock.get("paused", false);
 		return _project_json_contents(p_uri, payload);
 	}
 
