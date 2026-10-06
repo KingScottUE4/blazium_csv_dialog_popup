@@ -557,8 +557,15 @@ static String _obf_rel_path(const String &p_src_root, const String &p_path) {
 
 void Obfuscation::build_pack_ident_maps(HashMap<String, String> &r_idents, HashSet<String> &r_funcs, HashSet<String> &r_scene_names) const {
 	HashSet<String> vars;
+	HashSet<String> keep;
+	r_idents.clear();
 	r_funcs.clear();
 	r_scene_names.clear();
+	// Renaming identifiers is opt-in: text-level renaming can't see every way a
+	// name is used (saved data, reflection, dictionary keys), so it can break games.
+	if (!bool(GLOBAL_GET("obfuscation/scripts/rename_identifiers"))) {
+		return;
+	}
 	Vector<String> files;
 	const String root = ProjectSettings::get_singleton()->globalize_path("res://").replace("\\", "/").simplify_path();
 	ObfuscationSourceMap::list_files(root, files);
@@ -569,7 +576,7 @@ void Obfuscation::build_pack_ident_maps(HashMap<String, String> &r_idents, HashS
 		}
 		const String ext = files[i].get_extension().to_lower();
 		if (ObfuscationSourceMap::is_script_ext(ext)) {
-			ObfuscationSourceMap::collect_split(FileAccess::get_file_as_string(files[i]), r_funcs, vars, ObfuscationSourceMap::script_lang_from_path(files[i]));
+			ObfuscationSourceMap::collect_split(FileAccess::get_file_as_string(files[i]), r_funcs, vars, keep, ObfuscationSourceMap::script_lang_from_path(files[i]));
 		} else if (_obf_is_scene_text(files[i])) {
 			ObfuscationSourceMap::collect_scene_names(FileAccess::get_file_as_string(files[i]), r_scene_names);
 		}
@@ -580,6 +587,21 @@ void Obfuscation::build_pack_ident_maps(HashMap<String, String> &r_idents, HashS
 	}
 	for (const String &n : r_scene_names) {
 		names.insert(n);
+	}
+	// Autoload names are global like class names, and the exported project
+	// settings register them under the names written in project.godot.
+	List<PropertyInfo> props;
+	ProjectSettings::get_singleton()->get_property_list(&props);
+	for (const PropertyInfo &pi : props) {
+		if (pi.name.begins_with("autoload/")) {
+			keep.insert(pi.name.get_slicec('/', 1));
+		}
+	}
+	// Global class names, and variables a scene or resource stores by name.
+	for (const String &n : keep) {
+		names.erase(n);
+		r_funcs.erase(n);
+		r_scene_names.erase(n);
 	}
 	r_idents = ObfuscationSourceMap::map_identifiers(_hmac_secret(), names);
 }
@@ -650,10 +672,15 @@ Variant Obfuscation::comment_ref(const String &p_source, const String &p_packed_
 }
 
 String Obfuscation::output_artifact_path(const String &p_logical) const {
-	if (bool(GLOBAL_GET("obfuscation/pack/scramble_names"))) {
-		return scramble_output_path(p_logical);
+	if (!bool(GLOBAL_GET("obfuscation/pack/scramble_names"))) {
+		return p_logical;
 	}
-	return p_logical;
+	// Match the export, which only scrambles with a loaded identity. This lets
+	// other export plugins call it from _export_begin, before ours has run.
+	if (!has_identity()) {
+		const_cast<Obfuscation *>(this)->load_identity();
+	}
+	return has_identity() ? scramble_output_path(p_logical) : p_logical;
 }
 
 PackedByteArray Obfuscation::derive_seed_bytes(const String &p_path) const {
@@ -664,6 +691,41 @@ PackedByteArray Obfuscation::derive_seed_bytes(const String &p_path) const {
 		b.write[7 - i] = (uint8_t)((v >> (i * 8)) & 0xff);
 	}
 	return b;
+}
+
+// A GDScript that extends another project script already inherits the parent's
+// _CK, _CI and _CR constants, and GDScript does not allow declaring a member
+// again in a subclass, so code injection would stop the script from loading.
+static bool _obf_extends_project_script(const String &p_source) {
+	const PackedStringArray lines = p_source.split("\n");
+	for (const String &raw : lines) {
+		if (raw.begins_with(" ") || raw.begins_with("\t")) {
+			continue;
+		}
+		const String line = raw.strip_edges();
+		int at = -1;
+		if (line.begins_with("extends ")) {
+			at = 8;
+		} else if (line.begins_with("class_name ") && line.find(" extends ") > 0) {
+			at = line.find(" extends ") + 9;
+		} else if (line.begins_with("func ") || line.begins_with("var ") || line.begins_with("const ") || line.begins_with("class ") || line.begins_with("static ")) {
+			return false; // Past the header: no extends line, so RefCounted.
+		}
+		if (at < 0) {
+			continue;
+		}
+		String target = line.substr(at).strip_edges();
+		const int comment = target.find_char('#');
+		if (comment >= 0) {
+			target = target.substr(0, comment).strip_edges();
+		}
+		if (target.begins_with("\"") || target.begins_with("'")) {
+			return true; // extends "res://base.gd"
+		}
+		target = target.get_slicec('.', 0).trim_suffix(":").strip_edges();
+		return !target.is_empty() && !ClassDB::class_exists(target);
+	}
+	return false;
 }
 
 String Obfuscation::inject_script_source(const String &p_source, const String &p_path) const {
@@ -691,6 +753,9 @@ String Obfuscation::inject_script_source(const String &p_source, const String &p
 			}
 		}
 		return ObfuscationCommentLattice::append_lines(src, lines);
+	}
+	if (!luau && _obf_extends_project_script(src)) {
+		return src; // The parent script carries the marks.
 	}
 	if (GLOBAL_GET("obfuscation/scripts/inject_ck")) {
 		src = ObfuscationScriptSeed::inject(src, derive_seed(p_path), luau);

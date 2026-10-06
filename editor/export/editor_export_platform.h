@@ -135,6 +135,9 @@ private:
 	void _edit_filter_list(HashSet<String> &r_list, const String &p_filter, bool exclude);
 
 	static Vector<uint8_t> _filter_extension_list_config_file(const String &p_config_path, const HashSet<String> &p_paths);
+	static String _get_exported_path(const Vector<Ref<EditorExportPlugin>> &p_plugins, const String &p_path);
+	static Vector<uint8_t> _export_global_class_list(const String &p_config_path, const Vector<Ref<EditorExportPlugin>> &p_plugins);
+	static Vector<uint8_t> _export_uid_cache(const String &p_cache_path, const Vector<Ref<EditorExportPlugin>> &p_plugins);
 
 	struct FileExportCache {
 		uint64_t source_modified_time = 0;

@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/crypto/crypto_core.h"
 #include "core/extension/gdextension.h"
+#include "core/io/config_file.h"
 #include "core/io/file_access_encrypted.h"
 #include "core/io/file_access_pack.h" // PACK_HEADER_MAGIC, PACK_FORMAT_VERSION
 #include "core/io/image_loader.h"
@@ -1183,6 +1184,11 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 
 	struct SortByName {
 		bool operator()(const Ref<EditorExportPlugin> &left, const Ref<EditorExportPlugin> &right) const {
+			const int left_order = left->get_export_order();
+			const int right_order = right->get_export_order();
+			if (left_order != right_order) {
+				return left_order < right_order;
+			}
 			return left->get_name() < right->get_name();
 		}
 	};
@@ -1561,6 +1567,10 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 			if (array.size() == 0) {
 				continue;
 			}
+		} else if (ProjectSettings::get_singleton()->get_global_class_list_path() == forced_export[i]) {
+			array = _export_global_class_list(forced_export[i], export_plugins);
+		} else if (ResourceUID::get_cache_file() == forced_export[i]) {
+			array = _export_uid_cache(forced_export[i], export_plugins);
 		} else {
 			array = FileAccess::get_file_as_bytes(forced_export[i]);
 		}
@@ -1616,6 +1626,110 @@ Vector<uint8_t> EditorExportPlatform::_filter_extension_list_config_file(const S
 		if (p_paths.has(l)) {
 			data.append_array(l.to_utf8_buffer());
 			data.append('\n');
+		}
+	}
+	return data;
+}
+
+// A plugin may pack a file under another path; the exported caches must point there.
+String EditorExportPlatform::_get_exported_path(const Vector<Ref<EditorExportPlugin>> &p_plugins, const String &p_path) {
+	String out = p_path;
+	for (const Ref<EditorExportPlugin> &plugin : p_plugins) {
+		out = plugin->get_exported_path(out);
+	}
+	return out;
+}
+
+Vector<uint8_t> EditorExportPlatform::_export_global_class_list(const String &p_config_path, const Vector<Ref<EditorExportPlugin>> &p_plugins) {
+	const Vector<uint8_t> original = FileAccess::get_file_as_bytes(p_config_path);
+	Ref<ConfigFile> cf;
+	cf.instantiate();
+	if (cf->load(p_config_path) != OK) {
+		return original;
+	}
+
+	bool changed = false;
+	Array list = cf->get_value("", "list", Array());
+	for (int i = 0; i < list.size(); i++) {
+		Dictionary class_dict = list[i];
+		if (!class_dict.has("path")) {
+			continue;
+		}
+		const String path = class_dict["path"];
+		const String packed_path = _get_exported_path(p_plugins, path);
+		const String icon = class_dict.get("icon", String());
+		const String packed_icon = icon.is_empty() ? icon : _get_exported_path(p_plugins, icon);
+		if (packed_path == path && packed_icon == icon) {
+			continue;
+		}
+		class_dict = class_dict.duplicate();
+		class_dict["path"] = packed_path;
+		if (!icon.is_empty()) {
+			class_dict["icon"] = packed_icon;
+		}
+		list[i] = class_dict;
+		changed = true;
+	}
+
+	if (!changed) {
+		return original;
+	}
+	cf->set_value("", "list", list);
+	return cf->encode_to_text().to_utf8_buffer();
+}
+
+// Same layout as ResourceUID::save_to_cache(): entry count, then for each entry
+// the 64-bit ID, the path length and the UTF-8 path.
+Vector<uint8_t> EditorExportPlatform::_export_uid_cache(const String &p_cache_path, const Vector<Ref<EditorExportPlugin>> &p_plugins) {
+	const Vector<uint8_t> original = FileAccess::get_file_as_bytes(p_cache_path);
+	Ref<FileAccess> src = FileAccess::open(p_cache_path, FileAccess::READ);
+	if (src.is_null()) {
+		return original;
+	}
+
+	struct Entry {
+		uint64_t id = 0;
+		String path;
+	};
+	Vector<Entry> entries;
+	bool changed = false;
+	const uint32_t count = src->get_32();
+	for (uint32_t i = 0; i < count; i++) {
+		Entry entry;
+		entry.id = src->get_64();
+		const uint32_t len = src->get_32();
+		if (src->eof_reached() || src->get_position() + len > src->get_length()) {
+			return original; // Truncated cache; leave it as is.
+		}
+		const Vector<uint8_t> bytes = src->get_buffer(len);
+		entry.path.parse_utf8((const char *)bytes.ptr(), bytes.size());
+		const String packed_path = _get_exported_path(p_plugins, entry.path);
+		if (packed_path != entry.path) {
+			entry.path = packed_path;
+			changed = true;
+		}
+		entries.push_back(entry);
+	}
+
+	if (!changed) {
+		return original;
+	}
+
+	Vector<uint8_t> data;
+	auto put_32 = [&data](uint32_t p_value) {
+		for (int i = 0; i < 4; i++) {
+			data.push_back(uint8_t(p_value >> (8 * i)));
+		}
+	};
+	put_32(entries.size());
+	for (const Entry &entry : entries) {
+		for (int i = 0; i < 8; i++) {
+			data.push_back(uint8_t(entry.id >> (8 * i)));
+		}
+		const CharString utf8 = entry.path.utf8();
+		put_32(utf8.length());
+		for (int i = 0; i < utf8.length(); i++) {
+			data.push_back(uint8_t(utf8[i]));
 		}
 	}
 	return data;

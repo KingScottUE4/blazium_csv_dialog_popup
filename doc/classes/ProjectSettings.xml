@@ -4111,8 +4111,9 @@
 		<member name="obfuscation/pack/inject_seal" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], export writes a claim PNG and manifest into the packed tree.
 		</member>
-		<member name="obfuscation/pack/scramble_names" type="bool" setter="" getter="" default="true">
-			If [code]true[/code], claim PNG and manifest are packed under one-way HMAC folder and file names instead of [code].obfuscation/claimkey.png[/code]. Original names cannot be recovered from the packed paths.
+		<member name="obfuscation/pack/scramble_names" type="bool" setter="" getter="" default="false">
+			If [code]true[/code], exported files are stored under HMAC-derived names instead of their project paths. Literal [code]res://[/code] paths in scripts, scenes and project settings are rewritten to match, and the exported UID cache and global class list point at the new names. Imported resources are exported as their imported files, also renamed.
+			[b]Note:[/b] Paths a game builds while running (for example [code]"res://models/%s.obj" % name[/code]) can't be followed and will not be found. Use full literal paths, for example in a lookup table, for any file the game loads by name. Files that another export plugin adds with [method EditorExportPlugin.add_file] keep their path unless that plugin asks [method Obfuscation.output_artifact_path] for the new one. The export reports an error if a project setting points at a file that was not renamed.
 		</member>
 		<member name="obfuscation/project_id" type="String" setter="" getter="" default="&quot;&quot;">
 			Fallback project id when no identity is loaded. Identity generation also reads this value.
@@ -4134,6 +4135,11 @@
 		</member>
 		<member name="obfuscation/scripts/minify" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], strip author comments and minify packed GDScript and Luau before planting lattice comments. GDScript indentation is kept.
+		</member>
+		<member name="obfuscation/scripts/rename_identifiers" type="bool" setter="" getter="" default="false">
+			If [code]true[/code], the names of the project's own functions, variables, signals, enums, autoloads and nodes are replaced with HMAC-derived names in exported scripts and scenes. Names the engine exposes (methods, properties, signals and constants of every class and built-in type, and utility functions) are never renamed, nor are [code]class_name[/code] names, [annotation @GDScript.@export] variables, or input actions.
+			Strings are only renamed where they name code: the method, signal or property argument of calls such as [method Object.call], [method Object.connect], [method Object.has_method], [method Object.set_deferred], [method Tween.tween_property] and [Callable] constructors, and node paths in [method Node.get_node], [code]$[/code] and [code]%[/code]. A name stored in any other string (a dictionary key, a save file, a value looked up with [method Object.get]) keeps its spelling and will no longer match. A dictionary read with dot syntax ([code]data.title[/code]) is renamed like a member if the project declares a variable with that name.
+			[b]Warning:[/b] This renames by reading the source text, so test the exported game thoroughly.
 		</member>
 		<member name="obfuscation/textures/dwt" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], embed a Haar DWT + QIM mark before compressed textures are saved.

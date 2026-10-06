@@ -40,6 +40,8 @@ void test_obfuscation_path_canonicalize();
 void test_obfuscation_scramble_one_way();
 void test_obfuscation_identifier_rewrite();
 void test_obfuscation_scene_rewrite();
+void test_obfuscation_rename_safety();
+void test_obfuscation_injection_placement();
 void test_obfuscation_luau_rewrite();
 void test_obfuscation_comment_lattice();
 
@@ -77,6 +79,14 @@ TEST_CASE("[Modules][Obfuscation] identifier rewrite keeps reserved names") {
 
 TEST_CASE("[Modules][Obfuscation] scene tree names scramble with NodePath and groups") {
 	test_obfuscation_scene_rewrite();
+}
+
+TEST_CASE("[Modules][Obfuscation] renaming leaves engine names, data strings, input actions, class names and exports alone") {
+	test_obfuscation_rename_safety();
+}
+
+TEST_CASE("[Modules][Obfuscation] injected code and lattice references stay where GDScript allows them") {
+	test_obfuscation_injection_placement();
 }
 
 TEST_CASE("[Modules][Obfuscation] Luau identifiers and require paths scramble") {
