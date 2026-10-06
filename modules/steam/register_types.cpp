@@ -34,6 +34,7 @@
 #include "steam_auth_result.h"
 #include "steam_inventory_item.h"
 #include "steam_item_definition.h"
+#include "steam_workshop_item.h"
 
 #include "core/config/engine.h"
 #include "core/object/callable_mp.h"
@@ -97,6 +98,7 @@ void initialize_steam_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(SteamAchievementInfo);
 		GDREGISTER_CLASS(SteamInventoryItem);
 		GDREGISTER_CLASS(SteamItemDefinition);
+		GDREGISTER_CLASS(SteamWorkshopItem);
 		GDREGISTER_CLASS(Steam);
 		steam_singleton = memnew(Steam);
 		Engine::get_singleton()->add_singleton(Engine::Singleton("Steam", Steam::get_singleton()));
