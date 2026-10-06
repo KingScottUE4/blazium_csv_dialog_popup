@@ -119,6 +119,9 @@ protected:
 
 public:
 	virtual String get_name() const override { return "GDScript"; }
+	// Tokenizing replaces the source, and stops later plugins from seeing the
+	// file, so run after the plugins that read or rewrite scripts.
+	virtual int get_export_order() const override { return 100; }
 };
 
 static void _editor_init() {

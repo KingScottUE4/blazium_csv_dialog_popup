@@ -227,7 +227,8 @@ void test_obfuscation_identifier_rewrite() {
 	const String out = ObfuscationSourceMap::rewrite_script(src, idents, funcs, key, true);
 	CHECK(out.find("func next_roll") < 0);
 	CHECK(out.find("var rng") < 0);
-	CHECK(out.find("print(\"next_roll\")") < 0);
+	// A plain string is data, not code, and keeps its spelling.
+	CHECK(out.find("print(\"next_roll\")") >= 0);
 	CHECK(out.find(String("x.") + rolled) >= 0);
 	CHECK(out.find("extends Node") >= 0);
 	CHECK(out.find("func _ready") >= 0);
@@ -260,7 +261,7 @@ void test_obfuscation_scene_rewrite() {
 	CHECK(scene.has("Margin"));
 	CHECK(scene.has("VBox"));
 	CHECK(scene.has("HarborQuestState"));
-	CHECK(scene.has("jump"));
+	CHECK(!scene.has("jump")); // Input actions are never renamed.
 	CHECK(!scene.has("Control"));
 	CHECK(!scene.has("BlazeSeal"));
 	CHECK(!scene.has("42"));
@@ -279,12 +280,11 @@ void test_obfuscation_scene_rewrite() {
 	REQUIRE(idents.has("harbor_party"));
 	REQUIRE(idents.has("1_main"));
 	REQUIRE(idents.has("HarborQuestState"));
-	REQUIRE(idents.has("jump"));
+	CHECK(!idents.has("jump"));
 	const String hero = *idents.getptr("HarborHero");
 	const String group = *idents.getptr("harbor_party");
 	const String ext_id = *idents.getptr("1_main");
 	const String auto_n = *idents.getptr("HarborQuestState");
-	const String jump_n = *idents.getptr("jump");
 	const String out_scene = ObfuscationSourceMap::rewrite_scene(tscn, idents, key);
 	CHECK(out_scene.find("HarborHero") < 0);
 	CHECK(out_scene.find("harbor_party") < 0);
@@ -300,20 +300,128 @@ void test_obfuscation_scene_rewrite() {
 	CHECK(out_scene.find(String("NodePath(\"") + hero + ":frame\")") >= 0);
 	const String out_godot = ObfuscationSourceMap::rewrite_scene(godot, idents, key);
 	CHECK(out_godot.find("HarborQuestState") < 0);
-	CHECK(out_godot.find("jump=") < 0);
+	CHECK(out_godot.find("\njump={") >= 0);
 	CHECK(out_godot.find("config/name=\"Harbor Quest\"") >= 0);
 	CHECK(out_godot.find(auto_n) >= 0);
-	CHECK(out_godot.find(jump_n + "={") >= 0);
 	CHECK(out_godot.find("quest") < 0);
 	const String out_gd = ObfuscationSourceMap::rewrite_script(gd, idents, funcs, scene, key, true);
 	CHECK(out_gd.find("HarborHero") < 0);
 	CHECK(out_gd.find("harbor_party") < 0);
-	CHECK(out_gd.find("\"jump\"") < 0);
+	CHECK(out_gd.find("is_action_pressed(\"jump\")") >= 0);
 	CHECK(out_gd.find("extends Control") >= 0);
 	CHECK(out_gd.find("print(\"BlazeSeal\")") >= 0);
 	CHECK(out_gd.find(String("$") + hero) >= 0);
 	CHECK(out_gd.find(group) >= 0);
-	CHECK(out_gd.find(jump_n) >= 0);
+	CHECK(out_gd.find(String("get_node(\"") + hero + "\")") >= 0);
+}
+
+void test_obfuscation_rename_safety() {
+	PackedByteArray key;
+	key.resize(32);
+	for (int i = 0; i < 32; i++) {
+		key.write[i] = (uint8_t)(i * 7 + 3);
+	}
+	// Engine API names are reserved, so a project function called open() or
+	// play() does not rename FileAccess.open() or AudioStreamPlayer.play().
+	CHECK(ObfuscationSourceMap::is_reserved("open"));
+	CHECK(ObfuscationSourceMap::is_reserved("save"));
+	CHECK(ObfuscationSourceMap::is_reserved("play"));
+	CHECK(ObfuscationSourceMap::is_reserved("name"));
+	CHECK(ObfuscationSourceMap::is_reserved("get_value"));
+	CHECK(ObfuscationSourceMap::is_reserved("size"));
+	CHECK(ObfuscationSourceMap::is_reserved("lerp"));
+	CHECK(ObfuscationSourceMap::is_reserved("MOUSE_BUTTON_LEFT"));
+	const String gd = "class_name RaceKart\nextends Node\n"
+					  "signal lap_done\n"
+					  "@export var top_speed := 3.0\n"
+					  "@export_group(\"Feel\")\n"
+					  "var weight := 1.0\n"
+					  "func open() -> void:\n\tvar f := FileAccess.open(\"user://s.json\", FileAccess.READ)\n"
+					  "func boost(other) -> void:\n"
+					  "\tother.weight += 1.0\n"
+					  "\tvar data := {\"weight\": weight}\n"
+					  "\tdata.get(\"weight\")\n"
+					  "\tif has_method(\"boost\"):\n\t\tcall_deferred(\"boost\", other)\n"
+					  "\tconnect(\"lap_done\", Callable(self, \"boost\"))\n"
+					  "\tInput.is_action_pressed(\"ui_accept\")\n"
+					  "\tvar karts := [other]\n"
+					  "\tkarts[0].weight = 1e-12 + 0x1F + 2.5e+3\n";
+	HashSet<String> funcs;
+	HashSet<String> vars;
+	HashSet<String> keep;
+	ObfuscationSourceMap::collect_split(gd, funcs, vars, keep, ObfuscationSourceMap::SCRIPT_GDSCRIPT);
+	CHECK(keep.has("RaceKart"));
+	CHECK(keep.has("top_speed"));
+	CHECK(!keep.has("weight")); // @export_group does not export the next var.
+	CHECK(!funcs.has("open"));
+	CHECK(funcs.has("boost"));
+	HashSet<String> names(vars);
+	for (const String &n : funcs) {
+		names.insert(n);
+	}
+	for (const String &n : keep) {
+		names.erase(n);
+	}
+	const HashMap<String, String> idents = ObfuscationSourceMap::map_identifiers(key, names);
+	REQUIRE(idents.has("weight"));
+	REQUIRE(idents.has("boost"));
+	REQUIRE(idents.has("lap_done"));
+	const String weight = *idents.getptr("weight");
+	const String boost = *idents.getptr("boost");
+	const String lap = *idents.getptr("lap_done");
+	REQUIRE(idents.has("other")); // Parameters are renamed too.
+	const String other = *idents.getptr("other");
+	HashSet<String> scene;
+	const String out = ObfuscationSourceMap::rewrite_script(gd, idents, funcs, scene, key, true);
+	CHECK(out.find("class_name RaceKart") >= 0);
+	CHECK(out.find("var top_speed") >= 0);
+	CHECK(out.find("func open()") >= 0);
+	CHECK(out.find("FileAccess.open(") >= 0);
+	CHECK(out.find(other + "." + weight) >= 0); // A member after a dot.
+	CHECK(out.find("{\"weight\": " + weight + "}") >= 0); // Dictionary keys are data.
+	CHECK(out.find("data.get(\"weight\")") >= 0);
+	CHECK(out.find(String("has_method(\"") + boost + "\")") >= 0);
+	CHECK(out.find(String("call_deferred(\"") + boost + "\", " + other + ")") >= 0);
+	CHECK(out.find(String("connect(\"") + lap + "\", Callable(self, \"" + boost + "\"))") >= 0);
+	CHECK(out.find("is_action_pressed(\"ui_accept\")") >= 0);
+	// Numbers are copied whole; a member after an index is still renamed.
+	CHECK(out.find(String("[0].") + weight + " = 1e-12 + 0x1F + 2.5e+3") >= 0);
+	const String tscn = "[connection signal=\"lap_done\" from=\".\" to=\".\" method=\"boost\"]\n";
+	const String out_scene = ObfuscationSourceMap::rewrite_scene(tscn, idents, key);
+	CHECK(out_scene.find(String("signal=\"") + lap + "\"") >= 0);
+	CHECK(out_scene.find(String("method=\"") + boost + "\"") >= 0);
+}
+
+void test_obfuscation_injection_placement() {
+	// Code injected after the header must not land inside a property's setter.
+	const String gd = "@tool\nextends Node3D\nclass_name Showroom\n\n## Docs.\n@export var rebuild := false:\n\tset(v):\n\t\trebuild = v\n";
+	const String out = ObfuscationSourceMap::insert_after_preamble(gd, "const _CK := 1");
+	CHECK(out.find("class_name Showroom\n") >= 0);
+	CHECK(out.find("const _CK := 1\n@export var rebuild := false:\n\tset(v):") >= 0);
+
+	// Lattice references stay literal where GDScript needs a constant, and a
+	// whole $A/B path is replaced, not just its first name.
+	PackedByteArray key;
+	key.resize(32);
+	for (int i = 0; i < 32; i++) {
+		key.write[i] = (uint8_t)(i * 11 + 5);
+	}
+	HashMap<String, String> idents;
+	idents["Hero"] = "_aaaaaaaaaaaa";
+	HashSet<String> funcs;
+	HashSet<String> scene;
+	scene.insert("Hero");
+	const String path = "res://aaaaaaaa/bbbbbbbb/cccccccccccccccc.gd";
+	const String src = String("extends Node\nconst Kart := preload(\"") + path + "\")\nconst FILES := {\n\t\"a\": \"" + path + "\",\n}\n@export_file var f := \"" + path + "\"\n@onready var menu = $_aaaaaaaaaaaa/Menu\nstatic func make():\n\treturn load(\"" + path + "\")\nfunc _ready():\n\tvar k = load(\"" + path + "\")\n";
+	Vector<String> lines;
+	const String crefs = ObfuscationCommentLattice::apply_cref(src, key, "res://x.gd", ObfuscationSourceMap::SCRIPT_GDSCRIPT, idents, funcs, scene, lines);
+	CHECK(crefs.find(String("const Kart := preload(\"") + path + "\")") >= 0);
+	CHECK(crefs.find(String("\t\"a\": \"") + path + "\",") >= 0); // Inside a multi-line const.
+	CHECK(crefs.find(String("@export_file var f := \"") + path + "\"") >= 0);
+	CHECK(crefs.find("@onready var menu = get_node(str(_obfuscation_cref(") >= 0);
+	CHECK(crefs.find("/Menu") < 0);
+	CHECK(crefs.find(String("\treturn load(\"") + path + "\")") >= 0); // Static function.
+	CHECK(crefs.find("\tvar k = load(str(_obfuscation_cref(") >= 0);
 }
 
 void test_obfuscation_luau_rewrite() {

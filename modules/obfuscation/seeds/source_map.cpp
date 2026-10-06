@@ -31,9 +31,18 @@
 
 #include "seeds/output_names.h"
 
+#include "core/config/engine.h"
+#include "core/core_constants.h"
 #include "core/io/dir_access.h"
 #include "core/object/class_db.h"
 #include "core/templates/hash_set.h"
+#include "core/variant/variant.h"
+
+#include "modules/modules_enabled.gen.h" // For gdscript.
+
+#ifdef MODULE_GDSCRIPT_ENABLED
+#include "modules/gdscript/gdscript_utility_functions.h"
+#endif
 
 static bool _is_ident_start(char32_t c) {
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
@@ -100,6 +109,72 @@ static void _ensure_reserved() {
 	}
 }
 
+// Every name the engine exposes. Renaming a project function or variable that
+// shares one would also rename the engine call (FileAccess.open, play, name...).
+static HashSet<String> _engine_names;
+static bool _engine_names_ready = false;
+
+static void _ensure_engine_names() {
+	if (_engine_names_ready) {
+		return;
+	}
+	_engine_names_ready = true;
+	LocalVector<StringName> classes;
+	ClassDB::get_class_list(classes);
+	for (const StringName &cls : classes) {
+		_engine_names.insert(cls);
+		List<MethodInfo> methods;
+		ClassDB::get_method_list(cls, &methods, true);
+		ClassDB::get_virtual_methods(cls, &methods, true);
+		ClassDB::get_signal_list(cls, &methods, true);
+		for (const MethodInfo &mi : methods) {
+			_engine_names.insert(mi.name);
+		}
+		List<PropertyInfo> props;
+		ClassDB::get_property_list(cls, &props, true);
+		for (const PropertyInfo &pi : props) {
+			_engine_names.insert(pi.name);
+		}
+		List<String> constants;
+		ClassDB::get_integer_constant_list(cls, &constants, true);
+		for (const String &c : constants) {
+			_engine_names.insert(c);
+		}
+		List<StringName> enums;
+		ClassDB::get_enum_list(cls, &enums, true);
+		for (const StringName &e : enums) {
+			_engine_names.insert(e);
+		}
+	}
+	for (int t = 0; t < Variant::VARIANT_MAX; t++) {
+		const Variant::Type type = Variant::Type(t);
+		_engine_names.insert(Variant::get_type_name(type));
+		List<StringName> names;
+		Variant::get_builtin_method_list(type, &names);
+		Variant::get_member_list(type, &names);
+		Variant::get_constants_for_type(type, &names);
+		for (const StringName &n : names) {
+			_engine_names.insert(n);
+		}
+	}
+	List<StringName> functions;
+	Variant::get_utility_function_list(&functions);
+#ifdef MODULE_GDSCRIPT_ENABLED
+	GDScriptUtilityFunctions::get_function_list(&functions);
+#endif
+	for (const StringName &f : functions) {
+		_engine_names.insert(f);
+	}
+	for (int i = 0; i < CoreConstants::get_global_constant_count(); i++) {
+		_engine_names.insert(CoreConstants::get_global_constant_name(i));
+	}
+	List<Engine::Singleton> singletons;
+	Engine::get_singleton()->get_singletons(&singletons);
+	for (const Engine::Singleton &sg : singletons) {
+		_engine_names.insert(sg.name);
+	}
+}
+
 bool ObfuscationSourceMap::is_reserved(const String &p_name) {
 	_ensure_reserved();
 	if (_reserved_words.has(p_name)) {
@@ -108,7 +183,8 @@ bool ObfuscationSourceMap::is_reserved(const String &p_name) {
 	if (ClassDB::class_exists(p_name)) {
 		return true;
 	}
-	return false;
+	_ensure_engine_names();
+	return _engine_names.has(p_name);
 }
 
 static int _skip_string(const String &p_src, int p_i) {
@@ -272,8 +348,14 @@ void ObfuscationSourceMap::collect_split(const String &p_source, HashSet<String>
 }
 
 void ObfuscationSourceMap::collect_split(const String &p_source, HashSet<String> &r_funcs, HashSet<String> &r_vars, ScriptLang p_lang) {
+	HashSet<String> keep;
+	collect_split(p_source, r_funcs, r_vars, keep, p_lang);
+}
+
+void ObfuscationSourceMap::collect_split(const String &p_source, HashSet<String> &r_funcs, HashSet<String> &r_vars, HashSet<String> &r_keep, ScriptLang p_lang) {
 	const int n = p_source.length();
 	int i = 0;
+	bool export_pending = false; // Saw @export*, waiting for its var.
 	while (i < n) {
 		const char32_t c = p_source[i];
 		if (p_lang == SCRIPT_LUAU && c == '-' && i + 1 < n && p_source[i + 1] == '-') {
@@ -298,7 +380,14 @@ void ObfuscationSourceMap::collect_split(const String &p_source, HashSet<String>
 			i++;
 			continue;
 		}
+		const bool annotation = i > 0 && p_source[i - 1] == '@';
 		const String tok = _read_ident(p_source, i);
+		if (annotation) {
+			if (tok.begins_with("export") && tok != "export_group" && tok != "export_subgroup" && tok != "export_category") {
+				export_pending = true;
+			}
+			continue;
+		}
 		if (p_lang == SCRIPT_LUAU && tok == "function") {
 			_skip_ws(p_source, i);
 			if (i < n && _is_ident_start(p_source[i])) {
@@ -365,9 +454,14 @@ void ObfuscationSourceMap::collect_split(const String &p_source, HashSet<String>
 		if (!kw_var && !kw_func) {
 			continue;
 		}
+		const bool keep_name = tok == "class_name" || (tok == "var" && export_pending);
+		export_pending = false;
 		_skip_ws(p_source, i);
 		if (i < n && _is_ident_start(p_source[i])) {
 			const String name = _read_ident(p_source, i);
+			if (keep_name) {
+				r_keep.insert(name);
+			}
 			if (!is_reserved(name)) {
 				if (kw_func) {
 					r_funcs.insert(name);
@@ -540,7 +634,9 @@ void ObfuscationSourceMap::collect_scene_names(const String &p_text, HashSet<Str
 			section = line.substr(1, line.length() - 2).strip_edges();
 			continue;
 		}
-		if (section != "autoload" && section != "input") {
+		// Input actions are data: the engine's own ui_* actions and players'
+		// saved key bindings use them by name, so they are never renamed.
+		if (section != "autoload") {
 			continue;
 		}
 		if (line.is_empty() || line.begins_with(";") || line.begins_with("#")) {
@@ -655,6 +751,7 @@ String ObfuscationSourceMap::rewrite_scene(const String &p_text, const HashMap<S
 	text = _rewrite_quoted_attr(text, "from", true, p_idents);
 	text = _rewrite_quoted_attr(text, "to", true, p_idents);
 	text = _rewrite_quoted_attr(text, "method", false, p_idents);
+	text = _rewrite_quoted_attr(text, "signal", false, p_idents);
 	text = _rewrite_quoted_attr(text, "id", false, p_idents);
 	text = _rewrite_call_quoted(text, "NodePath", p_idents, true);
 	text = _rewrite_call_quoted(text, "ExtResource", p_idents, false);
@@ -701,7 +798,7 @@ String ObfuscationSourceMap::rewrite_scene(const String &p_text, const HashMap<S
 			section = stripped.substr(1, stripped.length() - 2).strip_edges();
 			continue;
 		}
-		if (section != "autoload" && section != "input") {
+		if (section != "autoload") {
 			continue;
 		}
 		String line = lines[i];
@@ -744,7 +841,9 @@ String ObfuscationSourceMap::rewrite_paths(const String &p_text, const PackedByt
 			j++;
 		}
 		const String logical = text.substr(i, j - i);
-		if (logical == "res://" || keep_original_path(logical)) {
+		// A folder prefix ("res://audio/" + name) is part of a path built at run
+		// time. There is no single file to point it at, so leave it readable.
+		if (logical == "res://" || logical.ends_with("/") || keep_original_path(logical)) {
 			p = j;
 			continue;
 		}
@@ -785,14 +884,12 @@ static String _rewrite_comment(const String &p_comment, const HashMap<String, St
 	return out;
 }
 
-static bool _looks_like_node_path(const String &p_inner) {
-	if (p_inner.is_empty() || p_inner.begins_with("res://") || p_inner.begins_with("uid://") || p_inner.begins_with("user://")) {
+// A string used as a node path: a single node name counts too ("Label").
+static bool _is_node_path_text(const String &p_inner) {
+	if (p_inner.is_empty() || p_inner.find("res://") >= 0 || p_inner.find("uid://") >= 0 || p_inner.find("user://") >= 0) {
 		return false;
 	}
-	if (p_inner.find("res://") >= 0 || p_inner.find("uid://") >= 0) {
-		return false;
-	}
-	return p_inner.find("/") >= 0;
+	return true;
 }
 
 String ObfuscationSourceMap::rewrite_script(const String &p_source, const HashMap<String, String> &p_idents, const HashSet<String> &p_funcs, const PackedByteArray &p_hmac_key, bool p_scramble_paths) {
@@ -800,18 +897,105 @@ String ObfuscationSourceMap::rewrite_script(const String &p_source, const HashMa
 	return rewrite_script(p_source, p_idents, p_funcs, none, p_hmac_key, p_scramble_paths, SCRIPT_GDSCRIPT);
 }
 
+// Calls whose string argument names code: a method, signal or property (at the
+// given argument index), or a node path. Only strings in these places are
+// renamed. Any other string may be data (a save-file key, a dictionary key, an
+// input action) that has to keep its spelling.
+struct ObfNameArg {
+	const char *call;
+	int arg;
+};
+
+static const ObfNameArg obf_name_args[] = {
+	{ "call", 0 },
+	{ "call_deferred", 0 },
+	{ "callv", 0 },
+	{ "has_method", 0 },
+	{ "emit_signal", 0 },
+	{ "connect", 0 },
+	{ "disconnect", 0 },
+	{ "is_connected", 0 },
+	{ "has_signal", 0 },
+	{ "add_user_signal", 0 },
+	{ "has_user_signal", 0 },
+	{ "set_deferred", 0 },
+	{ "get_method_argument_count", 0 },
+	{ "rpc", 0 },
+	{ "rpc_config", 0 },
+	{ "rpc_id", 1 },
+	{ "Callable", 1 },
+	{ "Signal", 1 },
+	{ "tween_property", 1 },
+	// Groups: scenes store them by name, and they are renamed there.
+	{ "add_to_group", 0 },
+	{ "remove_from_group", 0 },
+	{ "is_in_group", 0 },
+	{ "get_nodes_in_group", 0 },
+	{ "get_first_node_in_group", 0 },
+	{ "get_node_count_in_group", 0 },
+	{ "has_group", 0 },
+	{ "call_group", 0 },
+	{ "call_group", 1 },
+	{ "notify_group", 0 },
+	{ "set_group", 0 },
+	{ "set_group", 1 },
+	{ "call_group_flags", 1 },
+	{ "call_group_flags", 2 },
+	{ "notify_group_flags", 1 },
+	{ "set_group_flags", 1 },
+	{ "set_group_flags", 2 },
+	{ nullptr, 0 },
+};
+
+static const char *obf_node_calls[] = {
+	"get_node",
+	"get_node_or_null",
+	"has_node",
+	"find_child",
+	"NodePath",
+	"get_node_and_resource",
+	"has_node_and_resource",
+	nullptr,
+};
+
+struct ObfCallFrame {
+	String callee;
+	int arg = 0;
+};
+
+static void _literal_context(const Vector<ObfCallFrame> &p_frames, char32_t p_prefix, bool &r_names_code, bool &r_node_path) {
+	r_names_code = false;
+	r_node_path = p_prefix == '$' || p_prefix == '%' || p_prefix == '^'; // $"A/B", %"Unique", ^"A/B".
+	if (r_node_path || p_frames.is_empty()) {
+		return;
+	}
+	const ObfCallFrame &top = p_frames[p_frames.size() - 1];
+	for (int k = 0; obf_node_calls[k]; k++) {
+		if (top.arg == 0 && top.callee == obf_node_calls[k]) {
+			r_node_path = true;
+			return;
+		}
+	}
+	for (int k = 0; obf_name_args[k].call; k++) {
+		if (top.arg == obf_name_args[k].arg && top.callee == obf_name_args[k].call) {
+			r_names_code = true;
+			return;
+		}
+	}
+}
+
 String ObfuscationSourceMap::rewrite_script(const String &p_source, const HashMap<String, String> &p_idents, const HashSet<String> &p_funcs, const HashSet<String> &p_scene_names, const PackedByteArray &p_hmac_key, bool p_scramble_paths, ScriptLang p_lang) {
 	String out;
 	const int n = p_source.length();
 	int i = 0;
-	bool after_dot = false;
+	String last_ident; // The identifier right before a '(' names the call.
+	Vector<ObfCallFrame> frames;
 	while (i < n) {
 		const char32_t c = p_source[i];
 		if (p_lang == SCRIPT_LUAU && c == '-' && i + 1 < n && p_source[i + 1] == '-') {
 			const int start = i;
 			i = _skip_luau_comment(p_source, i);
 			out += _rewrite_comment(p_source.substr(start, i - start), p_idents);
-			after_dot = false;
 			continue;
 		}
 		if (p_lang != SCRIPT_LUAU && c == '#') {
@@ -820,7 +1004,6 @@ String ObfuscationSourceMap::rewrite_script(const String &p_source, const HashMa
 				i++;
 			}
 			out += _rewrite_comment(p_source.substr(start, i - start), p_idents);
-			after_dot = false;
 			continue;
 		}
 		if (p_lang == SCRIPT_LUAU && c == '[' && i + 1 < n && (p_source[i + 1] == '[' || p_source[i + 1] == '=')) {
@@ -838,7 +1021,6 @@ String ObfuscationSourceMap::rewrite_script(const String &p_source, const HashMa
 			} else {
 				out += lit;
 			}
-			after_dot = false;
 			continue;
 		}
 		if (c == '"' || c == '\'') {
@@ -855,40 +1037,73 @@ String ObfuscationSourceMap::rewrite_script(const String &p_source, const HashMa
 				inner = lit.substr(1, lit.length() - 2);
 			} else {
 				out += lit;
-				after_dot = false;
 				continue;
 			}
+			bool names_code = false;
+			bool node_path = false;
+			_literal_context(frames, start > 0 ? p_source[start - 1] : 0, names_code, node_path);
+			last_ident = String();
 			const String *mapped_lit = p_idents.getptr(inner);
-			if (mapped_lit && (p_funcs.has(inner) || p_scene_names.has(inner))) {
+			if (names_code && mapped_lit) {
 				out += quote + *mapped_lit + quote;
-			} else if (_looks_like_node_path(inner)) {
+			} else if (node_path && _is_node_path_text(inner)) {
 				out += quote + rewrite_node_path(inner, p_idents) + quote;
 			} else if (p_scramble_paths) {
 				out += quote + rewrite_paths(inner, p_hmac_key) + quote;
 			} else {
 				out += lit;
 			}
-			after_dot = false;
+			continue;
+		}
+		if (c >= '0' && c <= '9') {
+			// A number is copied whole, so the "e" in 1e-12 or the "b" in 0b101
+			// is not read as an identifier.
+			const int start = i;
+			const bool hex = c == '0' && i + 1 < n && (p_source[i + 1] == 'x' || p_source[i + 1] == 'X');
+			i++;
+			while (i < n) {
+				const char32_t d = p_source[i];
+				if (_is_ident_cont(d) || (d == '.' && i + 1 < n && p_source[i + 1] >= '0' && p_source[i + 1] <= '9')) {
+					i++; // Not a '.' before a member name: points[0].weight.
+				} else if (!hex && (d == '+' || d == '-') && (p_source[i - 1] == 'e' || p_source[i - 1] == 'E')) {
+					i++;
+				} else {
+					break;
+				}
+			}
+			out += p_source.substr(start, i - start);
+			last_ident = String();
 			continue;
 		}
 		if (_is_ident_start(c)) {
 			const String id = _read_ident(p_source, i);
+			// Engine names are reserved, so a mapped name after a dot is the
+			// project's own member (other_kart.speed, Kart.Kind) and is renamed
+			// along with its declaration.
 			const String *mapped_id = p_idents.getptr(id);
-			const bool remap = mapped_id && (!after_dot || p_funcs.has(id) || p_scene_names.has(id));
-			if (remap) {
+			if (mapped_id) {
 				out += *mapped_id;
 			} else {
 				out += id;
 			}
-			after_dot = false;
+			last_ident = id;
 			continue;
 		}
-		out += String::chr(c);
-		if (c == '.' || (p_lang == SCRIPT_LUAU && c == ':')) {
-			after_dot = true;
-		} else if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
-			after_dot = false;
+		if (c == '(') {
+			ObfCallFrame frame;
+			frame.callee = last_ident;
+			frames.push_back(frame);
+		} else if (c == '[' || c == '{') {
+			frames.push_back(ObfCallFrame());
+		} else if ((c == ')' || c == ']' || c == '}') && !frames.is_empty()) {
+			frames.resize(frames.size() - 1);
+		} else if (c == ',' && !frames.is_empty()) {
+			frames.write[frames.size() - 1].arg++;
 		}
+		if (c != ' ' && c != '\t') {
+			last_ident = String();
+		}
+		out += String::chr(c);
 		i++;
 	}
 	return out;
@@ -947,6 +1162,16 @@ int ObfuscationSourceMap::gdscript_preamble_end(const String &p_source) {
 		if (p_source[i] == '\n') {
 			i++;
 			continue;
+		}
+		if (p_source[i] == '@') {
+			// Only script-level annotations belong to the header. Anything else
+			// (@export, @onready...) starts the body, and its declaration may
+			// continue on the next lines, so insert before it.
+			int j = i + 1;
+			const String annotation = _read_ident(p_source, j);
+			if (annotation != "tool" && annotation != "icon" && annotation != "static_unload" && annotation != "abstract") {
+				break;
+			}
 		}
 		if (p_source[i] == '#' || p_source[i] == '@') {
 			while (i < n && p_source[i] != '\n') {

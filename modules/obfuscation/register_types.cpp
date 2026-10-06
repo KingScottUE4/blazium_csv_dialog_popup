@@ -79,7 +79,10 @@ static void register_obfuscation_settings() {
 	GLOBAL_DEF_BASIC("obfuscation/scripts/comment_lattice", true);
 	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "obfuscation/scripts/comment_decoys", PROPERTY_HINT_RANGE, "0,64,1"), 8);
 	GLOBAL_DEF_BASIC("obfuscation/pack/inject_seal", true);
-	GLOBAL_DEF_BASIC("obfuscation/pack/scramble_names", true);
+	// Off by default: renaming packed files needs every reference to a file to
+	// be a literal path. Paths a game builds at run time can't be followed.
+	GLOBAL_DEF_BASIC("obfuscation/pack/scramble_names", false);
+	GLOBAL_DEF_BASIC("obfuscation/scripts/rename_identifiers", false);
 }
 
 void initialize_obfuscation_module(ModuleInitializationLevel p_level) {

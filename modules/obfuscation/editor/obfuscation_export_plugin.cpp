@@ -32,88 +32,168 @@
 #include "editor/obfuscation_export_plugin.h"
 
 #include "core/config/project_settings.h"
+#include "core/io/config_file.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/image.h"
 #include "core/io/json.h"
-#include "core/io/resource_uid.h"
 #include "core/object/object.h"
 #include "core/templates/list.h"
+#include "editor/export/editor_export_platform.h"
+#include "editor/export/editor_export_preset.h"
 #include "scene/main/node.h"
+
+#include "modules/modules_enabled.gen.h" // For gdscript.
+
+#ifdef MODULE_GDSCRIPT_ENABLED
+#include "modules/gdscript/gdscript_tokenizer_buffer.h"
+#endif
 
 #include "modules/obfuscation/obfuscation.h"
 #include "modules/obfuscation/seeds/output_names.h"
 #include "modules/obfuscation/seeds/source_map.h"
 
-static Vector<uint8_t> _obf_rewrite_uid_cache_bytes(const Vector<uint8_t> &p_src, Obfuscation *p_ob) {
-	if (p_src.size() < 4 || !p_ob) {
-		return p_src;
+// A string from a project setting is rewritten only when the path in it is
+// one this export packs, so settings that name missing files keep their text.
+static bool _obf_setting_path_exists(const String &p_text) {
+	String path = p_text;
+	if (path.begins_with("*")) {
+		path = path.substr(1); // Autoload singleton marker.
 	}
-	const uint8_t *ptr = p_src.ptr();
-	const int64_t size = p_src.size();
-	int64_t off = 0;
-	auto get32 = [&](uint32_t &v) -> bool {
-		if (off + 4 > size) {
-			return false;
-		}
-		v = uint32_t(ptr[off]) | (uint32_t(ptr[off + 1]) << 8) | (uint32_t(ptr[off + 2]) << 16) | (uint32_t(ptr[off + 3]) << 24);
-		off += 4;
-		return true;
-	};
-	auto get64 = [&](uint64_t &v) -> bool {
-		if (off + 8 > size) {
-			return false;
-		}
-		v = 0;
-		for (int i = 0; i < 8; i++) {
-			v |= uint64_t(ptr[off + i]) << (8 * i);
-		}
-		off += 8;
-		return true;
-	};
-	uint32_t count = 0;
-	if (!get32(count)) {
-		return p_src;
+	if (!path.begins_with("res://")) {
+		return true; // Paths inside longer text are left to rewrite_pack_paths.
 	}
-	struct Ent {
-		uint64_t id = 0;
-		String path;
-	};
-	Vector<Ent> ents;
-	ents.resize(count);
-	for (uint32_t i = 0; i < count; i++) {
-		uint64_t id = 0;
-		uint32_t len = 0;
-		if (!get64(id) || !get32(len) || off + int64_t(len) > size) {
-			return p_src;
-		}
-		ents.write[i].id = id;
-		ents.write[i].path = p_ob->rewrite_pack_paths(String::utf8(reinterpret_cast<const char *>(ptr + off), len));
-		off += len;
+	const int colon = path.find_char(':', 6);
+	if (colon >= 0) {
+		path = path.substr(0, colon); // Translation remaps: "res://x.png:es".
 	}
-	auto store32 = [](Vector<uint8_t> &o, uint32_t v) {
-		o.push_back(uint8_t(v));
-		o.push_back(uint8_t(v >> 8));
-		o.push_back(uint8_t(v >> 16));
-		o.push_back(uint8_t(v >> 24));
-	};
-	auto store64 = [](Vector<uint8_t> &o, uint64_t v) {
-		for (int i = 0; i < 8; i++) {
-			o.push_back(uint8_t(v >> (8 * i)));
+	return FileAccess::exists(path);
+}
+
+Variant ObfuscationExportPlugin::_rewrite_setting(const Variant &p_value) {
+	Obfuscation *ob = Obfuscation::get_singleton();
+	switch (p_value.get_type()) {
+		case Variant::STRING:
+		case Variant::STRING_NAME: {
+			const String src = p_value;
+			if (src.find("res://") < 0 || !_obf_setting_path_exists(src)) {
+				return p_value;
+			}
+			String path = src.begins_with("*") ? src.substr(1) : src;
+			if (path.begins_with("res://")) {
+				const int colon = path.find_char(':', 6);
+				setting_paths.insert(colon >= 0 ? path.substr(0, colon) : path);
+			}
+			const String rewritten = ob->rewrite_pack_paths(src);
+			if (p_value.get_type() == Variant::STRING_NAME) {
+				return StringName(rewritten);
+			}
+			return rewritten;
 		}
-	};
-	Vector<uint8_t> out;
-	store32(out, uint32_t(ents.size()));
-	for (int i = 0; i < ents.size(); i++) {
-		store64(out, ents[i].id);
-		const CharString cs = ents[i].path.utf8();
-		store32(out, uint32_t(cs.length()));
-		const uint8_t *bp = reinterpret_cast<const uint8_t *>(cs.ptr());
-		for (int j = 0; j < cs.length(); j++) {
-			out.push_back(bp[j]);
+		case Variant::PACKED_STRING_ARRAY: {
+			PackedStringArray arr = p_value;
+			for (int i = 0; i < arr.size(); i++) {
+				arr.write[i] = _rewrite_setting(arr[i]);
+			}
+			return arr;
+		}
+		case Variant::ARRAY: {
+			Array arr = Array(p_value).duplicate();
+			for (int i = 0; i < arr.size(); i++) {
+				arr[i] = _rewrite_setting(arr[i]);
+			}
+			return arr;
+		}
+		case Variant::DICTIONARY: {
+			const Dictionary src = p_value;
+			Dictionary out;
+			for (const KeyValue<Variant, Variant> &kv : src) {
+				out[_rewrite_setting(kv.key)] = _rewrite_setting(kv.value);
+			}
+			return out;
+		}
+		default:
+			return p_value;
+	}
+}
+
+// Scripts go out the way the export preset asks for them. GDScript's own export
+// plugin runs after this one and never sees a script this plugin has packed.
+void ObfuscationExportPlugin::_add_script(const String &p_dest, const String &p_source) {
+#ifdef MODULE_GDSCRIPT_ENABLED
+	if (p_dest.get_extension().to_lower() == "gd" && script_mode != EditorExportPreset::MODE_SCRIPT_TEXT) {
+		const GDScriptTokenizerBuffer::CompressMode compress = script_mode == EditorExportPreset::MODE_SCRIPT_BINARY_TOKENS_COMPRESSED ? GDScriptTokenizerBuffer::COMPRESS_ZSTD : GDScriptTokenizerBuffer::COMPRESS_NONE;
+		const Vector<uint8_t> tokens = GDScriptTokenizerBuffer::parse_code_string(p_source, compress);
+		if (!tokens.is_empty()) {
+			const String gdc = p_dest.get_basename() + ".gdc";
+			add_file(gdc, tokens, false);
+			const String remap = "[remap]\n\npath=\"" + gdc.c_escape() + "\"\n";
+			add_file(p_dest + ".remap", remap.to_utf8_buffer(), false);
+			return;
 		}
 	}
-	return out;
+#endif
+	add_file(p_dest, p_source.to_utf8_buffer(), false);
+}
+
+// An imported file is packed as what it imports to, plus a .import file that
+// points there -- the same as the export platform does, but at scrambled paths.
+void ObfuscationExportPlugin::_add_imported(const String &p_path, const String &p_dest, const HashSet<String> &p_features) {
+	Obfuscation *ob = Obfuscation::get_singleton();
+	Ref<ConfigFile> config;
+	config.instantiate();
+	if (config->load(p_path + ".import") != OK) {
+		ERR_PRINT("Obfuscation: could not parse '" + p_path + ".import', not exported.");
+		return;
+	}
+	if (String(config->get_value("remap", "importer", String())) == "keep") {
+		add_file(p_dest, FileAccess::get_file_as_bytes(p_path), false);
+		return;
+	}
+	const Vector<String> keys = config->get_section_keys("remap");
+	for (const String &key : keys) {
+		const bool wanted = key == "path" || (key.begins_with("path.") && p_features.has(key.get_slicec('.', 1)));
+		if (!wanted) {
+			if (key.begins_with("path.")) {
+				config->erase_section_key("remap", key);
+			}
+			continue;
+		}
+		const String artifact = config->get_value("remap", key);
+		const String artifact_dest = ob->scramble_output_path(artifact);
+		add_file(artifact_dest, FileAccess::get_file_as_bytes(artifact), false);
+		config->set_value("remap", key, artifact_dest);
+	}
+	if (config->has_section("deps")) {
+		config->erase_section("deps");
+	}
+	if (config->has_section("params")) {
+		config->erase_section("params");
+	}
+	add_file(p_dest + ".import", config->encode_to_text().to_utf8_buffer(), false);
+}
+
+String ObfuscationExportPlugin::get_exported_path(const String &p_path) const {
+	const String *dest = exported_paths.getptr(p_path);
+	return dest ? *dest : p_path;
+}
+
+// A project setting that points at a file this plugin never packed (another
+// export plugin took it first, or it is excluded) leaves the game unable to
+// start. Say so in the export log instead of shipping a broken build.
+void ObfuscationExportPlugin::_check_settings() {
+	for (const String &path : setting_paths) {
+		if (exported_paths.has(path)) {
+			continue;
+		}
+		const String msg = vformat("Project settings point at \"%s\", which scramble_names renamed, but the file was not packed under the new name. The exported game will not find it.", path);
+		Ref<EditorExportPlatform> platform = get_export_platform();
+		if (platform.is_valid()) {
+			platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_ERROR, "Obfuscation", msg);
+		} else {
+			ERR_PRINT(msg);
+		}
+	}
 }
 
 void ObfuscationExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_debug, const String &p_path, int p_flags) {
@@ -129,9 +209,12 @@ void ObfuscationExportPlugin::_export_begin(const HashSet<String> &p_features, b
 	pack_scene_names.clear();
 	pack_scripts.clear();
 	saved_settings.clear();
-	saved_uid_cache.clear();
-	uid_cache_path = String();
-	uid_cache_patched = false;
+	exported_paths.clear();
+	setting_paths.clear();
+	script_mode = EditorExportPreset::MODE_SCRIPT_BINARY_TOKENS_COMPRESSED;
+	if (get_export_preset().is_valid()) {
+		script_mode = get_export_preset()->get_script_export_mode();
+	}
 	if (p_features.has("no_obfuscation")) {
 		enabled = false;
 		return;
@@ -145,44 +228,49 @@ void ObfuscationExportPlugin::_export_begin(const HashSet<String> &p_features, b
 		ob->load_identity();
 	}
 
+	// The comment lattice stores its data in comments, and scripts exported as
+	// binary tokens keep no comments, so lattice references would come back
+	// empty. Use the plain code injection for this export instead.
+	if (script_mode != EditorExportPreset::MODE_SCRIPT_TEXT && bool(GLOBAL_GET("obfuscation/scripts/comment_lattice"))) {
+		saved_settings["obfuscation/scripts/comment_lattice"] = true;
+		ProjectSettings::get_singleton()->set("obfuscation/scripts/comment_lattice", false);
+		if (get_export_platform().is_valid()) {
+			get_export_platform()->add_message(EditorExportPlatform::EXPORT_MESSAGE_INFO, "Obfuscation", "Scripts are exported as binary tokens, which keep no comments, so obfuscation/scripts/comment_lattice was not used for this export.");
+		}
+	}
+
 	scramble_pack = bool(GLOBAL_GET("obfuscation/pack/scramble_names")) && ob->has_identity();
 	if (scramble_pack) {
 		ob->build_pack_ident_maps(pack_idents, pack_funcs, pack_scene_names);
 		List<PropertyInfo> props;
 		ProjectSettings::get_singleton()->get_property_list(&props);
 		for (const PropertyInfo &pi : props) {
-			if (pi.type != Variant::STRING || !(pi.usage & PROPERTY_USAGE_STORAGE)) {
+			if (!(pi.usage & PROPERTY_USAGE_STORAGE)) {
+				continue;
+			}
+			const String setting = pi.name;
+			if (setting.begins_with("editor_plugins/") || setting.begins_with("editor/")) {
+				continue; // Editor-only; those files are not exported.
+			}
+			// Strings (autoloads, main scene, icon) and lists of them (translations).
+			const Variant::Type t = pi.type;
+			if (t != Variant::STRING && t != Variant::STRING_NAME && t != Variant::PACKED_STRING_ARRAY && t != Variant::ARRAY && t != Variant::DICTIONARY) {
 				continue;
 			}
 			const Variant cur = ProjectSettings::get_singleton()->get(pi.name);
-			const String src = cur;
-			if (src.find("res://") < 0) {
-				continue;
-			}
-			if (src.begins_with("res://") && !FileAccess::exists(src)) {
-				continue;
-			}
-			const String rewritten = ob->rewrite_pack_paths(src);
-			if (rewritten == src) {
+			const Variant rewritten = _rewrite_setting(cur);
+			if (rewritten == cur) {
 				continue;
 			}
 			saved_settings[pi.name] = cur;
 			ProjectSettings::get_singleton()->set(pi.name, rewritten);
 		}
-		uid_cache_path = ResourceUID::get_cache_file();
-		if (FileAccess::exists(uid_cache_path)) {
-			saved_uid_cache = FileAccess::get_file_as_bytes(uid_cache_path);
-			const Vector<uint8_t> rewritten_uid = _obf_rewrite_uid_cache_bytes(saved_uid_cache, ob);
-			Ref<FileAccess> uf = FileAccess::open(uid_cache_path, FileAccess::WRITE);
-			if (uf.is_valid()) {
-				uf->store_buffer(rewritten_uid.ptr(), rewritten_uid.size());
-				uid_cache_patched = true;
-			}
-		}
+		// The exported UID cache is rebuilt by the export platform, which asks
+		// get_exported_path() where each file went, so it is not patched here.
 	}
 
 	if (ob->has_identity() && (scramble_pack || bool(GLOBAL_GET("obfuscation/scripts/comment_lattice")))) {
-		if (pack_idents.is_empty()) {
+		if (!scramble_pack) {
 			ob->build_pack_ident_maps(pack_idents, pack_funcs, pack_scene_names);
 		}
 		HashMap<String, String> packed_bodies;
@@ -244,6 +332,11 @@ void ObfuscationExportPlugin::_export_begin(const HashSet<String> &p_features, b
 }
 
 void ObfuscationExportPlugin::_export_end() {
+	if (scramble_pack) {
+		_check_settings();
+	}
+	exported_paths.clear();
+	setting_paths.clear();
 	pack_idents.clear();
 	pack_funcs.clear();
 	pack_scene_names.clear();
@@ -255,17 +348,6 @@ void ObfuscationExportPlugin::_export_end() {
 		}
 	}
 	saved_settings.clear();
-	if (uid_cache_patched && !uid_cache_path.is_empty()) {
-		Ref<FileAccess> uf = FileAccess::open(uid_cache_path, FileAccess::WRITE);
-		if (uf.is_valid()) {
-			if (!saved_uid_cache.is_empty()) {
-				uf->store_buffer(saved_uid_cache.ptr(), saved_uid_cache.size());
-			}
-		}
-	}
-	saved_uid_cache.clear();
-	uid_cache_path = String();
-	uid_cache_patched = false;
 	if (!stripped_copyright || !ProjectSettings::get_singleton()) {
 		return;
 	}
@@ -310,13 +392,18 @@ void ObfuscationExportPlugin::_export_file(const String &p_path, const String &p
 			return;
 		}
 		const String dest = ObfuscationSourceMap::keep_original_path(p_path) ? p_path : ob->scramble_output_path(p_path);
+		exported_paths[p_path] = dest;
+		if (FileAccess::exists(p_path + ".import")) {
+			skip();
+			_add_imported(p_path, dest, p_features);
+			return;
+		}
 		Vector<uint8_t> bytes;
 		if (ObfuscationSourceMap::is_script_ext(ext)) {
-			if (pack_scripts.has(p_path)) {
-				bytes = pack_scripts[p_path].to_utf8_buffer();
-			} else {
-				bytes = ob->pack_script_source(FileAccess::get_file_as_string(p_path), p_path, dest, pack_idents, pack_funcs, pack_scene_names).to_utf8_buffer();
-			}
+			const String src = pack_scripts.has(p_path) ? pack_scripts[p_path] : ob->pack_script_source(FileAccess::get_file_as_string(p_path), p_path, dest, pack_idents, pack_funcs, pack_scene_names);
+			skip();
+			_add_script(dest, src);
+			return;
 		} else if (ext == "tscn" || ext == "tres" || ext == "godot" || file == "project.godot") {
 			String src = FileAccess::get_file_as_string(p_path);
 			if (file == "project.godot") {
@@ -344,7 +431,7 @@ void ObfuscationExportPlugin::_export_file(const String &p_path, const String &p
 	if (ObfuscationSourceMap::is_script_ext(ext)) {
 		if (pack_scripts.has(p_path)) {
 			skip();
-			add_file(p_path, pack_scripts[p_path].to_utf8_buffer(), false);
+			_add_script(p_path, pack_scripts[p_path]);
 			return;
 		}
 		const String src = FileAccess::get_file_as_string(p_path);
@@ -353,9 +440,10 @@ void ObfuscationExportPlugin::_export_file(const String &p_path, const String &p
 		}
 		const String injected = ob->inject_script_source(src, p_path);
 		if (injected == src) {
-			return;
+			return; // GDScript's export plugin packs it as usual.
 		}
-		add_file(p_path, injected.to_utf8_buffer(), true);
+		skip();
+		_add_script(p_path, injected);
 		return;
 	}
 	if (file == "project.godot") {
