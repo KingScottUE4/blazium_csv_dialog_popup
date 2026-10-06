@@ -184,6 +184,15 @@ protected:
 public:
 	virtual String get_name() const;
 
+	// Export plugins see each file in ascending order of this value, then by name.
+	// A plugin that rewrites files can return a higher value so that plugins which
+	// only read files see them first. Not exposed to scripts; script plugins use 0.
+	virtual int get_export_order() const { return 0; }
+
+	// If this plugin packed p_path somewhere else, return where it went. The exported
+	// UID cache and global class list point at the returned path.
+	virtual String get_exported_path(const String &p_path) const { return p_path; }
+
 	virtual bool supports_platform(const Ref<EditorExportPlatform> &p_export_platform) const;
 	PackedStringArray get_export_features(const Ref<EditorExportPlatform> &p_export_platform, bool p_debug) const;
 

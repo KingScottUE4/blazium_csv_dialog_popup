@@ -50,9 +50,15 @@ class ObfuscationExportPlugin : public EditorExportPlugin {
 	HashSet<String> pack_scene_names;
 	HashMap<String, String> pack_scripts;
 	HashMap<StringName, Variant> saved_settings;
-	Vector<uint8_t> saved_uid_cache;
-	String uid_cache_path;
-	bool uid_cache_patched = false;
+	int script_mode = 0;
+	// Where each file the plugin moved ended up, and what project settings point at.
+	HashMap<String, String> exported_paths;
+	HashSet<String> setting_paths;
+
+	void _add_script(const String &p_dest, const String &p_source);
+	void _add_imported(const String &p_path, const String &p_dest, const HashSet<String> &p_features);
+	Variant _rewrite_setting(const Variant &p_value);
+	void _check_settings();
 
 protected:
 	static void _bind_methods() {}
@@ -65,6 +71,10 @@ protected:
 
 public:
 	virtual String get_name() const override { return "Obfuscation"; }
+	// After plugins that only read files, before GDScript's tokenizer (100):
+	// this plugin rewrites scripts and tokenizes them itself.
+	virtual int get_export_order() const override { return 50; }
+	virtual String get_exported_path(const String &p_path) const override;
 };
 
 #endif

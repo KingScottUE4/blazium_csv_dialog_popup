@@ -48,6 +48,10 @@ public:
 	static void collect_identifiers(const String &p_source, HashSet<String> &r_out);
 	static void collect_split(const String &p_source, HashSet<String> &r_funcs, HashSet<String> &r_vars);
 	static void collect_split(const String &p_source, HashSet<String> &r_funcs, HashSet<String> &r_vars, ScriptLang p_lang);
+	// r_keep gets names that must keep their spelling: global class names (the
+	// exported class list stores them) and @export variables (scenes and
+	// resources store their values by name).
+	static void collect_split(const String &p_source, HashSet<String> &r_funcs, HashSet<String> &r_vars, HashSet<String> &r_keep, ScriptLang p_lang);
 	static void collect_scene_names(const String &p_text, HashSet<String> &r_out);
 	static HashMap<String, String> map_identifiers(const PackedByteArray &p_hmac_key, const HashSet<String> &p_names);
 	static String rewrite_node_path(const String &p_path, const HashMap<String, String> &p_idents);

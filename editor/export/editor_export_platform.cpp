@@ -1365,6 +1365,11 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 
 	struct SortByName {
 		bool operator()(const Ref<EditorExportPlugin> &left, const Ref<EditorExportPlugin> &right) const {
+			const int left_order = left->get_export_order();
+			const int right_order = right->get_export_order();
+			if (left_order != right_order) {
+				return left_order < right_order;
+			}
 			return left->get_name() < right->get_name();
 		}
 	};
@@ -1762,7 +1767,7 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 		}
 	}
 
-	const FilteredCache filtered_cache = _get_filtered_cache(paths);
+	const FilteredCache filtered_cache = _get_filtered_cache(paths, export_plugins);
 
 	Vector<String> forced_export = get_forced_export_files(p_preset);
 	for (const String &file : forced_export) {
@@ -1836,8 +1841,17 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 
 // Used by the main export function to filter excluded global classes, extensions
 // and UIDs based on excluded resources configured in the export preset.
-EditorExportPlatform::FilteredCache EditorExportPlatform::_get_filtered_cache(const HashSet<String> &p_paths) {
+EditorExportPlatform::FilteredCache EditorExportPlatform::_get_filtered_cache(const HashSet<String> &p_paths, const Vector<Ref<EditorExportPlugin>> &p_plugins) {
 	FilteredCache result;
+
+	// A plugin may pack a file under another path; the caches must point there.
+	auto exported_path = [&p_plugins](const String &p_path) -> String {
+		String out = p_path;
+		for (const Ref<EditorExportPlugin> &plugin : p_plugins) {
+			out = plugin->get_exported_path(out);
+		}
+		return out;
+	};
 
 	HashSet<String> extension_list_lines;
 	Ref<FileAccess> ext_file = FileAccess::open(GDExtension::get_extension_list_config_file(), FileAccess::READ);
@@ -1872,12 +1886,23 @@ EditorExportPlatform::FilteredCache EditorExportPlatform::_get_filtered_cache(co
 		if (extension_list_lines.has(path)) {
 			extension_lines.push_back(path);
 		}
+		const String packed_path = exported_path(path);
 		if (class_by_path.has(path)) {
-			global_class_list.push_back(class_by_path[path]);
+			if (packed_path == path) {
+				global_class_list.push_back(class_by_path[path]);
+			} else {
+				Dictionary class_dict = class_by_path[path].duplicate();
+				class_dict["path"] = packed_path;
+				const String icon = class_dict.get("icon", String());
+				if (!icon.is_empty()) {
+					class_dict["icon"] = exported_path(icon);
+				}
+				global_class_list.push_back(class_dict);
+			}
 		}
 		ResourceUID::ID uid = EditorFileSystem::get_singleton()->get_file_uid(path);
 		if (uid != ResourceUID::INVALID_ID) {
-			uid_entries.push_back(Pair<ResourceUID::ID, String>(uid, path));
+			uid_entries.push_back(Pair<ResourceUID::ID, String>(uid, packed_path));
 		}
 	}
 

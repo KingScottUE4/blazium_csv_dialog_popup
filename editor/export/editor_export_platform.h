@@ -158,7 +158,7 @@ private:
 		Vector<uint8_t> uids;
 	};
 
-	static FilteredCache _get_filtered_cache(const HashSet<String> &p_paths);
+	static FilteredCache _get_filtered_cache(const HashSet<String> &p_paths, const Vector<Ref<EditorExportPlugin>> &p_plugins = Vector<Ref<EditorExportPlugin>>());
 
 	struct FileExportCache {
 		uint64_t source_modified_time = 0;
