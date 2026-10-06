@@ -150,6 +150,7 @@ private:
 	void _send_response(Ref<StreamPeerTCP> p_client, const Dictionary &p_data);
 	void _send_error(Ref<StreamPeerTCP> p_client, const String &p_message);
 	void _cleanup();
+	void _apply_inherited_play_clock();
 
 protected:
 	static void _bind_methods();

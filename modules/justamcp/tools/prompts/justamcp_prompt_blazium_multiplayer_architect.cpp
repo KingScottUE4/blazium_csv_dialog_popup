@@ -101,6 +101,9 @@ Dictionary JustAMCPPromptBlaziumMultiplayerArchitect::get_messages(const Diction
 	text += String("- Track connected peers via multiplayer.peer_connected and peer_disconnected signals.\n");
 	text += String("- The server peer ID is always 1.\n\n");
 
+	text += String("## Authority owns state\n");
+	text += String("The multiplayer authority owns gameplay state. Clients send intent with an `@rpc` that the authority validates, then the authority writes the result. Do not let a client set position, health, or inventory directly. Use `MultiplayerAPI`, `MultiplayerPeer`, `is_multiplayer_authority`, `MultiplayerSpawner`, and `MultiplayerSynchronizer` only.\n\n");
+
 	text += String("## Required Output\n");
 	text += String("1. Updated GDScript with full @rpc annotations and authority guards.\n");
 	text += String("2. Scene additions needed (MultiplayerSpawner / MultiplayerSynchronizer nodes and their configuration).\n");

@@ -2986,6 +2986,23 @@ void EditorHelp::_gen_extensions_docs() {
 	}
 }
 
+void EditorHelp::ensure_doc_data() {
+	_wait_for_thread();
+	if (doc && !doc->class_list.is_empty()) {
+		return;
+	}
+	if (!doc) {
+		doc = memnew(DocTools);
+	}
+	if (doc->class_list.is_empty()) {
+		doc->generate();
+	}
+	DocTools compdoc;
+	if (compdoc.load_compressed(_doc_data_compressed, _doc_data_compressed_size, _doc_data_uncompressed_size) == OK) {
+		doc->merge_from(compdoc);
+	}
+}
+
 void EditorHelp::generate_doc(bool p_use_cache) {
 	doc_generation_count++;
 	OS::get_singleton()->benchmark_begin_measure("EditorHelp", vformat("Generate Documentation (Run %d)", doc_generation_count));

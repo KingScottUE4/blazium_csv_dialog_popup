@@ -33,6 +33,7 @@
 #include "../justamcp_editor_plugin.h"
 #include "../justamcp_editor_scene_access.h"
 #include "editor/editor_interface.h"
+#include "justamcp_gap_fill.h"
 #include "scene/2d/navigation_agent_2d.h"
 #include "scene/2d/navigation_region_2d.h"
 #include "scene/3d/navigation_agent_3d.h"
@@ -529,6 +530,12 @@ Dictionary JustAMCPSpatialTools::execute_tool(const String &p_tool_name, const D
 	}
 	if (p_tool_name == "navigation_get_info") {
 		return navigation_get_info(p_args);
+	}
+	if (p_tool_name == "spatial_snap_to_surface") {
+		return justamcp_spatial_snap_to_surface(p_args);
+	}
+	if (p_tool_name == "spatial_repeat_along") {
+		return justamcp_spatial_repeat_along(p_args);
 	}
 	return Dictionary();
 }

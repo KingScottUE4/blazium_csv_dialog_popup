@@ -218,6 +218,7 @@ protected:
 
 public:
 	static void generate_doc(bool p_use_cache = true);
+	static void ensure_doc_data();
 	static DocTools *get_doc_data();
 	static void cleanup_doc();
 	static String get_cache_full_path();
