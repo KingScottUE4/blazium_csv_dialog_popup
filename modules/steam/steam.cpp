@@ -119,6 +119,8 @@ void Steam::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("inventory_result_ready", PropertyInfo(Variant::INT, "result_handle"), PropertyInfo(Variant::INT, "result_code")));
 	ADD_SIGNAL(MethodInfo("inventory_full_update", PropertyInfo(Variant::INT, "result_handle")));
 	ADD_SIGNAL(MethodInfo("inventory_definitions_updated"));
+
+	_bind_workshop_methods();
 }
 
 Steam *Steam::get_singleton() {
@@ -160,6 +162,10 @@ void Steam::_reset_ticket_state() {
 }
 
 void Steam::_handle_callback(int p_callback_id, const void *p_data, int p_size) {
+	if (_handle_workshop_callback(p_callback_id, p_data, p_size)) {
+		return;
+	}
+
 	if (p_callback_id == SteamGetTicketForWebApiResponse::k_iCallback) {
 		if (p_size < (int)sizeof(SteamGetTicketForWebApiResponse)) {
 			_log_debug(vformat("GetTicketForWebApiResponse too small: %d", p_size));
@@ -277,15 +283,28 @@ void Steam::_dispatch_callbacks() {
 			if (callback.m_iCallback == SteamAPICallCompleted::k_iCallback) {
 				if (callback.m_pubParam && callback.m_cubParam >= (int)sizeof(SteamAPICallCompleted)) {
 					const SteamAPICallCompleted *call_completed = (const SteamAPICallCompleted *)callback.m_pubParam;
+					bool has_result = false;
+					bool failed = false;
+					Vector<uint8_t> result;
 					if (call_completed->m_cubParam > 0) {
-						Vector<uint8_t> result;
 						result.resize((int)call_completed->m_cubParam);
-						bool failed = false;
-						if (loader.manual_dispatch_get_api_call_result(
-									steam_pipe, call_completed->m_hAsyncCall, result.ptrw(),
-									(int)call_completed->m_cubParam, call_completed->m_iCallback, &failed)) {
-							_handle_callback(call_completed->m_iCallback, result.ptr(), (int)call_completed->m_cubParam);
-						}
+						has_result = loader.manual_dispatch_get_api_call_result(
+								steam_pipe, call_completed->m_hAsyncCall, result.ptrw(),
+								(int)call_completed->m_cubParam, call_completed->m_iCallback, &failed);
+					}
+
+					WorkshopPendingCall workshop_call;
+					const bool is_workshop_call = workshop_pending_calls.has(call_completed->m_hAsyncCall);
+					if (is_workshop_call) {
+						workshop_call = workshop_pending_calls[call_completed->m_hAsyncCall];
+						workshop_pending_calls.erase(call_completed->m_hAsyncCall);
+					}
+
+					if (has_result && !(is_workshop_call && failed)) {
+						_handle_callback(call_completed->m_iCallback, result.ptr(), (int)call_completed->m_cubParam);
+					} else if (is_workshop_call) {
+						// IO failure (e.g. Steam servers unreachable): still report back to the game.
+						_handle_workshop_call_failure(workshop_call);
 					}
 				}
 			} else if (callback.m_iCallback == SteamInventoryDefinitionUpdate::k_iCallback) {
@@ -373,6 +392,13 @@ Error Steam::initialize(int p_app_id) {
 		}
 	}
 
+	if (loader.has_workshop_support()) {
+		steam_ugc = loader.get_steam_ugc();
+		if (!steam_ugc) {
+			_log_debug("Steam Workshop (UGC) interface unavailable");
+		}
+	}
+
 	initialized = true;
 	_log_debug("Steam initialized");
 
@@ -393,6 +419,8 @@ void Steam::shutdown() {
 	steam_friends = nullptr;
 	steam_utils = nullptr;
 	steam_inventory = nullptr;
+	steam_ugc = nullptr;
+	_clear_workshop_state();
 	steam_pipe = 0;
 	manual_dispatch_enabled = false;
 	stats_received = false;
