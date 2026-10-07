@@ -30,6 +30,7 @@
 #include "justamcp_editor_filesystem.h"
 
 #ifdef TOOLS_ENABLED
+#include "core/object/script_language.h"
 #include "core/os/thread.h"
 #include "editor/editor_file_system.h"
 #endif
@@ -49,6 +50,31 @@ void refresh_path(const String &p_path) {
 	}
 #else
 	(void)p_path;
+#endif
+}
+
+String class_index_status(const String &p_path, const String &p_source) {
+#ifdef TOOLS_ENABLED
+	EditorFileSystem *filesystem = EditorFileSystem::get_singleton();
+	if (!filesystem || !Thread::is_main_thread() || filesystem->is_scanning()) {
+		return "pending";
+	}
+	const Vector<String> lines = p_source.split("\n");
+	for (int i = 0; i < lines.size(); i++) {
+		const String line = lines[i].strip_edges();
+		if (!line.begins_with("class_name ")) {
+			continue;
+		}
+		const String name = line.substr(11).get_slice(" ", 0).strip_edges();
+		if (!name.is_empty() && !ScriptServer::is_global_class(name)) {
+			return "pending";
+		}
+	}
+	return "registered";
+#else
+	(void)p_path;
+	(void)p_source;
+	return "pending";
 #endif
 }
 

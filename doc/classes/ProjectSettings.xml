@@ -720,6 +720,8 @@
 		<member name="blazium/justamcp/prompts/blazium_ui_scaffolder" type="bool" setter="" getter="" default="true">
 			Read-only MCP prompt template registered as [code]blazium_ui_scaffolder[/code]. Description: Generates responsive Godot 4 UI layouts using Container nodes, anchors, and theme overrides. Never outputs hardcoded position or size values.
 		</member>
+		<member name="blazium/justamcp/prompts/blazium_version_migration" type="bool" setter="" getter="" default="true">
+		</member>
 		<member name="blazium/justamcp/prompts/blazium_visual_proof" type="bool" setter="" getter="" default="true">
 		</member>
 		<member name="blazium/justamcp/prompts/editor_state" type="bool" setter="" getter="" default="true">
@@ -1299,6 +1301,8 @@
 		</member>
 		<member name="blazium/justamcp/tools/export_tools/blazium_export_release" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], exposes the [code]blazium_export_release[/code] tool from the Export Tools family to MCP clients. Exports the project using the release preset.
+		</member>
+		<member name="blazium/justamcp/tools/export_tools/blazium_export_smoke" type="bool" setter="" getter="" default="true">
 		</member>
 		<member name="blazium/justamcp/tools/export_tools/blazium_get_android_preset_info" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], exposes the [code]blazium_get_android_preset_info[/code] tool from the Export Tools family to MCP clients. Reads Android export preset metadata.

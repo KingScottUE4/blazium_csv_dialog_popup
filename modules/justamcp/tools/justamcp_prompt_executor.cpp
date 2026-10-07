@@ -90,6 +90,7 @@ JustAMCPPromptExecutor::JustAMCPPromptExecutor() {
 	add_prompt(memnew(JustAMCPPromptBlaziumWorkflow(JustAMCPPromptBlaziumWorkflow::AUTOWORK_FIX_LOOP)));
 	add_prompt(memnew(JustAMCPPromptBlaziumWorkflow(JustAMCPPromptBlaziumWorkflow::DIAGNOSTICS_TRIAGE)));
 	add_prompt(memnew(JustAMCPPromptBlaziumWorkflow(JustAMCPPromptBlaziumWorkflow::VISUAL_PROOF)));
+	add_prompt(memnew(JustAMCPPromptBlaziumWorkflow(JustAMCPPromptBlaziumWorkflow::VERSION_MIGRATION)));
 	add_prompt(memnew(JustAMCPPromptProjectInfo));
 	add_prompt(memnew(JustAMCPPromptEditorState));
 	add_prompt(memnew(JustAMCPPromptAutoworkTestGenerator));

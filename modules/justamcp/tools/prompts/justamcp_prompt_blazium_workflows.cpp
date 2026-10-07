@@ -60,6 +60,9 @@ String JustAMCPPromptBlaziumWorkflow::get_name() const {
 
 		case VISUAL_PROOF:
 			return "blazium_visual_proof";
+
+		case VERSION_MIGRATION:
+			return "blazium_version_migration";
 	}
 
 	return "blazium_project_intake";
@@ -84,6 +87,9 @@ String JustAMCPPromptBlaziumWorkflow::_get_title() const {
 
 		case VISUAL_PROOF:
 			return "Blazium Visual Proof";
+
+		case VERSION_MIGRATION:
+			return "Blazium Version Migration";
 	}
 
 	return "Blazium Project Intake";
@@ -108,6 +114,9 @@ String JustAMCPPromptBlaziumWorkflow::_get_description() const {
 
 		case VISUAL_PROOF:
 			return "Sets the editor camera, screenshots, applies a change, repeats the same camera, and compares the two shots with the existing compare tool.";
+
+		case VERSION_MIGRATION:
+			return "Moves a Godot 4.x project onto the Blazium 4.8 line. Keeps the current pin unless migration was requested. Template v1.";
 	}
 
 	return "";
@@ -152,6 +161,13 @@ Array JustAMCPPromptBlaziumWorkflow::_get_arguments() const {
 			arguments.push_back(_make_prompt_argument("change", "What to change between the two screenshots.", true));
 
 			arguments.push_back(_make_prompt_argument("camera", "Optional camera position, rotation, and fov to lock for both shots.", false));
+
+			arguments.push_back(_make_prompt_argument("asset_path", "res:// path of the asset that must be loaded in the after shot.", false));
+
+			break;
+
+		case VERSION_MIGRATION:
+			arguments.push_back(_make_prompt_argument("from_version", "Source engine line, for example Godot 4.3 or Godot 4.6.", false));
 
 			break;
 
@@ -474,9 +490,11 @@ Dictionary JustAMCPPromptBlaziumWorkflow::_get_diagnostics_triage_messages(const
 Dictionary JustAMCPPromptBlaziumWorkflow::_get_visual_proof_messages(const Dictionary &p_args) {
 	const String change = p_args.has("change") ? String(p_args["change"]) : "[change]";
 	const String camera = p_args.has("camera") ? String(p_args["camera"]) : "";
+	const String asset_path = p_args.has("asset_path") ? String(p_args["asset_path"]) : "";
 	String text = "You are proving a visual change in the Blazium editor.\n\n";
 	text += "Change: " + change + "\n";
-	text += "Camera: " + (camera.is_empty() ? "[use the current 3D editor camera]" : camera) + "\n\n";
+	text += "Camera: " + (camera.is_empty() ? "[use the current 3D editor camera]" : camera) + "\n";
+	text += "Asset: " + (asset_path.is_empty() ? "[name the res:// path that must be loaded]" : asset_path) + "\n\n";
 	text += "Workflow:\n";
 	text += "1. Read `blazium_editor_get_camera`. If a camera was provided, apply it with `blazium_editor_set_camera` (position, rotation, fov).\n";
 	text += "2. Capture the before shot with `blazium_editor_take_screenshot`.\n";
@@ -484,13 +502,31 @@ Dictionary JustAMCPPromptBlaziumWorkflow::_get_visual_proof_messages(const Dicti
 	text += "4. Set the same camera again with `blazium_editor_set_camera`.\n";
 	text += "5. Capture the after shot with `blazium_editor_take_screenshot`.\n";
 	text += "6. Compare the two PNG paths with `blazium_runtime_compare_screenshots`.\n";
-	text += "7. Report the camera pose, both paths, and whether the compare tool found a difference.\n";
+	text += "7. Report the camera pose, both paths, the loaded res:// asset path, and whether the compare tool found a difference. A shot of a placeholder does not pass when an asset path was named.\n";
 	Array messages;
 	messages.push_back(_make_text_message(text));
 	_append_common_context(messages);
 	messages.push_back(_make_resource_message("blazium://editor/state"));
 	Dictionary result;
 	result["description"] = "Blazium Visual Proof";
+	result["messages"] = messages;
+	result["ok"] = true;
+	return result;
+}
+
+Dictionary JustAMCPPromptBlaziumWorkflow::_get_version_migration_messages(const Dictionary &p_args) {
+	const String from_version = p_args.has("from_version") ? String(p_args["from_version"]) : "[current project pin]";
+	String text = "You are moving a project onto the Blazium 4.8 line.\n\n";
+	text += "From: " + from_version + "\n\n";
+	text += "Keep the project's current pin unless the user asked to migrate.\n";
+	text += "Load the blazium-version-migration skill for the 4.x hop (HDR, AreaLight3D, virtual joystick, tween await).\n";
+	text += "Godot 3 names (yield, export var, instance, KinematicBody, Spatial, File.new, Pool arrays, three-argument connect) are listed on blazium_gdscript_linter. Do not paste a second rename table here.\n";
+	text += "After a class_name add, rename, or delete, finish the editor class scan or run `blazium --headless --import` before another script uses that name.\n";
+	Array messages;
+	messages.push_back(_make_text_message(text));
+	_append_common_context(messages);
+	Dictionary result;
+	result["description"] = "Blazium Version Migration";
 	result["messages"] = messages;
 	result["ok"] = true;
 	return result;
@@ -515,6 +551,9 @@ Dictionary JustAMCPPromptBlaziumWorkflow::get_messages(const Dictionary &p_args)
 
 		case VISUAL_PROOF:
 			return _get_visual_proof_messages(p_args);
+
+		case VERSION_MIGRATION:
+			return _get_version_migration_messages(p_args);
 	}
 
 	return _make_error_result("Unknown Blazium workflow prompt.");

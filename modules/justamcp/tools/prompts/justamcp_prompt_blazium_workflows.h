@@ -44,6 +44,7 @@ public:
 		AUTOWORK_FIX_LOOP,
 		DIAGNOSTICS_TRIAGE,
 		VISUAL_PROOF,
+		VERSION_MIGRATION,
 	};
 
 private:
@@ -59,6 +60,7 @@ private:
 	Dictionary _get_autowork_fix_loop_messages(const Dictionary &p_args);
 	Dictionary _get_diagnostics_triage_messages(const Dictionary &p_args);
 	Dictionary _get_visual_proof_messages(const Dictionary &p_args);
+	Dictionary _get_version_migration_messages(const Dictionary &p_args);
 
 protected:
 	static void _bind_methods();
