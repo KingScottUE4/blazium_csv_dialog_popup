@@ -82,6 +82,9 @@
 		<member name="max_size" type="Vector2i" setter="set_max_size" getter="get_max_size" default="Vector2i(480, 270)">
 			Downscales captured frames that exceed this size. [code](0, 0)[/code] disables scaling.
 		</member>
+		<member name="paused" type="bool" setter="set_paused" getter="is_paused" default="false">
+			When [code]true[/code], capture skips new frames until recording is resumed.
+		</member>
 	</members>
 	<signals>
 		<signal name="recording_finished">

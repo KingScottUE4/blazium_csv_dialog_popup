@@ -162,6 +162,9 @@
 		<member name="dither" type="bool" setter="set_dither" getter="get_dither" default="true">
 			Dithering used when encoding GIFs.
 		</member>
+		<member name="encode_optimize" type="bool" setter="set_encode_optimize" getter="get_encode_optimize" default="true">
+			If [code]true[/code], encoding uses transparency and frame differencing. Recorder captures set this to [code]false[/code] so each frame is a full opaque picture.
+		</member>
 		<member name="loop" type="bool" setter="set_loop" getter="get_loop" default="true">
 			If [code]true[/code], playback repeats according to [member netscape_loop_count].
 		</member>

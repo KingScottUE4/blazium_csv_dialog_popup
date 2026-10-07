@@ -347,6 +347,7 @@ static func __run_tests__(
 	inc_orphans: Callable,
 	end_test: Callable,
 	should_abort: Callable,
+	yield_frames: bool,
 ):
 	for script: Dictionary in scripts:
 		if should_abort.is_valid() and should_abort.call():
@@ -421,6 +422,11 @@ static func __run_tests__(
 
 		test_instance.queue_free()
 
+		if yield_frames:
+			var tree = Engine.get_main_loop()
+			if tree != null and tree.has_signal(&"process_frame"):
+				await tree.process_frame
+
 	on_test_over.call()
 )";
 	Array scripts = collector->get_scripts();
@@ -446,7 +452,11 @@ static func __run_tests__(
 	Callable end_test = callable_mp(logger_ptr, &AutoworkLogger::end_test);
 
 	Callable should_abort = callable_mp(this, &Autowork::is_aborted);
-	gd_proxy_runner->call("__run_tests__", scripts, get_test_instance, on_test_over, begin_test, inc_test_count, inc_orphans, end_test, should_abort);
+	runner_script = gd_proxy_runner;
+	gd_proxy_runner->call("__run_tests__", scripts, get_test_instance, on_test_over, begin_test, inc_test_count, inc_orphans, end_test, should_abort, yield_frames);
+	if (!yield_frames) {
+		runner_script.unref();
+	}
 }
 
 AutoworkTest *Autowork::_get_test_instance(Dictionary script_info) {

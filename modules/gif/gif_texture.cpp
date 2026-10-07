@@ -240,7 +240,7 @@ PackedByteArray GIFTexture::save_to_buffer() const {
 		frames.write[i].delay_cs = get_frame_delay(i);
 	}
 	PackedByteArray out;
-	if (gif_encode_frames(frames, netscape_loop_count, dither, true, out) != OK) {
+	if (gif_encode_frames(frames, netscape_loop_count, dither, encode_optimize, out) != OK) {
 		return PackedByteArray();
 	}
 	return out;
@@ -845,6 +845,16 @@ bool GIFTexture::get_dither() const {
 	return dither;
 }
 
+void GIFTexture::set_encode_optimize(bool p_optimize) {
+	RWLockWrite w(rw_lock);
+	encode_optimize = p_optimize;
+}
+
+bool GIFTexture::get_encode_optimize() const {
+	RWLockRead r(rw_lock);
+	return encode_optimize;
+}
+
 int GIFTexture::get_width() const {
 	RWLockRead r(rw_lock);
 	return canvas_size.x > 0 ? canvas_size.x : 1;
@@ -999,6 +1009,8 @@ void GIFTexture::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_bake_compress"), &GIFTexture::get_bake_compress);
 	ClassDB::bind_method(D_METHOD("set_dither", "dither"), &GIFTexture::set_dither);
 	ClassDB::bind_method(D_METHOD("get_dither"), &GIFTexture::get_dither);
+	ClassDB::bind_method(D_METHOD("set_encode_optimize", "optimize"), &GIFTexture::set_encode_optimize);
+	ClassDB::bind_method(D_METHOD("get_encode_optimize"), &GIFTexture::get_encode_optimize);
 	ClassDB::bind_method(D_METHOD("_get_source_frames"), &GIFTexture::_get_source_frames);
 	ClassDB::bind_method(D_METHOD("_set_source_frames", "frames"), &GIFTexture::_set_source_frames);
 	ClassDB::bind_method(D_METHOD("_get_baked_frames"), &GIFTexture::_get_baked_frames);
@@ -1015,6 +1027,7 @@ void GIFTexture::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "bake_storage", PROPERTY_HINT_ENUM, "Store,Generate On Load"), "set_bake_storage", "get_bake_storage");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "bake_compress"), "set_bake_compress", "get_bake_compress");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "dither"), "set_dither", "get_dither");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "encode_optimize"), "set_encode_optimize", "get_encode_optimize");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "source_frames", PROPERTY_HINT_ARRAY_TYPE, "Image", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE), "_set_source_frames", "_get_source_frames");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "baked_frames", PROPERTY_HINT_ARRAY_TYPE, "Image", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE), "_set_baked_frames", "_get_baked_frames");
 

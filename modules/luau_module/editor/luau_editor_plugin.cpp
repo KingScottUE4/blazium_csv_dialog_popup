@@ -34,9 +34,7 @@
 #include "editor/luau_formatter.h"
 #include "require/luau_package_path.h"
 
-#include "core/config/project_settings.h"
 #include "core/input/shortcut.h"
-#include "core/io/file_access.h"
 #include "scene/gui/separator.h"
 #include <lua.h>
 
@@ -114,19 +112,35 @@ void LuauEditorPlugin::_on_run_script_pressed() {
 		return;
 	}
 
-	const String project = ProjectSettings::get_singleton()->get_resource_path();
-	const String temp_path = ProjectSettings::get_singleton()->globalize_path("user://luau_run_temp.luau");
-	Ref<FileAccess> file = FileAccess::open(temp_path, FileAccess::WRITE);
-	if (file.is_null()) {
-		_append_output("Failed to write temporary run script.", true);
-		return;
-	}
-	file->store_string(code);
-	file->close();
+	// Run in this editor. Launching the editor executable opened a second editor window.
+	Ref<luau_module::LuaState> state;
+	state.instantiate();
+	state->open_libs(LuaState::LIB_ALL);
+	LuauPackagePath::install_package_searchers(state);
 
-	const String exe = OS::get_singleton()->get_executable_path();
-	const int exit_code = OS::get_singleton()->execute(exe, { "--headless", "--path", project, "-s", temp_path });
-	_append_output(vformat("Run script exit code: %d", exit_code), exit_code != 0);
+	const int top_before = state->get_top();
+	const LuaState::Status status = state->do_string(code, "@LuauScript");
+	if (status == luau_module::LuaState::STATUS_OK) {
+		const int results = state->get_top() - top_before;
+		for (int i = 0; i < results; ++i) {
+			const String result = state->push_as_string(-results + i);
+			state->pop(1);
+			_append_output(result);
+		}
+		state->set_top(top_before);
+		_append_output("Script finished in this editor.");
+	} else {
+		String err_msg;
+		if (state->get_top() > top_before && state->is_string(-1)) {
+			err_msg = state->to_string_inplace(-1);
+			state->pop(1);
+		} else {
+			err_msg = "Luau execution failed.";
+		}
+		state->set_top(top_before);
+		_append_output(err_msg, true);
+	}
+	state->close();
 }
 
 void LuauEditorPlugin::_on_clear_pressed() {
@@ -197,14 +211,14 @@ void LuauEditorPlugin::_setup_repl() {
 	buttons->add_child(format_button);
 	vbox->add_child(buttons);
 
-	add_control_to_bottom_panel(main_panel, "Luau REPL");
+	add_blazium_window("Luau", "REPL", main_panel);
 	_init_repl_state();
 	_append_output("Luau REPL ready.");
 }
 
 void LuauEditorPlugin::_teardown_repl() {
 	if (main_panel) {
-		remove_control_from_bottom_panel(main_panel);
+		remove_blazium_item("Luau", "REPL");
 		memdelete(main_panel);
 		main_panel = nullptr;
 	}
@@ -231,9 +245,8 @@ void LuauEditorPlugin::_notification(int p_what) {
 }
 
 void LuauEditorPlugin::make_visible(bool p_visible) {
-	if (main_panel) {
-		main_panel->set_visible(p_visible);
-	}
+	// The REPL lives in its own window, so editor main-screen changes must not hide it.
+	(void)p_visible;
 }
 
 LuauEditorPlugin::LuauEditorPlugin() {

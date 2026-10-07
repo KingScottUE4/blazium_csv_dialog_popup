@@ -6,6 +6,15 @@ Import("env_modules")
 
 env_dddbrowser = env_modules.Clone()
 
+if env["module_luau_module_enabled"]:
+    env_dddbrowser.Prepend(
+        CPPPATH=[
+            "#modules/luau_module/",
+            "#thirdparty/luau/Common/include",
+            "#thirdparty/luau/VM/include",
+        ]
+    )
+
 env_dddbrowser.add_source_files(env.modules_sources, "*.cpp")
 
 if env.editor_build:

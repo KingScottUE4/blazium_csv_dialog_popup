@@ -32,6 +32,7 @@
 #include "tests/test_macros.h"
 
 #include "modules/luau_module/analysis/luau_typecheck.h"
+#include "modules/luau_module/lua_state.h"
 #include "modules/luau_module/luau.h"
 #include "modules/luau_module/luau_bytecode_format.h"
 #include "modules/luau_module/luau_class_info.h"
@@ -140,6 +141,16 @@ return NodeScript
 		}
 	}
 	CHECK(found_ready);
+}
+
+TEST_CASE("[Modules][LuauModule] script run stays in process") {
+	Ref<luau_module::LuaState> state;
+	state.instantiate();
+	state->open_libs(luau_module::LuaState::LIB_ALL);
+	const luau_module::LuaState::Status status = state->do_string("return 2 + 2", "@LuauScript");
+	CHECK(status == luau_module::LuaState::STATUS_OK);
+	CHECK(state->get_top() >= 1);
+	state->close();
 }
 
 } //namespace TestLuauModule

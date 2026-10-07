@@ -40,6 +40,7 @@
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
 #include "scene/gui/rich_text_label.h"
+#include "scene/main/scene_tree.h"
 
 void SteamEditorPlugin::_append_log(const String &p_line) {
 	if (!log) {
@@ -69,6 +70,38 @@ void SteamEditorPlugin::_on_init_pressed() {
 			String::num_uint64(steam->get_local_steam_id())));
 }
 
+void SteamEditorPlugin::_stop_ticket_poll() {
+	ticket_polls = 0;
+	SceneTree *tree = get_tree();
+	if (tree && tree->is_connected(SNAME("process_frame"), callable_mp(this, &SteamEditorPlugin::_poll_ticket))) {
+		tree->disconnect(SNAME("process_frame"), callable_mp(this, &SteamEditorPlugin::_poll_ticket));
+	}
+}
+
+void SteamEditorPlugin::_poll_ticket() {
+	Steam *steam = Steam::get_singleton();
+	if (!steam) {
+		_stop_ticket_poll();
+		_append_log("Steam singleton unavailable");
+		return;
+	}
+	steam->poll_callbacks();
+	ticket_polls++;
+	if (steam->get_ticket_state() == Steam::TICKET_STATE_PENDING && ticket_polls < 300) {
+		return;
+	}
+	const int state = steam->get_ticket_state();
+	_stop_ticket_poll();
+	if (state == Steam::TICKET_STATE_READY) {
+		last_hex_ticket = steam->get_pending_hex_ticket();
+		_append_log(vformat("Ticket ready (%d chars)", last_hex_ticket.length()));
+	} else if (state == Steam::TICKET_STATE_PENDING) {
+		_append_log("Ticket failed: timed out");
+	} else {
+		_append_log(vformat("Ticket failed: %s", steam->get_pending_ticket_error()));
+	}
+}
+
 void SteamEditorPlugin::_on_request_ticket_pressed() {
 	Steam *steam = Steam::get_singleton();
 	if (!steam) {
@@ -77,15 +110,11 @@ void SteamEditorPlugin::_on_request_ticket_pressed() {
 	}
 	String identity = identity_edit ? identity_edit->get_text() : "blazium";
 	steam->request_web_api_ticket(identity);
-	for (int i = 0; i < 300 && steam->get_ticket_state() == Steam::TICKET_STATE_PENDING; i++) {
-		steam->poll_callbacks();
-		OS::get_singleton()->delay_usec(10000);
-	}
-	if (steam->get_ticket_state() == Steam::TICKET_STATE_READY) {
-		last_hex_ticket = steam->get_pending_hex_ticket();
-		_append_log(vformat("Ticket ready (%d chars)", last_hex_ticket.length()));
-	} else {
-		_append_log(vformat("Ticket failed: %s", steam->get_pending_ticket_error()));
+	_append_log("Requesting ticket...");
+	ticket_polls = 0;
+	SceneTree *tree = get_tree();
+	if (tree && !tree->is_connected(SNAME("process_frame"), callable_mp(this, &SteamEditorPlugin::_poll_ticket))) {
+		tree->connect(SNAME("process_frame"), callable_mp(this, &SteamEditorPlugin::_poll_ticket));
 	}
 }
 
@@ -385,7 +414,7 @@ void SteamEditorPlugin::_setup_dock() {
 	dock_root->add_child(fields_grid);
 	dock_root->add_child(buttons_grid);
 	dock_root->add_child(log);
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock_root);
+	add_blazium_window("Steam", "Steam", dock_root);
 
 	Steam *steam = Steam::get_singleton();
 	if (steam) {
@@ -396,6 +425,7 @@ void SteamEditorPlugin::_setup_dock() {
 }
 
 void SteamEditorPlugin::_teardown_dock() {
+	_stop_ticket_poll();
 	if (!dock_root) {
 		return;
 	}
@@ -407,7 +437,7 @@ void SteamEditorPlugin::_teardown_dock() {
 		steam->disconnect("workshop_query_completed", callable_mp(this, &SteamEditorPlugin::_on_workshop_query_completed));
 	}
 
-	remove_control_from_docks(dock_root);
+	remove_blazium_item("Steam", "Steam");
 	dock_root->queue_free();
 	dock_root = nullptr;
 	app_id_edit = nullptr;

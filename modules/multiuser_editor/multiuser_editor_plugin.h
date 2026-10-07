@@ -48,6 +48,7 @@
 	((EditorSettings::get_singleton() && EditorSettings::get_singleton()->has_setting(m_var)) ? EditorSettings::get_singleton()->get(m_var) : Variant(m_default))
 #endif
 
+class Autowork;
 class EditorSelection;
 class EditorUndoRedoManager;
 class Timer;
@@ -111,6 +112,8 @@ private:
 	double last_cursor_broadcast = 0.0;
 	bool was_playing = false;
 
+	void _start_yielded_autowork();
+	void _on_autowork_finished(Autowork *p_runner);
 	void _emit_action(Dictionary p_action);
 	void _emit_action_to_server(const Dictionary &p_action);
 	void _emit_file_sync_actions(const Vector<Dictionary> &p_actions);

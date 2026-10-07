@@ -47,7 +47,10 @@
 #include "editor/editor_data.h"
 #include "editor/editor_node.h"
 #include "editor/editor_settings.h"
+#include "editor/filesystem_dock.h"
 #include "editor/gui/editor_file_dialog.h"
+#include "scene/gui/box_container.h"
+#include "scene/gui/button.h"
 #include "scene/gui/popup_menu.h"
 #include "scene/main/window.h"
 #include "scene/resources/packed_scene.h"
@@ -202,7 +205,11 @@ void DDDBrowserEditorPlugin::_test_scene_root(Node *p_root) {
 	DisplayServer::get_singleton()->clipboard_set(url);
 	String msg = vformat(TTR("Preview server running.\nOpen in DDDBrowser (Allow HTTP):\n%s\n\nURL copied to clipboard."), url);
 	String exe = EDITOR_GET("dddbrowser/executable_path");
-	if (!exe.is_empty() && FileAccess::exists(exe)) {
+	const String engine_exe = OS::get_singleton()->get_executable_path();
+	const bool is_engine = !exe.is_empty() && !engine_exe.is_empty() && exe.simplify_path().to_lower() == engine_exe.simplify_path().to_lower();
+	if (is_engine) {
+		msg += TTR("\nThe DDDBrowser executable path is this editor, so it was not launched.");
+	} else if (!exe.is_empty() && FileAccess::exists(exe)) {
 		List<String> args;
 		args.push_back(url);
 		OS::get_singleton()->create_process(exe, args);
@@ -257,6 +264,17 @@ void DDDBrowserEditorPlugin::_check_luau_paths(const Variant &p_paths) {
 			if (DDDBrowserScript *script_node = Object::cast_to<DDDBrowserScript>(n)) {
 				script_path = script_node->get_source_path();
 				break;
+			}
+		}
+	}
+	if (script_path.is_empty()) {
+		if (FileSystemDock *dock = FileSystemDock::get_singleton()) {
+			Vector<String> selected = dock->get_selected_paths();
+			for (int i = 0; i < selected.size(); i++) {
+				if (selected[i].ends_with(".luau")) {
+					script_path = selected[i];
+					break;
+				}
 			}
 		}
 	}
@@ -354,38 +372,46 @@ DDDBrowserEditorPlugin::DDDBrowserEditorPlugin() {
 	export_dialog->connect("dir_selected", callable_mp(this, &DDDBrowserEditorPlugin::_export_to_path));
 	EditorNode::get_singleton()->get_gui_base()->add_child(export_dialog);
 
-	PopupMenu *menu = get_export_as_menu();
-	int idx = menu->get_item_count();
-	menu->add_item(TTR("DDDBrowser Page..."));
-	menu->set_item_metadata(idx, callable_mp(this, &DDDBrowserEditorPlugin::_popup_export_dialog));
+	tools_panel = memnew(VBoxContainer);
+	Button *export_page = memnew(Button);
+	export_page->set_text(TTR("Export Page..."));
+	export_page->connect(SceneStringName(pressed), callable_mp(this, &DDDBrowserEditorPlugin::_popup_export_dialog));
+	tools_panel->add_child(export_page);
 
-	fs_plugin.instantiate();
-	fs_plugin->set_callbacks(
-			callable_mp(this, &DDDBrowserEditorPlugin::_export_paths),
-			callable_mp(this, &DDDBrowserEditorPlugin::_test_paths),
-			Callable(),
-			callable_mp(this, &DDDBrowserEditorPlugin::_check_luau_paths));
-	add_context_menu_plugin(EditorContextMenuPlugin::CONTEXT_SLOT_FILESYSTEM, fs_plugin);
+	Button *export_scene = memnew(Button);
+	export_scene->set_text(TTR("Export Edited Scene"));
+	export_scene->connect(SceneStringName(pressed), callable_mp(this, &DDDBrowserEditorPlugin::_export_paths).bind(PackedStringArray()));
+	tools_panel->add_child(export_scene);
 
-	fs_create_plugin.instantiate();
-	fs_create_plugin->set_callbacks(Callable(), Callable(), callable_mp(this, &DDDBrowserEditorPlugin::_create_level_paths));
-	add_context_menu_plugin(EditorContextMenuPlugin::CONTEXT_SLOT_FILESYSTEM_CREATE, fs_create_plugin);
+	Button *test_scene = memnew(Button);
+	test_scene->set_text(TTR("Test Edited Scene"));
+	test_scene->connect(SceneStringName(pressed), callable_mp(this, &DDDBrowserEditorPlugin::_test_paths).bind(PackedStringArray()));
+	tools_panel->add_child(test_scene);
 
-	tree_plugin.instantiate();
-	tree_plugin->set_callbacks(
-			callable_mp(this, &DDDBrowserEditorPlugin::_export_paths),
-			callable_mp(this, &DDDBrowserEditorPlugin::_test_paths),
-			callable_mp(this, &DDDBrowserEditorPlugin::_check_luau_paths));
-	add_context_menu_plugin(EditorContextMenuPlugin::CONTEXT_SLOT_SCENE_TREE, tree_plugin);
+	Button *check_luau = memnew(Button);
+	check_luau->set_text(TTR("Check Luau"));
+	check_luau->connect(SceneStringName(pressed), callable_mp(this, &DDDBrowserEditorPlugin::_check_luau_paths).bind(PackedStringArray()));
+	tools_panel->add_child(check_luau);
+
+	Button *create_level = memnew(Button);
+	create_level->set_text(TTR("Create Level"));
+	PackedStringArray create_paths;
+	create_paths.push_back("res://");
+	create_level->connect(SceneStringName(pressed), callable_mp(this, &DDDBrowserEditorPlugin::_create_level_paths).bind(create_paths));
+	tools_panel->add_child(create_level);
+
+	add_blazium_window("DDDBrowser", "Tools", tools_panel);
 }
 
 DDDBrowserEditorPlugin::~DDDBrowserEditorPlugin() {
 	if (preview_server.is_valid()) {
 		preview_server->stop();
 	}
-	remove_context_menu_plugin(fs_plugin);
-	remove_context_menu_plugin(fs_create_plugin);
-	remove_context_menu_plugin(tree_plugin);
+	if (tools_panel) {
+		remove_blazium_item("DDDBrowser", "Tools");
+		memdelete(tools_panel);
+		tools_panel = nullptr;
+	}
 }
 
 #endif

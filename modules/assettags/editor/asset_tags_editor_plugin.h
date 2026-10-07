@@ -31,9 +31,9 @@
 
 #ifdef TOOLS_ENABLED
 
-#include "asset_tags_context_menu_plugin.h"
 #include "editor/plugins/editor_plugin.h"
 
+class AssetTagsEditorDialog;
 class LineEdit;
 class Tree;
 class TreeItem;
@@ -46,7 +46,7 @@ class AssetTagsEditorPlugin : public EditorPlugin {
 	LineEdit *new_tag_edit = nullptr;
 	LineEdit *comment_edit = nullptr;
 	LineEdit *rename_edit = nullptr;
-	Ref<AssetTagsContextMenuPlugin> fs_context_plugin;
+	AssetTagsEditorDialog *tags_dialog = nullptr;
 
 	String selected_tag;
 
@@ -59,9 +59,9 @@ class AssetTagsEditorPlugin : public EditorPlugin {
 	void _on_rename_tag_pressed();
 	void _on_cleanup_unused_pressed();
 	void _on_undo_pressed();
+	void _on_edit_selected_files_pressed();
 	void _on_tag_dictionary_changed();
 	void _on_index_reloaded();
-	void _on_project_settings_visibility_changed();
 	void _build_tab();
 	void _teardown_tab();
 

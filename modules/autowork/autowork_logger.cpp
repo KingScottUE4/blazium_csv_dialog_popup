@@ -28,6 +28,7 @@
 /**************************************************************************/
 
 #include "autowork_logger.h"
+#include "core/config/engine.h"
 #include "core/io/file_access.h"
 #include "core/io/json.h"
 #include "core/os/os.h"
@@ -104,7 +105,11 @@ void AutoworkLogger::print_log(const String &p_msg, bool p_error) {
 	}
 
 	if (output_ui && output_ui->has_method("append_text")) {
-		output_ui->call("append_text", bbmsg + "\n");
+		if (Engine::get_singleton() && Engine::get_singleton()->is_editor_hint()) {
+			output_ui->call_deferred("append_text", bbmsg + "\n");
+		} else {
+			output_ui->call("append_text", bbmsg + "\n");
+		}
 	}
 }
 

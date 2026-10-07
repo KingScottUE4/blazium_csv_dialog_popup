@@ -52,6 +52,8 @@ class Autowork : public Node {
 #endif
 	bool finished = false;
 	bool aborted = false;
+	bool yield_frames = false;
+	Ref<RefCounted> runner_script;
 	String json_output_path;
 	String xml_output_path;
 
@@ -71,6 +73,7 @@ public:
 	void add_directory(const String &p_path, const String &p_prefix = "", const String &p_suffix = "");
 	void add_script(const String &p_path);
 	void set_test(const String &p_test_name);
+	void set_yield_frames(bool p_yield) { yield_frames = p_yield; }
 	void run_tests();
 	void abort();
 	void maybe_place_runtime_ui();

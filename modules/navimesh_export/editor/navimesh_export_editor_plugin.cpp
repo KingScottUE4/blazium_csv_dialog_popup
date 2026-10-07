@@ -119,11 +119,8 @@ void NavimeshExportEditorPlugin::_ensure_file_dialog() {
 
 void NavimeshExportEditorPlugin::_notification(int p_what) {
 	if (p_what == NOTIFICATION_ENTER_TREE) {
-		if (spatial_export) {
-			spatial_export->set_text(TTR("Export Navimesh"));
-		}
-		if (canvas_export) {
-			canvas_export->set_text(TTR("Export Navimesh"));
+		if (export_button) {
+			export_button->set_text(TTR("Export Navimesh"));
 		}
 	}
 }
@@ -137,24 +134,27 @@ void NavimeshExportEditorPlugin::edit(Object *p_object) {
 }
 
 void NavimeshExportEditorPlugin::make_visible(bool p_visible) {
-	Object *obj = ObjectDB::get_instance(current_object);
-	const bool show_3d = p_visible && Object::cast_to<NavigationRegion3D>(obj);
-	const bool show_2d = p_visible && Object::cast_to<NavigationRegion2D>(obj);
-	if (spatial_hbox) {
-		spatial_hbox->set_visible(show_3d);
-	}
-	if (canvas_hbox) {
-		canvas_hbox->set_visible(show_2d);
-	}
-	if (!p_visible) {
-		current_object = ObjectID();
-	}
+	(void)p_visible;
 }
 
 void NavimeshExportEditorPlugin::_on_toolbar_export() {
 	_ensure_file_dialog();
 	ERR_FAIL_NULL(file_dialog);
 	Object *obj = ObjectDB::get_instance(current_object);
+	if (!_is_nav_export_node(obj)) {
+		List<Node *> selected = EditorNode::get_singleton()->get_editor_selection()->get_selected_node_list();
+		for (Node *node : selected) {
+			if (_is_nav_export_node(node)) {
+				obj = node;
+				current_object = node->get_instance_id();
+				break;
+			}
+		}
+	}
+	if (!_is_nav_export_node(obj)) {
+		EditorNode::get_singleton()->show_accept(TTR("Select a NavigationRegion2D or NavigationRegion3D to export."), TTR("OK"));
+		return;
+	}
 	file_dialog->set_current_file(_default_export_name(obj));
 	file_dialog->popup_file_dialog();
 }
@@ -176,28 +176,22 @@ NavimeshExportEditorPlugin::NavimeshExportEditorPlugin() {
 	inspector_plugin.instantiate();
 	add_inspector_plugin(inspector_plugin);
 
-	spatial_hbox = memnew(HBoxContainer);
-	spatial_export = memnew(Button);
-	spatial_export->set_theme_type_variation(SceneStringName(FlatButton));
-	spatial_export->set_text(TTR("Export Navimesh"));
-	spatial_export->set_tooltip_text(TTR("Bake and export the selected NavigationRegion3D (and scene links) for a third-party server."));
-	spatial_export->connect(SceneStringName(pressed), callable_mp(this, &NavimeshExportEditorPlugin::_on_toolbar_export));
-	spatial_hbox->add_child(spatial_export);
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, spatial_hbox);
-	spatial_hbox->hide();
-
-	canvas_hbox = memnew(HBoxContainer);
-	canvas_export = memnew(Button);
-	canvas_export->set_theme_type_variation(SceneStringName(FlatButton));
-	canvas_export->set_text(TTR("Export Navimesh"));
-	canvas_export->set_tooltip_text(TTR("Bake and export the selected NavigationRegion2D (and scene links) for a third-party server."));
-	canvas_export->connect(SceneStringName(pressed), callable_mp(this, &NavimeshExportEditorPlugin::_on_toolbar_export));
-	canvas_hbox->add_child(canvas_export);
-	add_control_to_container(CONTAINER_CANVAS_EDITOR_MENU, canvas_hbox);
-	canvas_hbox->hide();
+	export_panel = memnew(VBoxContainer);
+	export_button = memnew(Button);
+	export_button->set_text(TTR("Export Navimesh"));
+	export_button->set_tooltip_text(TTR("Bake and export the selected NavigationRegion2D or NavigationRegion3D (and scene links) for a third-party server."));
+	export_button->connect(SceneStringName(pressed), callable_mp(this, &NavimeshExportEditorPlugin::_on_toolbar_export));
+	export_panel->add_child(export_button);
+	add_blazium_window("Navimesh Export", "Export", export_panel);
 }
 
 NavimeshExportEditorPlugin::~NavimeshExportEditorPlugin() {
+	if (export_panel) {
+		remove_blazium_item("Navimesh Export", "Export");
+		memdelete(export_panel);
+		export_panel = nullptr;
+		export_button = nullptr;
+	}
 	if (inspector_plugin.is_valid()) {
 		remove_inspector_plugin(inspector_plugin);
 	}

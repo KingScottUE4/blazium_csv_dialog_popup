@@ -37,8 +37,8 @@
 
 class Button;
 class EditorFileDialog;
-class HBoxContainer;
 class Node;
+class VBoxContainer;
 
 class NavimeshExportInspectorPlugin : public EditorInspectorPlugin {
 	GDCLASS(NavimeshExportInspectorPlugin, EditorInspectorPlugin);
@@ -58,10 +58,8 @@ class NavimeshExportEditorPlugin : public EditorPlugin {
 	GDCLASS(NavimeshExportEditorPlugin, EditorPlugin);
 
 	Ref<NavimeshExportInspectorPlugin> inspector_plugin;
-	HBoxContainer *spatial_hbox = nullptr;
-	HBoxContainer *canvas_hbox = nullptr;
-	Button *spatial_export = nullptr;
-	Button *canvas_export = nullptr;
+	VBoxContainer *export_panel = nullptr;
+	Button *export_button = nullptr;
 	EditorFileDialog *file_dialog = nullptr;
 	ObjectID current_object;
 

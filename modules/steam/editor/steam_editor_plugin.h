@@ -49,8 +49,11 @@ private:
 	LineEdit *item_def_id_edit;
 	RichTextLabel *log;
 	String last_hex_ticket;
+	int ticket_polls = 0;
 
 	void _append_log(const String &p_line);
+	void _stop_ticket_poll();
+	void _poll_ticket();
 	void _on_init_pressed();
 	void _on_request_ticket_pressed();
 	void _on_authenticate_pressed();

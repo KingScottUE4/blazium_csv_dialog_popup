@@ -295,3 +295,45 @@ void test_gif_recorder_add_frame() {
 	REQUIRE(anim.is_valid());
 	CHECK(anim->get_frame_count() == 2);
 }
+
+void test_gif_recorder_pause_keeps_frames() {
+	Ref<GIFRecorder> rec;
+	rec.instantiate();
+	Ref<Image> a = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+	a->fill(Color(1, 0, 0));
+	Ref<Image> b = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+	b->fill(Color(0, 0, 1));
+	CHECK(rec->add_frame(a) == OK);
+	rec->set_paused(true);
+	CHECK(rec->is_paused());
+	CHECK(rec->add_frame(b) == OK);
+	rec->set_paused(false);
+	CHECK_FALSE(rec->is_paused());
+	CHECK(rec->add_frame(b) == OK);
+	Ref<GIFTexture> anim = rec->stop();
+	REQUIRE(anim.is_valid());
+	CHECK(anim->get_frame_count() == 2);
+}
+
+void test_gif_recorder_transparent_frame_roundtrip() {
+	Ref<GIFRecorder> rec;
+	rec.instantiate();
+	rec->set_dither(false);
+	Ref<Image> frame = Image::create_empty(2, 2, false, Image::FORMAT_RGBA8);
+	frame->fill(Color(1, 0, 0, 0));
+	CHECK(rec->add_frame(frame) == OK);
+	Ref<GIFTexture> anim = rec->stop();
+	REQUIRE(anim.is_valid());
+	CHECK_FALSE(anim->get_encode_optimize());
+	const PackedByteArray buf = anim->save_to_buffer();
+	CHECK(buf.size() > 0);
+	GIFDecoded decoded;
+	CHECK(gif_decode_buffer(buf.ptr(), buf.size(), decoded) == OK);
+	REQUIRE(decoded.frames.size() == 1);
+	REQUIRE(decoded.frames[0].image.is_valid());
+	const Color c = decoded.frames[0].image->get_pixel(0, 0);
+	CHECK(c.r > 0.9f);
+	CHECK(c.g < 0.1f);
+	CHECK(c.b < 0.1f);
+	CHECK(c.a > 0.9f);
+}

@@ -49,10 +49,13 @@ void XboxEditorPlugin::_notification(int p_what) {
 		export_platform = Ref<EditorExportPlatform>(memnew(EditorExportPlatformXbox));
 		EditorExport::get_singleton()->add_export_platform(export_platform);
 
-		add_tool_menu_item("Xbox: Create Game Config", callable_mp(this, &XboxEditorPlugin::_create_game_config));
-		add_tool_menu_item("Xbox: Validate Configuration", callable_mp(this, &XboxEditorPlugin::_validate_configuration));
-		add_tool_menu_item("Xbox: Open GDK Documentation", callable_mp(this, &XboxEditorPlugin::_open_gdk_docs));
+		add_blazium_action("Xbox", "Create Game Config", callable_mp(this, &XboxEditorPlugin::_create_game_config));
+		add_blazium_action("Xbox", "Validate Configuration", callable_mp(this, &XboxEditorPlugin::_validate_configuration));
+		add_blazium_action("Xbox", "Open GDK Documentation", callable_mp(this, &XboxEditorPlugin::_open_gdk_docs));
 	} else if (p_what == NOTIFICATION_EXIT_TREE) {
+		remove_blazium_item("Xbox", "Create Game Config");
+		remove_blazium_item("Xbox", "Validate Configuration");
+		remove_blazium_item("Xbox", "Open GDK Documentation");
 		if (export_platform.is_valid()) {
 			EditorExport::get_singleton()->remove_export_platform(export_platform);
 			export_platform.unref();

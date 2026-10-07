@@ -39,7 +39,10 @@
 
 class Button;
 class EditorFileDialog;
+class Label;
+class LineEdit;
 class TextureRect;
+class VBoxContainer;
 
 class EditorInspectorPluginGIF : public EditorInspectorPlugin {
 	GDCLASS(EditorInspectorPluginGIF, EditorInspectorPlugin);
@@ -65,17 +68,39 @@ class GIFEditorPlugin : public EditorPlugin {
 	Ref<GIFPreviewGenerator> preview_generator;
 	Ref<GIFRecorder> recorder;
 	EditorFileDialog *save_dialog = nullptr;
+	VBoxContainer *record_panel = nullptr;
+	Label *status_label = nullptr;
+	LineEdit *save_path_edit = nullptr;
+	Button *viewport_button = nullptr;
+	Button *game_button = nullptr;
+	Button *window_button = nullptr;
+	Button *running_button = nullptr;
+	Button *pause_button = nullptr;
+	Button *stop_button = nullptr;
+	Button *export_button = nullptr;
 	String pending_save_kind;
+	String active_source;
 	ObjectID game_view_id;
 	bool capturing_game = false;
+	bool capturing_running = false;
+	bool choosing_save_path = false;
 
 	void _record_editor_viewport();
-	void _record_game_viewport();
-	void _record_full_window();
+	void _record_editor_game_window();
+	void _record_editor_window();
+	void _record_running_game();
 	void _export_animation_player();
 	void _toggle_recording(GIFRecorder::Source p_source, Viewport *p_viewport);
+	void _on_pause_pressed();
+	void _on_stop_pressed();
+	void _on_browse_save_path();
+	void _set_status(const String &p_text);
+	void _refresh_record_controls();
+	bool _capture_active() const;
+	void _save_texture(const Ref<GIFTexture> &p_texture);
+	void _stop_screen_capture();
 	void _save_dialog_file_selected(const String &p_path);
-	void _process_game_capture();
+	void _process_screen_capture();
 	Viewport *_get_active_editor_viewport() const;
 
 public:

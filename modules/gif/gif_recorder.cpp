@@ -60,10 +60,12 @@ Error GIFRecorder::_start_common() {
 	texture.instantiate();
 	texture->set_netscape_loop_count(loop_count);
 	texture->set_dither(dither);
+	texture->set_encode_optimize(false);
 	texture->set_play(false);
 	accum = 0;
 	frame_interval = fps > 0 ? (1.0 / double(fps)) : (1.0 / 12.0);
 	recording = true;
+	paused = false;
 	_connect_process(true);
 	return OK;
 }
@@ -80,8 +82,8 @@ Ref<Image> GIFRecorder::_capture_image() const {
 		if (!DisplayServer::get_singleton()) {
 			return Ref<Image>();
 		}
-		const Vector2i pos = DisplayServer::get_singleton()->window_get_position_with_decorations();
-		const Vector2i size = DisplayServer::get_singleton()->window_get_size_with_decorations();
+		const Vector2i pos = DisplayServer::get_singleton()->window_get_position_with_decorations(window_id);
+		const Vector2i size = DisplayServer::get_singleton()->window_get_size_with_decorations(window_id);
 		if (size.x <= 0 || size.y <= 0) {
 			return Ref<Image>();
 		}
@@ -102,13 +104,26 @@ Ref<Image> GIFRecorder::_prepare_image(const Ref<Image> &p_image) const {
 	if (max_size.x > 0 && max_size.y > 0 && (img->get_width() > max_size.x || img->get_height() > max_size.y)) {
 		img->resize(max_size.x, max_size.y, Image::INTERPOLATE_BILINEAR);
 	}
-	const int64_t pixels = int64_t(img->get_width()) * int64_t(img->get_height());
-	ERR_FAIL_COND_V_MSG(pixels > gif_get_max_canvas_pixels(), Ref<Image>(), "Captured frame exceeds blazium/gif/max_canvas_pixels.");
+	if (img->get_format() != Image::FORMAT_RGBA8) {
+		img->convert(Image::FORMAT_RGBA8);
+	}
+	// Viewport and screen captures often store color with alpha 0. cgif skips those pixels.
+	const int pixel_count = img->get_width() * img->get_height();
+	Vector<uint8_t> pixels = img->get_data();
+	if (pixels.size() >= pixel_count * 4) {
+		uint8_t *px = pixels.ptrw();
+		for (int i = 0; i < pixel_count; i++) {
+			px[i * 4 + 3] = 255;
+		}
+		img->set_data(img->get_width(), img->get_height(), false, Image::FORMAT_RGBA8, pixels);
+	}
+	const int64_t canvas_pixels = int64_t(img->get_width()) * int64_t(img->get_height());
+	ERR_FAIL_COND_V_MSG(canvas_pixels > gif_get_max_canvas_pixels(), Ref<Image>(), "Captured frame exceeds blazium/gif/max_canvas_pixels.");
 	return img;
 }
 
 void GIFRecorder::_process_frame() {
-	if (!recording) {
+	if (!recording || paused) {
 		return;
 	}
 	const double dt = Engine::get_singleton() ? Engine::get_singleton()->get_process_step() : frame_interval;
@@ -129,6 +144,7 @@ Error GIFRecorder::start_viewport(Viewport *p_viewport) {
 
 Error GIFRecorder::start_window() {
 	source = SOURCE_WINDOW;
+	window_id = DisplayServer::MAIN_WINDOW_ID;
 	return _start_common();
 }
 
@@ -139,12 +155,16 @@ Error GIFRecorder::start_screen(int p_screen) {
 }
 
 Error GIFRecorder::add_frame(const Ref<Image> &p_image) {
+	if (paused) {
+		return OK;
+	}
 	Ref<Image> img = _prepare_image(p_image);
 	ERR_FAIL_COND_V(img.is_null(), ERR_INVALID_PARAMETER);
 	if (texture.is_null()) {
 		texture.instantiate();
 		texture->set_netscape_loop_count(loop_count);
 		texture->set_dither(dither);
+		texture->set_encode_optimize(false);
 		texture->set_play(false);
 	}
 	const int cap = max_frames > 0 ? max_frames : gif_get_max_frames();
@@ -233,6 +253,14 @@ bool GIFRecorder::get_dither() const {
 	return dither;
 }
 
+void GIFRecorder::set_paused(bool p_paused) {
+	paused = p_paused;
+}
+
+bool GIFRecorder::is_paused() const {
+	return paused;
+}
+
 bool GIFRecorder::is_recording() const {
 	return recording;
 }
@@ -248,6 +276,8 @@ void GIFRecorder::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_max_frames"), &GIFRecorder::get_max_frames);
 	ClassDB::bind_method(D_METHOD("set_dither", "dither"), &GIFRecorder::set_dither);
 	ClassDB::bind_method(D_METHOD("get_dither"), &GIFRecorder::get_dither);
+	ClassDB::bind_method(D_METHOD("set_paused", "paused"), &GIFRecorder::set_paused);
+	ClassDB::bind_method(D_METHOD("is_paused"), &GIFRecorder::is_paused);
 	ClassDB::bind_method(D_METHOD("is_recording"), &GIFRecorder::is_recording);
 	ClassDB::bind_method(D_METHOD("start_viewport", "viewport"), &GIFRecorder::start_viewport);
 	ClassDB::bind_method(D_METHOD("start_window"), &GIFRecorder::start_window);
@@ -262,6 +292,7 @@ void GIFRecorder::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "loop_count"), "set_loop_count", "get_loop_count");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_frames"), "set_max_frames", "get_max_frames");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "dither"), "set_dither", "get_dither");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "paused"), "set_paused", "is_paused");
 
 	ADD_SIGNAL(MethodInfo("recording_finished", PropertyInfo(Variant::OBJECT, "animation", PROPERTY_HINT_RESOURCE_TYPE, "GIFTexture"), PropertyInfo(Variant::STRING, "path")));
 
