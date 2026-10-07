@@ -101,6 +101,18 @@ Dictionary JustAMCPPromptBlaziumGDScriptLinter::get_messages(const Dictionary &p
 	text += String("BAD:  var GRAVITY = 980\n");
 	text += String("GOOD: const GRAVITY: float = 980.0\n\n");
 
+	text += String("## Godot 3 names\n");
+	text += String("Refuse these and write the Blazium 4.8 form:\n");
+	text += String("- yield(...) -> await\n");
+	text += String("- export var / onready var -> @export var / @onready var\n");
+	text += String("- PackedScene.instance() -> instantiate()\n");
+	text += String("- KinematicBody2D / KinematicBody -> CharacterBody2D / CharacterBody3D\n");
+	text += String("- Spatial -> Node3D\n");
+	text += String("- Sprite -> Sprite2D or Sprite3D\n");
+	text += String("- File.new() / Directory.new() -> FileAccess / DirAccess\n");
+	text += String("- PoolByteArray and the other Pool*Array types -> PackedByteArray and the other Packed*Array types\n");
+	text += String("- connect(\"signal_name\", self, \"_method\") -> signal_name.connect(_method)\n\n");
+
 	text += String("## Writes\n");
 	text += String("`blazium_create_script`, `blazium_edit_script`, and `blazium_patch_script` refuse a .gd file when it does not compile. `validate` defaults to true. Pass `validate` false only when you intentionally keep a broken intermediate. .cs files are written as given. Call `blazium_validate_script` before you attach the result.\n\n");
 

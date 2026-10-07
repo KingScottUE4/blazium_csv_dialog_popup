@@ -44,3 +44,5 @@ bool justamcp_try_play_clock_command(const String &p_command, const Dictionary &
 bool justamcp_gdscript_source_compiles(const String &p_source, String &r_error);
 bool justamcp_script_write_requires_validate(const String &p_path, const Dictionary &p_params);
 Dictionary justamcp_guard_gdscript_write(const String &p_path, const String &p_content, const Dictionary &p_params);
+Dictionary justamcp_guard_scene_text(const String &p_path, const String &p_previous, const String &p_next);
+int justamcp_export_smoke_timeout_ms(const Dictionary &p_args);

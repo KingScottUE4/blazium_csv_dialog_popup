@@ -43,6 +43,7 @@ private:
 
 	Dictionary _list_export_presets(const Dictionary &p_params);
 	Dictionary _export_project(const Dictionary &p_params);
+	Dictionary _export_smoke(const Dictionary &p_params);
 	Dictionary _get_export_info(const Dictionary &p_params);
 	Dictionary _list_android_devices(const Dictionary &p_params);
 	Dictionary _get_android_preset_info(const Dictionary &p_params);

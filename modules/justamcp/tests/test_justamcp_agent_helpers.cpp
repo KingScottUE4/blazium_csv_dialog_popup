@@ -31,10 +31,12 @@
 
 #include "test_justamcp_agent_helpers.h"
 
+#include "../justamcp_editor_filesystem.h"
 #include "../justamcp_mcp_tool_macros.h"
 #include "../justamcp_play_clock.h"
 #include "../tools/justamcp_agent_helpers.h"
 #include "../tools/justamcp_category_dispatch.h"
+#include "../tools/justamcp_prompt_executor.h"
 #include "../tools/justamcp_settings_resolver.h"
 #include "../tools/justamcp_tool_executor.h"
 #include "../tools/justamcp_tool_schema_cache.h"
@@ -259,6 +261,7 @@ void test_justamcp_agent_gap_schemas() {
 	CHECK(_schema_has(schemas, "blazium_spatial_snap_to_surface"));
 	CHECK(_schema_has(schemas, "blazium_spatial_repeat_along"));
 	CHECK(_schema_has(schemas, "blazium_export_patch_pck"));
+	CHECK(_schema_has(schemas, "blazium_export_smoke"));
 	CHECK(_schema_has(schemas, "blazium_asset_lib_search"));
 	CHECK(_schema_has(schemas, "blazium_asset_lib_info"));
 	CHECK(_schema_has(schemas, "blazium_asset_lib_install"));
@@ -586,6 +589,45 @@ void test_justamcp_play_clock_and_script_guard() {
 	Dictionary step = executor.execute_tool("runtime_step", Dictionary());
 	CHECK(step.has("ok"));
 	CHECK(!bool(step.get("ok", true)));
+
+	Dictionary godot3 = justamcp_guard_gdscript_write("res://player.gd", "extends Node\nfunc _ready():\n\tyield(get_tree(), \"idle_frame\")\n", Dictionary());
+	CHECK(String(godot3.get("error", "")).findn("await") != -1);
+	Dictionary godot3_body = justamcp_guard_gdscript_write("res://player.gd", "extends KinematicBody2D\nfunc _ready():\n\tpass\n", Dictionary());
+	CHECK(String(godot3_body.get("error", "")).findn("CharacterBody2D") != -1);
+	Dictionary allow_old;
+	allow_old["validate"] = false;
+	CHECK(justamcp_guard_gdscript_write("res://player.gd", "extends KinematicBody2D\n", allow_old).is_empty());
+
+	const String scene = "[gd_scene load_steps=2 format=3 uid=\"uid://abc\"]\n[ext_resource type=\"Script\" path=\"res://a.gd\" id=\"1_a\"]\n";
+	Dictionary invented = justamcp_guard_scene_text("res://a.tscn", "", scene);
+	CHECK(invented.has("ok"));
+	CHECK(!bool(invented.get("ok", true)));
+	const String with_prop = scene + "position = Vector2(0, 0)\n";
+	CHECK(justamcp_guard_scene_text("res://a.tscn", with_prop, with_prop.replace("Vector2(0, 0)", "Vector2(1, 0)")).is_empty());
+	CHECK(justamcp_guard_scene_text("res://a.tscn", with_prop, with_prop + "[connection signal=\"pressed\" from=\".\" to=\".\" method=\"_on_pressed\"]\n").is_empty());
+	Dictionary uid_changed = justamcp_guard_scene_text("res://a.tscn", with_prop, with_prop.replace("uid://abc", "uid://def"));
+	CHECK(!bool(uid_changed.get("ok", true)));
+	CHECK(String(uid_changed.get("error", "")).findn("uid://") != -1);
+
+	CHECK(JustAMCPEditorFilesystem::class_index_status("res://player.gd", "class_name JustAMCPGapClassZZZ\n") == "pending");
+
+	Dictionary short_timeout;
+	short_timeout["timeout_ms"] = 10;
+	CHECK(justamcp_export_smoke_timeout_ms(short_timeout) == 1000);
+	Dictionary long_timeout;
+	long_timeout["timeout_ms"] = 999999;
+	CHECK(justamcp_export_smoke_timeout_ms(long_timeout) == 30000);
+	CHECK(justamcp_export_smoke_timeout_ms(Dictionary()) == 8000);
+
+	JustAMCPPromptExecutor prompts;
+	Dictionary migration = prompts.get_prompt("blazium_version_migration", Dictionary());
+	CHECK(bool(migration.get("ok", false)));
+	CHECK(String(migration.get("messages", Array())).findn("blazium-version-migration") != -1);
+	Dictionary proof_args;
+	proof_args["change"] = "move the crate";
+	proof_args["asset_path"] = "res://models/crate.glb";
+	Dictionary proof = prompts.get_prompt("blazium_visual_proof", proof_args);
+	CHECK(String(proof.get("messages", Array())).findn("res://models/crate.glb") != -1);
 }
 
 #endif
