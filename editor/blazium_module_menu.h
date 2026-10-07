@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_gif.h                                                            */
+/*  blazium_module_menu.h                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -29,65 +29,51 @@
 
 #pragma once
 
-#include "tests/test_macros.h"
+#include "core/object/object.h"
+#include "core/string/ustring.h"
+#include "core/templates/hash_map.h"
+#include "core/templates/vector.h"
+#include "core/variant/callable.h"
 
-void test_gif_decode_basic();
-void test_gif_encode_roundtrip();
-void test_gif_disposal_compose();
-void test_gif_interlaced_decode();
-void test_gif_corrupt_buffer();
-void test_gif_image_hooks();
-void test_gif_sprite_frames_convert();
-void test_gif_decode_caps();
-void test_gif_active_texture_without_rebake();
-void test_gif_recorder_add_frame();
-void test_gif_recorder_pause_keeps_frames();
-void test_gif_recorder_transparent_frame_roundtrip();
+class Control;
+class PopupMenu;
+class Window;
 
-TEST_CASE("[Modules][GIF] decode frames delay transparency loop") {
-	test_gif_decode_basic();
-}
+// Owns the main-menu Blazium entry. Modules register windows and actions here
+// instead of parenting controls into docks, toolbars, or other core editor UI.
+class BlaziumModuleMenu : public Object {
+	struct MenuEntry {
+		int id = 0;
+		String module;
+		String title;
+		Control *control = nullptr;
+		Callable action;
+		bool is_window = false;
+	};
 
-TEST_CASE("[Modules][GIF] encode still and animated roundtrip") {
-	test_gif_encode_roundtrip();
-}
+	static BlaziumModuleMenu *singleton;
 
-TEST_CASE("[Modules][GIF] disposal compose restore background and previous") {
-	test_gif_disposal_compose();
-}
+	PopupMenu *root_menu = nullptr;
+	HashMap<String, PopupMenu *> module_menus;
+	HashMap<Control *, Window *> windows;
+	Vector<MenuEntry> entries;
+	int next_id = 1;
+	int window_cascade = 0;
 
-TEST_CASE("[Modules][GIF] interlaced decode") {
-	test_gif_interlaced_decode();
-}
+	PopupMenu *_get_module_menu(const String &p_module);
+	void _on_id_pressed(int p_id);
+	void _open_window(Control *p_control, const String &p_title);
+	void _release_entry(int p_index);
 
-TEST_CASE("[Modules][GIF] corrupt buffer returns error") {
-	test_gif_corrupt_buffer();
-}
+public:
+	static BlaziumModuleMenu *get_singleton() { return singleton; }
 
-TEST_CASE("[Modules][GIF] Image load and save hooks") {
-	test_gif_image_hooks();
-}
+	BlaziumModuleMenu();
+	~BlaziumModuleMenu();
 
-TEST_CASE("[Modules][GIF] SpriteFrames conversion") {
-	test_gif_sprite_frames_convert();
-}
+	PopupMenu *get_menu() const { return root_menu; }
 
-TEST_CASE("[Modules][GIF] decode cap rejection") {
-	test_gif_decode_caps();
-}
-
-TEST_CASE("[Modules][GIF] get_active_texture without explicit rebake") {
-	test_gif_active_texture_without_rebake();
-}
-
-TEST_CASE("[Modules][GIF] GIFRecorder add_frame") {
-	test_gif_recorder_add_frame();
-}
-
-TEST_CASE("[Modules][GIF] GIFRecorder pause keeps captured frames") {
-	test_gif_recorder_pause_keeps_frames();
-}
-
-TEST_CASE("[Modules][GIF] GIFRecorder transparent capture stays visible") {
-	test_gif_recorder_transparent_frame_roundtrip();
-}
+	void add_window(const String &p_module, const String &p_title, Control *p_control);
+	void add_action(const String &p_module, const String &p_title, const Callable &p_callable);
+	void remove_item(const String &p_module, const String &p_title);
+};

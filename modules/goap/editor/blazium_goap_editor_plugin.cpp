@@ -36,7 +36,7 @@ void BlaziumGoapEditorPlugin::_bind_methods() {
 
 BlaziumGoapEditorPlugin::BlaziumGoapEditorPlugin() {
 	bottom_panel = memnew(BlaziumGoapBottomPanel);
-	add_control_to_bottom_panel(bottom_panel, "GOAP");
+	add_blazium_window("GOAP", "GOAP", bottom_panel);
 
 	debugger_plugin.instantiate();
 	debugger_plugin->bind_bottom_panel(bottom_panel);
@@ -48,7 +48,7 @@ BlaziumGoapEditorPlugin::~BlaziumGoapEditorPlugin() {
 		remove_debugger_plugin(debugger_plugin);
 	}
 	if (bottom_panel) {
-		remove_control_from_bottom_panel(bottom_panel);
+		remove_blazium_item("GOAP", "GOAP");
 		bottom_panel->queue_free();
 		bottom_panel = nullptr;
 	}

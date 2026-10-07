@@ -34,15 +34,14 @@
 #include "../asset_tag_coordinator.h"
 #include "../asset_tag_manager.h"
 #include "../asset_tag_registry.h"
-#include "asset_tags_context_menu_plugin.h"
+#include "asset_tags_dialog.h"
 #include "core/object/class_db.h"
-#include "editor/plugins/editor_context_menu_plugin.h"
-#include "editor/project_settings_editor.h"
+#include "editor/editor_node.h"
+#include "editor/filesystem_dock.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
-#include "scene/gui/tab_container.h"
 #include "scene/gui/tree.h"
 
 void AssetTagsEditorPlugin::_bind_methods() {}
@@ -220,11 +219,21 @@ void AssetTagsEditorPlugin::_on_index_reloaded() {
 	_refresh_tag_tree();
 }
 
-void AssetTagsEditorPlugin::_on_project_settings_visibility_changed() {
-	ProjectSettingsEditor *pse = ProjectSettingsEditor::get_singleton();
-	if (pse && pse->is_visible()) {
-		_refresh_tag_tree();
+void AssetTagsEditorPlugin::_on_edit_selected_files_pressed() {
+	FileSystemDock *dock = FileSystemDock::get_singleton();
+	if (!dock) {
+		return;
 	}
+	Vector<String> paths = dock->get_selected_paths();
+	if (paths.is_empty()) {
+		EditorNode::get_singleton()->show_accept(TTR("Select files in the FileSystem dock, then edit their tags."), TTR("OK"));
+		return;
+	}
+	if (!tags_dialog) {
+		tags_dialog = memnew(AssetTagsEditorDialog);
+		add_child(tags_dialog);
+	}
+	tags_dialog->edit(paths);
 }
 
 void AssetTagsEditorPlugin::_build_tab() {
@@ -297,20 +306,12 @@ void AssetTagsEditorPlugin::_build_tab() {
 	action_row->add_child(undo_button);
 	tab->add_child(action_row);
 
-	add_control_to_container(CONTAINER_PROJECT_SETTING_TAB_RIGHT, tags_tab);
+	Button *edit_files_button = memnew(Button);
+	edit_files_button->set_text(TTR("Edit Tags for Selected Files"));
+	edit_files_button->connect(SceneStringName(pressed), callable_mp(this, &AssetTagsEditorPlugin::_on_edit_selected_files_pressed));
+	tab->add_child(edit_files_button);
 
-	// Place immediately after General so the dictionary is not buried behind tab-bar scroll.
-	if (ProjectSettingsEditor *pse = ProjectSettingsEditor::get_singleton()) {
-		if (TabContainer *tabs = pse->get_tabs()) {
-			if (tags_tab->get_parent() == tabs && tabs->get_child_count() > 1) {
-				tabs->move_child(tags_tab, 1);
-			}
-		}
-		const Callable vis_cb = callable_mp(this, &AssetTagsEditorPlugin::_on_project_settings_visibility_changed);
-		if (!pse->is_connected(SceneStringName(visibility_changed), vis_cb)) {
-			pse->connect(SceneStringName(visibility_changed), vis_cb);
-		}
-	}
+	add_blazium_window("Asset Tags", "Tag Dictionary", tags_tab);
 
 	if (AssetTagManager *manager = AssetTagManager::get_singleton()) {
 		manager->connect("tag_dictionary_changed", callable_mp(this, &AssetTagsEditorPlugin::_on_tag_dictionary_changed));
@@ -323,12 +324,6 @@ void AssetTagsEditorPlugin::_build_tab() {
 }
 
 void AssetTagsEditorPlugin::_teardown_tab() {
-	if (ProjectSettingsEditor *pse = ProjectSettingsEditor::get_singleton()) {
-		const Callable vis_cb = callable_mp(this, &AssetTagsEditorPlugin::_on_project_settings_visibility_changed);
-		if (pse->is_connected(SceneStringName(visibility_changed), vis_cb)) {
-			pse->disconnect(SceneStringName(visibility_changed), vis_cb);
-		}
-	}
 	if (AssetTagManager *manager = AssetTagManager::get_singleton()) {
 		const Callable cb = callable_mp(this, &AssetTagsEditorPlugin::_on_tag_dictionary_changed);
 		if (manager->is_connected("tag_dictionary_changed", cb)) {
@@ -342,7 +337,7 @@ void AssetTagsEditorPlugin::_teardown_tab() {
 		}
 	}
 	if (tags_tab) {
-		remove_control_from_container(CONTAINER_PROJECT_SETTING_TAB_RIGHT, tags_tab);
+		remove_blazium_item("Asset Tags", "Tag Dictionary");
 		tags_tab->queue_free();
 		tags_tab = nullptr;
 		tag_tree = nullptr;
@@ -356,16 +351,8 @@ void AssetTagsEditorPlugin::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
 			_build_tab();
-			if (fs_context_plugin.is_null()) {
-				fs_context_plugin.instantiate();
-				add_context_menu_plugin(EditorContextMenuPlugin::CONTEXT_SLOT_FILESYSTEM, fs_context_plugin);
-			}
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
-			if (fs_context_plugin.is_valid()) {
-				remove_context_menu_plugin(fs_context_plugin);
-				fs_context_plugin.unref();
-			}
 			_teardown_tab();
 		} break;
 	}

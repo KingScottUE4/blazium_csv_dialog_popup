@@ -3003,6 +3003,29 @@ HWND DisplayServerWindows::_find_window_from_process_id(OS::ProcessID p_pid, HWN
 	return NULL;
 }
 
+Rect2i DisplayServerWindows::window_get_process_rect(OS::ProcessID p_pid) const {
+	_THREAD_SAFE_METHOD_
+
+	if (p_pid == 0 || !windows.has(MAIN_WINDOW_ID)) {
+		return Rect2i();
+	}
+	HWND parent = windows[MAIN_WINDOW_ID].hWnd;
+	HWND hwnd = const_cast<DisplayServerWindows *>(this)->_find_window_from_process_id(p_pid, parent);
+	if (!hwnd) {
+		return Rect2i();
+	}
+	RECT r;
+	if (!GetWindowRect(hwnd, &r)) {
+		return Rect2i();
+	}
+	const Point2i pos = Point2i(r.left, r.top) - _get_screens_origin();
+	const Size2i size = Size2i(r.right - r.left, r.bottom - r.top);
+	if (size.x <= 0 || size.y <= 0) {
+		return Rect2i();
+	}
+	return Rect2i(pos, size);
+}
+
 Error DisplayServerWindows::embed_process(WindowID p_window, OS::ProcessID p_pid, const Rect2i &p_rect, bool p_visible, bool p_grab_focus) {
 	_THREAD_SAFE_METHOD_
 

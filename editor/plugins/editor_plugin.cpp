@@ -31,6 +31,7 @@
 #include "editor_plugin.h"
 #include "editor_plugin.compat.inc"
 
+#include "editor/blazium_module_menu.h"
 #include "editor/debugger/editor_debugger_node.h"
 #include "editor/editor_dock_manager.h"
 #include "editor/editor_file_system.h"
@@ -206,6 +207,22 @@ void EditorPlugin::remove_control_from_container(CustomControlContainer p_locati
 
 void EditorPlugin::add_tool_menu_item(const String &p_name, const Callable &p_callable) {
 	EditorNode::get_singleton()->add_tool_menu_item(p_name, p_callable);
+}
+
+void EditorPlugin::add_blazium_window(const String &p_module, const String &p_title, Control *p_control) {
+	ERR_FAIL_NULL(BlaziumModuleMenu::get_singleton());
+	BlaziumModuleMenu::get_singleton()->add_window(p_module, p_title, p_control);
+}
+
+void EditorPlugin::add_blazium_action(const String &p_module, const String &p_title, const Callable &p_callable) {
+	ERR_FAIL_NULL(BlaziumModuleMenu::get_singleton());
+	BlaziumModuleMenu::get_singleton()->add_action(p_module, p_title, p_callable);
+}
+
+void EditorPlugin::remove_blazium_item(const String &p_module, const String &p_title) {
+	if (BlaziumModuleMenu::get_singleton()) {
+		BlaziumModuleMenu::get_singleton()->remove_item(p_module, p_title);
+	}
 }
 
 void EditorPlugin::add_tool_submenu_item(const String &p_name, PopupMenu *p_submenu) {
@@ -596,6 +613,9 @@ void EditorPlugin::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("remove_control_from_container", "container", "control"), &EditorPlugin::remove_control_from_container);
 	ClassDB::bind_method(D_METHOD("set_dock_tab_icon", "control", "icon"), &EditorPlugin::set_dock_tab_icon);
 	ClassDB::bind_method(D_METHOD("add_tool_menu_item", "name", "callable"), &EditorPlugin::add_tool_menu_item);
+	ClassDB::bind_method(D_METHOD("add_blazium_window", "module", "title", "control"), &EditorPlugin::add_blazium_window);
+	ClassDB::bind_method(D_METHOD("add_blazium_action", "module", "title", "callable"), &EditorPlugin::add_blazium_action);
+	ClassDB::bind_method(D_METHOD("remove_blazium_item", "module", "title"), &EditorPlugin::remove_blazium_item);
 	ClassDB::bind_method(D_METHOD("add_tool_submenu_item", "name", "submenu"), &EditorPlugin::add_tool_submenu_item);
 	ClassDB::bind_method(D_METHOD("remove_tool_menu_item", "name"), &EditorPlugin::remove_tool_menu_item);
 	ClassDB::bind_method(D_METHOD("get_export_as_menu"), &EditorPlugin::get_export_as_menu);

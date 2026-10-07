@@ -66,6 +66,7 @@ private:
 	BakeStorage bake_storage = BAKE_GENERATE_ON_LOAD;
 	bool bake_compress = false;
 	bool dither = true;
+	bool encode_optimize = true;
 
 	Vector<Ref<Image>> source_frames;
 	Vector<Ref<Image>> baked_frames;
@@ -176,6 +177,8 @@ public:
 	bool get_bake_compress() const;
 	void set_dither(bool p_dither);
 	bool get_dither() const;
+	void set_encode_optimize(bool p_optimize);
+	bool get_encode_optimize() const;
 
 	virtual int get_width() const override;
 	virtual int get_height() const override;

@@ -38,6 +38,7 @@
 #include "editor/editor_data.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_interface.h"
+#include "editor/editor_main_screen.h"
 #include "editor/editor_node.h"
 #include "editor/gui/editor_file_dialog.h"
 #include "editor/gui/editor_run_bar.h"
@@ -49,10 +50,12 @@
 #include "scene/gui/check_button.h"
 #include "scene/gui/control.h"
 #include "scene/gui/label.h"
+#include "scene/gui/line_edit.h"
 #include "scene/gui/slider.h"
 #include "scene/gui/texture_rect.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/viewport.h"
+#include "scene/main/window.h"
 #include "scene/resources/animation.h"
 #include "scene/resources/image_texture.h"
 #include "servers/display_server.h"
@@ -294,80 +297,201 @@ Viewport *GIFEditorPlugin::_get_active_editor_viewport() const {
 	if (!ei) {
 		return nullptr;
 	}
-	Viewport *vp2d = ei->get_editor_viewport_2d();
-	Viewport *vp3d = ei->get_editor_viewport_3d(0);
-	if (vp2d && vp2d->is_inside_tree()) {
-		return vp2d;
+	EditorMainScreen *screen = EditorNode::get_editor_main_screen();
+	const int selected = screen ? screen->get_selected_index() : -1;
+	if (selected == EditorMainScreen::EDITOR_3D) {
+		return ei->get_editor_viewport_3d(0);
 	}
-	if (vp3d) {
-		return vp3d;
+	if (selected == EditorMainScreen::EDITOR_2D) {
+		return ei->get_editor_viewport_2d();
 	}
-	return vp2d;
+	return nullptr;
+}
+
+void GIFEditorPlugin::_set_status(const String &p_text) {
+	if (status_label) {
+		status_label->set_text(p_text);
+	}
+}
+
+bool GIFEditorPlugin::_capture_active() const {
+	return capturing_game || capturing_running || (recorder.is_valid() && recorder->is_recording());
+}
+
+void GIFEditorPlugin::_refresh_record_controls() {
+	const bool active = _capture_active();
+	if (viewport_button) {
+		viewport_button->set_disabled(active);
+	}
+	if (game_button) {
+		game_button->set_disabled(active);
+	}
+	if (window_button) {
+		window_button->set_disabled(active);
+	}
+	if (running_button) {
+		running_button->set_disabled(active);
+	}
+	if (pause_button) {
+		pause_button->set_disabled(!active);
+		const bool paused = recorder.is_valid() && recorder->is_paused();
+		pause_button->set_text(paused ? TTR("Resume") : TTR("Pause"));
+	}
+	if (stop_button) {
+		stop_button->set_disabled(!active);
+	}
+}
+
+void GIFEditorPlugin::_save_texture(const Ref<GIFTexture> &p_texture) {
+	if (p_texture.is_null()) {
+		_set_status(TTR("Recording produced no frames."));
+		return;
+	}
+	const String path = save_path_edit ? save_path_edit->get_text().strip_edges() : String();
+	if (path.is_empty()) {
+		if (!save_dialog) {
+			_set_status(TTR("Choose a save location."));
+			return;
+		}
+		choosing_save_path = false;
+		save_dialog->set_meta("gif_texture", p_texture);
+		save_dialog->set_current_file("capture.gif");
+		save_dialog->popup_file_dialog();
+		_set_status(TTR("Choose a save location."));
+		return;
+	}
+	const Error err = p_texture->save_to_path(path);
+	if (err == OK) {
+		_set_status(vformat(TTR("Saved GIF: %s"), path));
+	} else {
+		_set_status(TTR("Failed to save GIF."));
+	}
+}
+
+void GIFEditorPlugin::_stop_screen_capture() {
+	capturing_game = false;
+	capturing_running = false;
+	SceneTree *tree = Object::cast_to<SceneTree>(OS::get_singleton() ? OS::get_singleton()->get_main_loop() : nullptr);
+	if (tree && tree->is_connected(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_screen_capture))) {
+		tree->disconnect(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_screen_capture));
+	}
+}
+
+void GIFEditorPlugin::_on_pause_pressed() {
+	if (!_capture_active() || recorder.is_null()) {
+		return;
+	}
+	const bool paused = !recorder->is_paused();
+	recorder->set_paused(paused);
+	if (paused) {
+		_set_status(vformat(TTR("Paused (%s)."), active_source));
+	} else {
+		_set_status(vformat(TTR("Recording %s."), active_source));
+	}
+	_refresh_record_controls();
+}
+
+void GIFEditorPlugin::_on_stop_pressed() {
+	if (!_capture_active()) {
+		return;
+	}
+	Ref<GIFTexture> tex;
+	if (capturing_game || capturing_running) {
+		_stop_screen_capture();
+	}
+	if (recorder.is_valid()) {
+		recorder->set_paused(false);
+		tex = recorder->stop();
+	}
+	active_source = String();
+	_refresh_record_controls();
+	pending_save_kind = "record";
+	_save_texture(tex);
+}
+
+void GIFEditorPlugin::_on_browse_save_path() {
+	if (!save_dialog) {
+		return;
+	}
+	choosing_save_path = true;
+	const String current = save_path_edit ? save_path_edit->get_text().strip_edges() : String();
+	if (!current.is_empty()) {
+		save_dialog->set_current_path(current);
+	}
+	save_dialog->popup_file_dialog();
 }
 
 void GIFEditorPlugin::_toggle_recording(GIFRecorder::Source p_source, Viewport *p_viewport) {
-	if (recorder.is_valid() && recorder->is_recording()) {
-		Ref<GIFTexture> tex = recorder->stop();
-		pending_save_kind = "record";
-		if (!save_dialog) {
-			return;
-		}
-		save_dialog->set_meta("gif_texture", tex);
-		save_dialog->popup_file_dialog();
+	if (_capture_active()) {
 		return;
 	}
 	recorder.instantiate();
 	Error err = OK;
 	if (p_source == GIFRecorder::SOURCE_WINDOW) {
+		active_source = TTR("editor window");
 		err = recorder->start_window();
 	} else if (p_viewport) {
+		active_source = TTR("2D/3D viewport");
 		err = recorder->start_viewport(p_viewport);
 	} else {
 		err = ERR_UNCONFIGURED;
 	}
 	if (err != OK) {
 		recorder.unref();
-		ERR_FAIL_MSG("Could not start GIF recording.");
+		active_source = String();
+		_set_status(TTR("Could not start GIF recording."));
+		_refresh_record_controls();
+		return;
 	}
-	print_line("GIF recording started. Choose the same menu item again to stop and save.");
+	_set_status(vformat(TTR("Recording %s."), active_source));
+	_refresh_record_controls();
 }
 
 void GIFEditorPlugin::_record_editor_viewport() {
+	if (_capture_active()) {
+		return;
+	}
 	Viewport *vp = _get_active_editor_viewport();
-	ERR_FAIL_NULL_MSG(vp, "No editor viewport is available to record.");
+	if (!vp) {
+		_set_status(TTR("Open the 2D or 3D editor to record that viewport."));
+		return;
+	}
 	_toggle_recording(GIFRecorder::SOURCE_VIEWPORT, vp);
 }
 
-void GIFEditorPlugin::_process_game_capture() {
-	if (!capturing_game || recorder.is_null()) {
+void GIFEditorPlugin::_process_screen_capture() {
+	if (recorder.is_null() || recorder->is_paused() || !DisplayServer::get_singleton()) {
 		return;
 	}
-	Control *gv = Object::cast_to<Control>(ObjectDB::get_instance(game_view_id));
-	if (!gv) {
-		return;
+	Ref<Image> shot;
+	if (capturing_game) {
+		Control *gv = Object::cast_to<Control>(ObjectDB::get_instance(game_view_id));
+		if (!gv) {
+			return;
+		}
+		const Rect2 rect = gv->get_global_rect();
+		Window *host = gv->get_window();
+		const DisplayServer::WindowID window_id = host ? host->get_window_id() : DisplayServer::MAIN_WINDOW_ID;
+		const Vector2i win = DisplayServer::get_singleton()->window_get_position(window_id);
+		shot = DisplayServer::get_singleton()->screen_get_image_rect(Rect2i(win + Vector2i(rect.position), Vector2i(rect.size)));
+	} else if (capturing_running) {
+		if (!EditorRunBar::get_singleton()) {
+			return;
+		}
+		const Rect2i rect = DisplayServer::get_singleton()->window_get_process_rect(EditorRunBar::get_singleton()->get_current_process());
+		if (rect.size.x <= 0 || rect.size.y <= 0) {
+			return;
+		}
+		shot = DisplayServer::get_singleton()->screen_get_image_rect(rect);
 	}
-	const Rect2 rect = gv->get_global_rect();
-	const Vector2i win = DisplayServer::get_singleton()->window_get_position();
-	Ref<Image> shot = DisplayServer::get_singleton()->screen_get_image_rect(Rect2i(win + Vector2i(rect.position), Vector2i(rect.size)));
 	if (shot.is_valid()) {
 		recorder->add_frame(shot);
 	}
 }
 
-void GIFEditorPlugin::_record_game_viewport() {
-	if (capturing_game && recorder.is_valid()) {
-		capturing_game = false;
-		SceneTree *tree = Object::cast_to<SceneTree>(OS::get_singleton()->get_main_loop());
-		if (tree && tree->is_connected(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_game_capture))) {
-			tree->disconnect(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_game_capture));
-		}
-		Ref<GIFTexture> tex = recorder->stop();
-		save_dialog->set_meta("gif_texture", tex);
-		save_dialog->popup_file_dialog();
+void GIFEditorPlugin::_record_editor_game_window() {
+	if (_capture_active()) {
 		return;
-	}
-	if (!EditorRunBar::get_singleton() || !EditorRunBar::get_singleton()->is_playing()) {
-		ERR_FAIL_MSG("Start the project before recording the game viewport.");
 	}
 	GameView *gv = nullptr;
 	if (EditorNode::get_singleton() && EditorNode::get_singleton()->get_gui_base()) {
@@ -376,19 +500,54 @@ void GIFEditorPlugin::_record_game_viewport() {
 			gv = Object::cast_to<GameView>(nodes[0]);
 		}
 	}
-	ERR_FAIL_NULL_MSG(gv, "Game View is not available.");
+	if (!gv || !gv->is_inside_tree()) {
+		_set_status(TTR("Editor Game Window is not available."));
+		return;
+	}
 	recorder.instantiate();
+	recorder->set_paused(false);
 	game_view_id = gv->get_instance_id();
 	capturing_game = true;
+	active_source = TTR("editor Game window");
 	SceneTree *tree = Object::cast_to<SceneTree>(OS::get_singleton()->get_main_loop());
-	if (tree && !tree->is_connected(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_game_capture))) {
-		tree->connect(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_game_capture));
+	if (tree && !tree->is_connected(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_screen_capture))) {
+		tree->connect(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_screen_capture));
 	}
-	print_line("GIF game viewport recording started. Choose the same menu item again to stop and save.");
+	_set_status(vformat(TTR("Recording %s."), active_source));
+	_refresh_record_controls();
 }
 
-void GIFEditorPlugin::_record_full_window() {
+void GIFEditorPlugin::_record_editor_window() {
 	_toggle_recording(GIFRecorder::SOURCE_WINDOW, nullptr);
+}
+
+void GIFEditorPlugin::_record_running_game() {
+	if (_capture_active()) {
+		return;
+	}
+	if (!EditorRunBar::get_singleton() || !EditorRunBar::get_singleton()->is_playing()) {
+		_set_status(TTR("Start the project before recording the running game."));
+		return;
+	}
+	if (!DisplayServer::get_singleton()) {
+		_set_status(TTR("Running game window was not found."));
+		return;
+	}
+	const Rect2i rect = DisplayServer::get_singleton()->window_get_process_rect(EditorRunBar::get_singleton()->get_current_process());
+	if (rect.size.x <= 0 || rect.size.y <= 0) {
+		_set_status(TTR("Running game window was not found."));
+		return;
+	}
+	recorder.instantiate();
+	recorder->set_paused(false);
+	capturing_running = true;
+	active_source = TTR("running game");
+	SceneTree *tree = Object::cast_to<SceneTree>(OS::get_singleton()->get_main_loop());
+	if (tree && !tree->is_connected(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_screen_capture))) {
+		tree->connect(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_screen_capture));
+	}
+	_set_status(vformat(TTR("Recording %s."), active_source));
+	_refresh_record_controls();
 }
 
 void GIFEditorPlugin::_export_animation_player() {
@@ -401,13 +560,22 @@ void GIFEditorPlugin::_export_animation_player() {
 			break;
 		}
 	}
-	ERR_FAIL_NULL_MSG(ap, "Select an AnimationPlayer to export as GIF.");
+	if (!ap) {
+		_set_status(TTR("Select an AnimationPlayer to export as GIF."));
+		return;
+	}
 	const StringName current = ap->get_assigned_animation();
-	ERR_FAIL_COND_MSG(String(current).is_empty(), "AnimationPlayer has no current animation.");
+	if (String(current).is_empty()) {
+		_set_status(TTR("AnimationPlayer has no current animation."));
+		return;
+	}
 	Ref<Animation> anim = ap->get_animation(current);
 	ERR_FAIL_COND(anim.is_null());
 	Viewport *vp = _get_active_editor_viewport();
-	ERR_FAIL_NULL(vp);
+	if (!vp) {
+		_set_status(TTR("No editor viewport is available to record."));
+		return;
+	}
 	const double length = anim->get_length();
 	const double step = MAX(1.0 / 12.0, anim->get_step() > 0.0 ? anim->get_step() : 1.0 / 12.0);
 	Ref<GIFRecorder> rec;
@@ -424,15 +592,29 @@ void GIFEditorPlugin::_export_animation_player() {
 		result.instantiate();
 	}
 	pending_save_kind = "anim";
-	save_dialog->set_meta("gif_texture", result);
-	save_dialog->popup_file_dialog();
+	_save_texture(result);
 }
 
 void GIFEditorPlugin::_save_dialog_file_selected(const String &p_path) {
+	if (choosing_save_path) {
+		choosing_save_path = false;
+		if (save_path_edit) {
+			save_path_edit->set_text(p_path);
+		}
+		_set_status(vformat(TTR("Save location: %s"), p_path));
+		return;
+	}
 	Ref<GIFTexture> tex = save_dialog->get_meta("gif_texture");
 	if (tex.is_valid()) {
-		tex->save_to_path(p_path);
-		print_line(vformat("Saved GIF: %s", p_path));
+		const Error err = tex->save_to_path(p_path);
+		if (save_path_edit) {
+			save_path_edit->set_text(p_path);
+		}
+		if (err == OK) {
+			_set_status(vformat(TTR("Saved GIF: %s"), p_path));
+		} else {
+			_set_status(TTR("Failed to save GIF."));
+		}
 	}
 }
 
@@ -442,10 +624,62 @@ GIFEditorPlugin::GIFEditorPlugin() {
 	preview_generator.instantiate();
 	EditorResourcePreview::get_singleton()->add_preview_generator(preview_generator);
 
-	add_tool_menu_item(TTR("Record Editor Viewport GIF"), callable_mp(this, &GIFEditorPlugin::_record_editor_viewport));
-	add_tool_menu_item(TTR("Record Game Viewport GIF"), callable_mp(this, &GIFEditorPlugin::_record_game_viewport));
-	add_tool_menu_item(TTR("Record Full Editor Window GIF"), callable_mp(this, &GIFEditorPlugin::_record_full_window));
-	add_tool_menu_item(TTR("Export AnimationPlayer as GIF"), callable_mp(this, &GIFEditorPlugin::_export_animation_player));
+	record_panel = memnew(VBoxContainer);
+	status_label = memnew(Label);
+	status_label->set_text(TTR("Idle."));
+	status_label->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	record_panel->add_child(status_label);
+
+	HBoxContainer *path_row = memnew(HBoxContainer);
+	save_path_edit = memnew(LineEdit);
+	save_path_edit->set_placeholder(TTR("Save location"));
+	save_path_edit->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	path_row->add_child(save_path_edit);
+	Button *browse_button = memnew(Button);
+	browse_button->set_text(TTR("Browse..."));
+	browse_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_on_browse_save_path));
+	path_row->add_child(browse_button);
+	record_panel->add_child(path_row);
+
+	game_button = memnew(Button);
+	game_button->set_text(TTR("Record Editor Game Window"));
+	game_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_record_editor_game_window));
+	record_panel->add_child(game_button);
+
+	window_button = memnew(Button);
+	window_button->set_text(TTR("Record Editor Window"));
+	window_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_record_editor_window));
+	record_panel->add_child(window_button);
+
+	running_button = memnew(Button);
+	running_button->set_text(TTR("Record Running Game"));
+	running_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_record_running_game));
+	record_panel->add_child(running_button);
+
+	viewport_button = memnew(Button);
+	viewport_button->set_text(TTR("Record 2D/3D Viewport"));
+	viewport_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_record_editor_viewport));
+	record_panel->add_child(viewport_button);
+
+	HBoxContainer *control_row = memnew(HBoxContainer);
+	pause_button = memnew(Button);
+	pause_button->set_text(TTR("Pause"));
+	pause_button->set_disabled(true);
+	pause_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_on_pause_pressed));
+	control_row->add_child(pause_button);
+	stop_button = memnew(Button);
+	stop_button->set_text(TTR("Stop"));
+	stop_button->set_disabled(true);
+	stop_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_on_stop_pressed));
+	control_row->add_child(stop_button);
+	record_panel->add_child(control_row);
+
+	export_button = memnew(Button);
+	export_button->set_text(TTR("Export AnimationPlayer"));
+	export_button->connect(SceneStringName(pressed), callable_mp(this, &GIFEditorPlugin::_export_animation_player));
+	record_panel->add_child(export_button);
+
+	add_blazium_window("GIF", "Record", record_panel);
 
 	save_dialog = memnew(EditorFileDialog);
 	save_dialog->set_file_mode(EditorFileDialog::FILE_MODE_SAVE_FILE);
@@ -456,17 +690,29 @@ GIFEditorPlugin::GIFEditorPlugin() {
 }
 
 GIFEditorPlugin::~GIFEditorPlugin() {
-	remove_tool_menu_item(TTR("Record Editor Viewport GIF"));
-	remove_tool_menu_item(TTR("Record Game Viewport GIF"));
-	remove_tool_menu_item(TTR("Record Full Editor Window GIF"));
-	remove_tool_menu_item(TTR("Export AnimationPlayer as GIF"));
-
-	if (capturing_game) {
-		capturing_game = false;
-		SceneTree *tree = Object::cast_to<SceneTree>(OS::get_singleton() ? OS::get_singleton()->get_main_loop() : nullptr);
-		if (tree && tree->is_connected(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_game_capture))) {
-			tree->disconnect(SNAME("process_frame"), callable_mp(this, &GIFEditorPlugin::_process_game_capture));
-		}
+	const bool screen_was_capturing = capturing_game || capturing_running;
+	if (screen_was_capturing) {
+		_stop_screen_capture();
+	}
+	if (recorder.is_valid() && (recorder->is_recording() || screen_was_capturing)) {
+		recorder->stop();
+	}
+	if (save_dialog && save_dialog->has_meta("gif_texture")) {
+		save_dialog->remove_meta("gif_texture");
+	}
+	if (record_panel) {
+		remove_blazium_item("GIF", "Record");
+		memdelete(record_panel);
+		record_panel = nullptr;
+		status_label = nullptr;
+		save_path_edit = nullptr;
+		viewport_button = nullptr;
+		game_button = nullptr;
+		window_button = nullptr;
+		running_button = nullptr;
+		pause_button = nullptr;
+		stop_button = nullptr;
+		export_button = nullptr;
 	}
 	if (inspector_plugin.is_valid()) {
 		remove_inspector_plugin(inspector_plugin);

@@ -117,6 +117,7 @@ Ref<SteamAuthResult> SteamAuthClient::authenticate_sync(const String &p_url, con
 	}
 
 	PackedByteArray response_bytes;
+	const double body_start_usec = Time::get_singleton()->get_ticks_usec();
 	while (true) {
 		http->poll();
 		HTTPClient::Status status = http->get_status();
@@ -135,6 +136,12 @@ Ref<SteamAuthResult> SteamAuthClient::authenticate_sync(const String &p_url, con
 			http->close();
 			return result;
 		}
+		if ((Time::get_singleton()->get_ticks_usec() - body_start_usec) / 1000000.0 > connect_timeout_sec) {
+			result->set_error_message("Timed out reading auth server response");
+			http->close();
+			return result;
+		}
+		::OS::get_singleton()->delay_usec(1000);
 	}
 
 	int response_code = http->get_response_code();

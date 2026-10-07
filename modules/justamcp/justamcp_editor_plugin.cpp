@@ -290,12 +290,10 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 				}
 			}
 
-			_setup_status_indicator();
-
 			inspector_plugin.instantiate();
 			EditorInspector::add_inspector_plugin(inspector_plugin);
 
-			add_tool_menu_item("JustAMCP Configuration", callable_mp(this, &JustAMCPEditorPlugin::_show_configuration_dialog));
+			add_blazium_action("JustAMCP", "Configuration", callable_mp(this, &JustAMCPEditorPlugin::_show_configuration_dialog));
 
 			if (editor_node) {
 				if (!editor_node->is_connected("scene_changed", callable_mp(this, &JustAMCPEditorPlugin::_invalidate_subscribed_editor_resources))) {
@@ -329,14 +327,17 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 			open_host->set_text("Open host");
 			open_host->connect("pressed", callable_mp(this, &JustAMCPEditorPlugin::_open_apps_host));
 			apps_dock->add_child(open_host);
-			add_control_to_dock(DOCK_SLOT_RIGHT_UL, apps_dock);
+			_setup_status_indicator();
+			apps_dock->move_child(status_label, 0);
+			add_blazium_window("JustAMCP", "Apps", apps_dock);
 			_refresh_apps_dock();
 			call_deferred(SNAME("_auto_connect_bridges"));
 
 		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
-			remove_tool_menu_item("JustAMCP Configuration");
+			remove_blazium_item("JustAMCP", "Configuration");
+			remove_blazium_item("JustAMCP", "Apps");
 
 			if (inspector_plugin.is_valid()) {
 				EditorInspector::remove_inspector_plugin(inspector_plugin);
@@ -360,15 +361,9 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 			}
 
 			if (apps_dock) {
-				remove_control_from_docks(apps_dock);
 				apps_dock->queue_free();
 				apps_dock = nullptr;
 				apps_list = nullptr;
-			}
-
-			if (status_label) {
-				remove_control_from_container(CONTAINER_TOOLBAR, status_label);
-				status_label->queue_free();
 				status_label = nullptr;
 			}
 		} break;
@@ -381,7 +376,7 @@ void JustAMCPEditorPlugin::_setup_status_indicator() {
 	status_label->add_theme_color_override("font_color", Color(0, 1, 0));
 	status_label->add_theme_font_size_override("font_size", 12);
 	status_label->set_visible(mcp_server && mcp_server->is_server_started());
-	add_control_to_container(CONTAINER_TOOLBAR, status_label);
+	apps_dock->add_child(status_label);
 }
 
 void JustAMCPEditorPlugin::_on_server_status_changed(bool p_started) {

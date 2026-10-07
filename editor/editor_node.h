@@ -64,6 +64,7 @@ class Window;
 class AudioStreamImportSettingsDialog;
 class AudioStreamPreviewGenerator;
 class BackgroundProgress;
+class BlaziumModuleMenu;
 class DependencyEditor;
 class DependencyErrorDialog;
 class DockSplitContainer;
@@ -325,6 +326,7 @@ private:
 	PopupMenu *settings_menu = nullptr;
 	PopupMenu *help_menu = nullptr;
 	PopupMenu *tool_menu = nullptr;
+	BlaziumModuleMenu *blazium_module_menu = nullptr;
 	PopupMenu *export_as_menu = nullptr;
 	Button *export_button = nullptr;
 	Button *search_button = nullptr;

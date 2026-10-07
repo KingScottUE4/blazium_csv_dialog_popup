@@ -52,9 +52,11 @@ private:
 	int max_frames = 0;
 	bool dither = true;
 	bool recording = false;
+	bool paused = false;
 
 	Source source = SOURCE_VIEWPORT;
 	ObjectID viewport_id;
+	int window_id = 0;
 	int screen_index = 0;
 	double accum = 0.0;
 	double frame_interval = 1.0 / 12.0;
@@ -82,6 +84,8 @@ public:
 	int get_max_frames() const;
 	void set_dither(bool p_dither);
 	bool get_dither() const;
+	void set_paused(bool p_paused);
+	bool is_paused() const;
 	bool is_recording() const;
 
 	Error start_viewport(Viewport *p_viewport);

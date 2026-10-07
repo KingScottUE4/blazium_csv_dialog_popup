@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_gif.h                                                            */
+/*  test_ddd_luau_check.h                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -29,65 +29,30 @@
 
 #pragma once
 
+#include "modules/dddbrowser/ddd_luau_check.h"
+
 #include "tests/test_macros.h"
 
-void test_gif_decode_basic();
-void test_gif_encode_roundtrip();
-void test_gif_disposal_compose();
-void test_gif_interlaced_decode();
-void test_gif_corrupt_buffer();
-void test_gif_image_hooks();
-void test_gif_sprite_frames_convert();
-void test_gif_decode_caps();
-void test_gif_active_texture_without_rebake();
-void test_gif_recorder_add_frame();
-void test_gif_recorder_pause_keeps_frames();
-void test_gif_recorder_transparent_frame_roundtrip();
+namespace TestDDDLuauCheck {
 
-TEST_CASE("[Modules][GIF] decode frames delay transparency loop") {
-	test_gif_decode_basic();
+TEST_CASE("[Modules][DDDBrowser] Check Luau accepts the entity template") {
+	const Dictionary result = DDDLuauCheck::check_source(DDDLuauCheck::entity_template());
+	const String message = result["message"];
+	CHECK(message == "DDD Luau compile check passed.");
+	CHECK(bool(result["ok"]));
 }
 
-TEST_CASE("[Modules][GIF] encode still and animated roundtrip") {
-	test_gif_encode_roundtrip();
+TEST_CASE("[Modules][DDDBrowser] Check Luau accepts the gamemode template") {
+	const Dictionary result = DDDLuauCheck::check_source(DDDLuauCheck::gamemode_template());
+	const String message = result["message"];
+	CHECK(message == "DDD Luau compile check passed.");
+	CHECK(bool(result["ok"]));
 }
 
-TEST_CASE("[Modules][GIF] disposal compose restore background and previous") {
-	test_gif_disposal_compose();
+TEST_CASE("[Modules][DDDBrowser] Check Luau reports a syntax error in process") {
+	const Dictionary result = DDDLuauCheck::check_source("function (\n");
+	CHECK_FALSE(bool(result["ok"]));
+	CHECK_FALSE(String(result["message"]).is_empty());
 }
 
-TEST_CASE("[Modules][GIF] interlaced decode") {
-	test_gif_interlaced_decode();
-}
-
-TEST_CASE("[Modules][GIF] corrupt buffer returns error") {
-	test_gif_corrupt_buffer();
-}
-
-TEST_CASE("[Modules][GIF] Image load and save hooks") {
-	test_gif_image_hooks();
-}
-
-TEST_CASE("[Modules][GIF] SpriteFrames conversion") {
-	test_gif_sprite_frames_convert();
-}
-
-TEST_CASE("[Modules][GIF] decode cap rejection") {
-	test_gif_decode_caps();
-}
-
-TEST_CASE("[Modules][GIF] get_active_texture without explicit rebake") {
-	test_gif_active_texture_without_rebake();
-}
-
-TEST_CASE("[Modules][GIF] GIFRecorder add_frame") {
-	test_gif_recorder_add_frame();
-}
-
-TEST_CASE("[Modules][GIF] GIFRecorder pause keeps captured frames") {
-	test_gif_recorder_pause_keeps_frames();
-}
-
-TEST_CASE("[Modules][GIF] GIFRecorder transparent capture stays visible") {
-	test_gif_recorder_transparent_frame_roundtrip();
-}
+} // namespace TestDDDLuauCheck

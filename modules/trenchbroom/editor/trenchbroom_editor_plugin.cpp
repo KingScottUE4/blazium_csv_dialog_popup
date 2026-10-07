@@ -90,8 +90,7 @@ void TrenchbroomEditorPlugin::_notification(int p_what) {
 			}
 			_register_editor_icons();
 			progress_container = _create_progress_bar();
-			progress_container->set_visible(false);
-			add_control_to_container(CONTAINER_INSPECTOR_BOTTOM, progress_container);
+			add_blazium_window("TrenchBroom", "Build Progress", progress_container);
 		} break;
 	}
 }
@@ -199,9 +198,7 @@ void TrenchbroomEditorPlugin::edit(Object *p_object) {
 }
 
 void TrenchbroomEditorPlugin::make_visible(bool p_visible) {
-	if (progress_container) {
-		progress_container->set_visible(p_visible);
-	}
+	(void)p_visible;
 }
 
 TrenchbroomEditorPlugin::~TrenchbroomEditorPlugin() {
@@ -209,7 +206,7 @@ TrenchbroomEditorPlugin::~TrenchbroomEditorPlugin() {
 	_disconnect_map_signals(edited_map);
 
 	if (progress_container) {
-		remove_control_from_container(CONTAINER_INSPECTOR_BOTTOM, progress_container);
+		remove_blazium_item("TrenchBroom", "Build Progress");
 		memdelete(progress_container);
 		progress_container = nullptr;
 		progress_bar = nullptr;

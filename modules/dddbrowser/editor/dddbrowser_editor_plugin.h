@@ -38,6 +38,7 @@
 #include "editor/plugins/editor_plugin.h"
 
 class EditorFileDialog;
+class VBoxContainer;
 
 class DDDBrowserFilesystemContextPlugin : public EditorContextMenuPlugin {
 	GDCLASS(DDDBrowserFilesystemContextPlugin, EditorContextMenuPlugin);
@@ -74,6 +75,7 @@ class DDDBrowserEditorPlugin : public EditorPlugin {
 	GDCLASS(DDDBrowserEditorPlugin, EditorPlugin);
 
 	EditorFileDialog *export_dialog = nullptr;
+	VBoxContainer *tools_panel = nullptr;
 	Ref<DDDBrowserExporter> exporter;
 	Ref<DDDBrowserPreviewServer> preview_server;
 	Ref<DDDBrowserFilesystemContextPlugin> fs_plugin;

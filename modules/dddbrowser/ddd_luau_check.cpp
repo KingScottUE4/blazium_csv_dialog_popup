@@ -31,6 +31,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/file_access.h"
+#include "modules/modules_enabled.gen.h"
 
 #ifdef MODULE_LUAU_MODULE_ENABLED
 #include "modules/luau_module/luau.h"

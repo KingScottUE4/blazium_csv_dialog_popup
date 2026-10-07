@@ -30,6 +30,8 @@
 
 #include "editor_node.h"
 
+#include "editor/blazium_module_menu.h"
+
 #include "core/config/project_settings.h"
 #include "core/extension/gdextension_manager.h"
 #include "core/input/input.h"
@@ -7726,6 +7728,13 @@ EditorNode::EditorNode() {
 	settings_menu->add_item(TTR("Configure FBX Importer..."), EDITOR_CONFIGURE_FBX_IMPORTER);
 #endif
 
+	blazium_module_menu = memnew(BlaziumModuleMenu);
+	{
+		PopupMenu *blazium_menu = blazium_module_menu->get_menu();
+		blazium_menu->set_name(TTR("Blazium"));
+		main_menu->add_child(blazium_menu);
+	}
+
 	help_menu = memnew(PopupMenu);
 	help_menu->set_name(TTR("Help"));
 	if (global_menu && NativeMenu::get_singleton()->has_system_menu(NativeMenu::HELP_MENU_ID)) {
@@ -8302,6 +8311,7 @@ EditorNode::~EditorNode() {
 	memdelete(progress_hb);
 	memdelete(project_upgrade_tool);
 	memdelete(editor_dock_manager);
+	memdelete(blazium_module_menu);
 
 	EditorSettings::destroy();
 	EditorThemeManager::finalize();
