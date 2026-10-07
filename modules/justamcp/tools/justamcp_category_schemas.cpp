@@ -492,8 +492,10 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 	is_core = false;
 	add_schema("list_export_presets", "Reads and returns all export presets from export_presets.cfg.",
 			Vector<String>{}, Vector<String>{});
-	add_schema("export_project", "Triggers a headless Godot export operation.",
+	add_schema("export_project", "Runs a headless export and returns the process exit status and export path.",
 			Vector<String>{ "preset_index", "number", "preset_name", "string", "debug", "boolean" }, Vector<String>{}, "required");
+	add_schema("export_smoke", "Launches an exported binary for a bounded interval and returns exit status, timeout, and the output tail.",
+			Vector<String>{ "path", "string", "timeout_ms", "number" }, Vector<String>{ "path" }, "required");
 	add_schema("export_release", "Exports the project using the release preset.",
 			Vector<String>{ "preset_name", "string", "preset_index", "number" }, Vector<String>{}, "required");
 	add_schema("export_debug", "Exports the project using the debug preset.",

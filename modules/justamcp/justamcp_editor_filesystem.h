@@ -34,5 +34,6 @@
 namespace JustAMCPEditorFilesystem {
 
 void refresh_path(const String &p_path);
+String class_index_status(const String &p_path, const String &p_source);
 
-}
+} //namespace JustAMCPEditorFilesystem

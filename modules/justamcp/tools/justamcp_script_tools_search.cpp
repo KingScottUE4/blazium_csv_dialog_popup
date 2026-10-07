@@ -27,6 +27,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#include "../justamcp_editor_filesystem.h"
 #include "../justamcp_play_clock.h"
 #include "../justamcp_read_limits.h"
 #include "justamcp_script_tools.h"
@@ -203,6 +204,9 @@ Dictionary JustAMCPScriptTools::_patch_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["patched"] = changed;
+	if (changed && path.get_extension().to_lower() == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, content);
+	}
 	return MCP_SUCCESS(res);
 }
 

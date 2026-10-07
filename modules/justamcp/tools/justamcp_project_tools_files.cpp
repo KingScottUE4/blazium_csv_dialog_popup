@@ -29,6 +29,7 @@
 
 #include "../justamcp_editor_filesystem.h"
 #include "../justamcp_mcp_tool_macros.h"
+#include "../justamcp_play_clock.h"
 #include "../justamcp_read_limits.h"
 #include "justamcp_agent_helpers.h"
 #include "justamcp_project_tools.h"
@@ -145,6 +146,15 @@ Dictionary JustAMCPProjectTools::create_file(const Dictionary &p_args) {
 	if (FileAccess::exists(path) && !bool(p_args.get("overwrite", false))) {
 		return MCP_ERROR(-32000, "File already exists: " + path);
 	}
+	String previous;
+	if (FileAccess::exists(path)) {
+		previous = FileAccess::get_file_as_string(path);
+	}
+	const String content = String(p_args.get("content", ""));
+	Dictionary scene_guard = justamcp_guard_scene_text(path, previous, content);
+	if (scene_guard.has("ok") && !bool(scene_guard["ok"])) {
+		return scene_guard;
+	}
 	const String parent = path.get_base_dir();
 	Ref<DirAccess> dir = DirAccess::create_for_path(parent);
 	if (dir.is_valid() && !dir->dir_exists(parent)) {
@@ -154,7 +164,7 @@ Dictionary JustAMCPProjectTools::create_file(const Dictionary &p_args) {
 	if (file.is_null()) {
 		return MCP_ERROR(-32000, "Failed to write: " + path);
 	}
-	file->store_string(String(p_args.get("content", "")));
+	file->store_string(content);
 	file->close();
 	JustAMCPEditorFilesystem::refresh_path(path);
 	_reload_if_script(path);
@@ -185,7 +195,12 @@ Dictionary JustAMCPProjectTools::edit_file(const Dictionary &p_args) {
 	if (matches != 1) {
 		return MCP_ERROR(-32000, vformat("search_text must match exactly once (found %d).", matches));
 	}
-	text = text.replace(search, replace);
+	const String next = text.replace(search, replace);
+	Dictionary scene_guard = justamcp_guard_scene_text(path, text, next);
+	if (scene_guard.has("ok") && !bool(scene_guard["ok"])) {
+		return scene_guard;
+	}
+	text = next;
 	Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
 	if (file.is_null()) {
 		return MCP_ERROR(-32000, "Failed to write: " + path);
