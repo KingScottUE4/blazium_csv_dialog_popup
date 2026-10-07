@@ -10,6 +10,7 @@
 
 #include "../justamcp_editor_scene_access.h"
 #include "../justamcp_mcp_tool_macros.h"
+#include "../justamcp_play_clock.h"
 #include "../justamcp_runtime.h"
 #include "../justamcp_server.h"
 #include "core/io/resource_loader.h"
@@ -40,6 +41,25 @@ inline Dictionary justamcp_normalize_runtime_result(const Dictionary &p_raw) {
 }
 
 inline Dictionary justamcp_runtime_bridge_execute(const String &p_internal_name, const Dictionary &p_args) {
+	if (p_internal_name == "runtime_step" || p_internal_name == "step") {
+		const Dictionary invalid = justamcp_validate_runtime_step_args(p_args);
+		if (!invalid.is_empty()) {
+			return invalid;
+		}
+	} else if (p_internal_name == "runtime_step_until" || p_internal_name == "step_until") {
+		const Dictionary invalid = justamcp_validate_runtime_step_until_args(p_args);
+		if (!invalid.is_empty()) {
+			return invalid;
+		}
+	} else if (p_internal_name == "runtime_set_time_scale" || p_internal_name == "set_time_scale") {
+		if (!p_args.has("time_scale") && !p_args.has("scale")) {
+			return MCP_ERROR(-32000, "time_scale is required.");
+		}
+		const double scale = double(p_args.get("time_scale", p_args.get("scale", 1.0)));
+		if (scale < 0.0 || scale > 16.0) {
+			return MCP_ERROR(-32000, "time_scale must be from 0 to 16.");
+		}
+	}
 	if (!JustAMCPRuntime::get_singleton()) {
 		return MCP_ERROR(-32000, "JustAMCPRuntime not initialized or game bridge inactive. Start play mode with MCP enabled, or ensure '--enable-mcp' / feature flags are active.");
 	}
@@ -72,6 +92,16 @@ inline Dictionary justamcp_runtime_bridge_execute(const String &p_internal_name,
 		cmd = "move_node";
 	} else if (cmd == "runtime_monitor_properties") {
 		cmd = "monitor_properties";
+	} else if (cmd == "runtime_freeze") {
+		cmd = "freeze";
+	} else if (cmd == "runtime_step") {
+		cmd = "step";
+	} else if (cmd == "runtime_step_until") {
+		cmd = "step_until";
+	} else if (cmd == "runtime_set_time_scale") {
+		cmd = "set_time_scale";
+	} else if (cmd == "runtime_click_world") {
+		cmd = "click_world";
 	}
 	Dictionary runtime_args = p_args;
 	if (p_internal_name == "runtime_get_tree" && runtime_args.has("max_depth") && !runtime_args.has("depth")) {
@@ -100,6 +130,9 @@ inline bool justamcp_is_runtime_bridge_tool(const String &p_name) {
 			p_name == "runtime_find_nodes_by_script" || p_name == "runtime_batch_get_properties" ||
 			p_name == "runtime_find_ui_elements" || p_name == "runtime_click_button_by_text" ||
 			p_name == "runtime_move_node" || p_name == "runtime_monitor_properties" ||
+			p_name == "runtime_freeze" || p_name == "runtime_step" ||
+			p_name == "runtime_step_until" || p_name == "runtime_set_time_scale" ||
+			p_name == "runtime_click_world" ||
 			p_name == "inject_drag" || p_name == "inject_scroll" ||
 			p_name == "inject_gesture" || p_name == "runtime_quit" ||
 			p_name == "get_network_info" || p_name == "get_audio_info" ||

@@ -37,6 +37,7 @@
 #include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
 #include "core/os/thread.h"
+#include "justamcp_gap_fill.h"
 
 #ifdef TOOLS_ENABLED
 #include "editor/editor_settings.h"
@@ -132,6 +133,8 @@ Dictionary JustAMCPExportTools::execute_tool(const String &p_tool_name, const Di
 			return err;
 		}
 		return _execute_blocking_tool_sync(p_tool_name, p_args);
+	} else if (p_tool_name == "export_patch_pck") {
+		return justamcp_export_patch_pck(p_args);
 	} else if (p_tool_name == "get_android_preset_info") {
 		return _get_android_preset_info(p_args);
 	} else if (p_tool_name == "export_release" || p_tool_name == "export_debug" || p_tool_name == "export_custom") {

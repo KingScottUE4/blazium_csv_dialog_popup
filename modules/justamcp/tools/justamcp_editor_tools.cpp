@@ -34,6 +34,7 @@
 #include "../justamcp_editor_scene_access.h"
 #include "../justamcp_mcp_tool_macros.h"
 #include "../justamcp_pagination.h"
+#include "../justamcp_play_clock.h"
 #include "../justamcp_runtime.h"
 #include "../justamcp_server.h"
 #include "../justamcp_tool_context.h"
@@ -54,6 +55,7 @@
 #include "editor/editor_settings.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "justamcp_agent_helpers.h"
+#include "justamcp_gap_fill.h"
 #include "justamcp_scene_tree_dump.h"
 #include "scene/2d/node_2d.h"
 #include "scene/gui/control.h"
@@ -331,21 +333,32 @@ Dictionary JustAMCPEditorTools::editor_play_scene(const Dictionary &p_args) {
 		return MCP_INVALID_PARAMS("duration_ms is required when inputs are provided.");
 	}
 
+	const Dictionary clock_args = justamcp_validate_play_launch_args(p_args);
+	if (!clock_args.is_empty()) {
+		result["ok"] = false;
+		result["error"] = String(clock_args.get("error", "Invalid play clock arguments."));
+		return result;
+	}
+
 	if (!editor_plugin || !editor_plugin->get_editor_interface()) {
 		result["ok"] = false;
 		result["error"] = "Failed to evaluate play request.";
 		return result;
 	}
 
+	justamcp_prepare_play_clock_environment(p_args);
+
 	if (scene_path.is_empty()) {
 		editor_plugin->get_editor_interface()->play_current_scene();
 	} else if (FileAccess::exists(scene_path)) {
 		editor_plugin->get_editor_interface()->play_custom_scene(scene_path);
 	} else {
+		justamcp_clear_play_clock_environment();
 		result["ok"] = false;
 		result["error"] = "Target scene file not found.";
 		return result;
 	}
+	justamcp_clear_play_clock_environment();
 
 	if (!has_duration) {
 		result["ok"] = true;
@@ -448,6 +461,24 @@ Dictionary JustAMCPEditorTools::editor_play_scene(const Dictionary &p_args) {
 
 Dictionary JustAMCPEditorTools::editor_play_main(const Dictionary &p_args) {
 	Dictionary result;
+	if (p_args.has("fixed_fps") || p_args.has("seed") || p_args.has("scene_path") || p_args.has("path")) {
+		const String scene_path = String(p_args.get("scene_path", p_args.get("path", "")));
+		if (!scene_path.is_empty()) {
+			String sandbox_error;
+			String canonical;
+			if (!justamcp_canonical_sandbox_path(scene_path, canonical, sandbox_error)) {
+				result["ok"] = false;
+				result["error"] = sandbox_error;
+				return result;
+			}
+		}
+		const Dictionary clock_args = justamcp_validate_play_launch_args(p_args);
+		if (!clock_args.is_empty()) {
+			result["ok"] = false;
+			result["error"] = String(clock_args.get("error", "Invalid play clock arguments."));
+			return result;
+		}
+	}
 	if (editor_plugin && editor_plugin->get_editor_interface()) {
 		editor_plugin->get_editor_interface()->play_main_scene();
 		result["ok"] = true;
@@ -704,7 +735,7 @@ Dictionary JustAMCPEditorTools::editor_set_settings(const Dictionary &p_args) {
 
 Dictionary JustAMCPEditorTools::editor_clear_output(const Dictionary &p_args) {
 	Dictionary result;
-	if (EditorNode::get_log()) {
+	if (EditorNode::get_singleton() && EditorNode::get_log()) {
 		EditorNode::get_log()->clear();
 		result["ok"] = true;
 		result["message"] = "Output cleared successfully.";
@@ -1191,6 +1222,30 @@ Dictionary JustAMCPEditorTools::execute_tool(const String &p_tool_name, const Di
 	}
 	if (p_tool_name == "editor_save_all_scenes") {
 		return editor_save_all_scenes(p_args);
+	}
+	if (p_tool_name == "editor_save_all") {
+		return justamcp_editor_save_all(p_args);
+	}
+	if (p_tool_name == "editor_get_camera") {
+		return justamcp_editor_get_camera(p_args);
+	}
+	if (p_tool_name == "editor_set_camera") {
+		return justamcp_editor_set_camera(p_args);
+	}
+	if (p_tool_name == "editor_list_dialogs") {
+		return justamcp_editor_list_dialogs(p_args);
+	}
+	if (p_tool_name == "editor_dismiss_dialog") {
+		return justamcp_editor_dismiss_dialog(p_args);
+	}
+	if (p_tool_name == "editor_list_actions") {
+		return justamcp_editor_list_actions(p_args);
+	}
+	if (p_tool_name == "editor_invoke_action") {
+		return justamcp_editor_invoke_action(p_args);
+	}
+	if (p_tool_name == "editor_unsaved_state") {
+		return justamcp_editor_unsaved_state(p_args);
 	}
 	if (p_tool_name == "editor_get_signals") {
 		return editor_get_signals(p_args);

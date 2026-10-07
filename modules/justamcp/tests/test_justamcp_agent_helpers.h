@@ -46,3 +46,9 @@ TEST_CASE("[Modules][JustAMCP] agent gap schemas registered") {
 TEST_CASE("[Modules][JustAMCP] agent gap dispatch routes") {
 	test_justamcp_agent_gap_dispatch();
 }
+
+void test_justamcp_play_clock_and_script_guard();
+
+TEST_CASE("[Modules][JustAMCP] play clock arguments and script guard") {
+	test_justamcp_play_clock_and_script_guard();
+}

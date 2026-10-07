@@ -104,7 +104,11 @@ Dictionary JustAMCPSceneResourceProvider::read(const String &p_uri, const String
 
 	if (p_canonical_uri == "blazium://scene/hierarchy") {
 		if (!root) {
-			return _scene_json_error(p_uri, "No scene is currently open");
+			Dictionary payload;
+			payload["nodes"] = Array();
+			payload["total_count"] = 0;
+			payload["error"] = "No scene is currently open";
+			return _scene_json_contents(p_uri, payload);
 		}
 		Array nodes;
 		_append_node_tree(root, root, 0, 10, nodes);

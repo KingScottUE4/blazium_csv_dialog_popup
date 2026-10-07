@@ -57,6 +57,9 @@ String JustAMCPPromptBlaziumWorkflow::get_name() const {
 
 		case DIAGNOSTICS_TRIAGE:
 			return "blazium_diagnostics_triage";
+
+		case VISUAL_PROOF:
+			return "blazium_visual_proof";
 	}
 
 	return "blazium_project_intake";
@@ -78,6 +81,9 @@ String JustAMCPPromptBlaziumWorkflow::_get_title() const {
 
 		case DIAGNOSTICS_TRIAGE:
 			return "Blazium Diagnostics Triage";
+
+		case VISUAL_PROOF:
+			return "Blazium Visual Proof";
 	}
 
 	return "Blazium Project Intake";
@@ -99,6 +105,9 @@ String JustAMCPPromptBlaziumWorkflow::_get_description() const {
 
 		case DIAGNOSTICS_TRIAGE:
 			return "Aggregates Blazium logs, runtime status, scene validation, project state, and performance context into a structured diagnosis. Template v1.";
+
+		case VISUAL_PROOF:
+			return "Sets the editor camera, screenshots, applies a change, repeats the same camera, and compares the two shots with the existing compare tool.";
 	}
 
 	return "";
@@ -132,6 +141,17 @@ Array JustAMCPPromptBlaziumWorkflow::_get_arguments() const {
 			arguments.push_back(_make_prompt_argument("input_sequence", "Optional natural-language input sequence to drive after launch.", false));
 
 			arguments.push_back(_make_prompt_argument("stop_after", "Whether to stop the game after inspection: true or false.", false));
+
+			arguments.push_back(_make_prompt_argument("seed", "Optional numeric seed passed to editor_play_scene.", false));
+
+			arguments.push_back(_make_prompt_argument("frozen", "Start frozen, then step with runtime_step or runtime_step_until.", false));
+
+			break;
+
+		case VISUAL_PROOF:
+			arguments.push_back(_make_prompt_argument("change", "What to change between the two screenshots.", true));
+
+			arguments.push_back(_make_prompt_argument("camera", "Optional camera position, rotation, and fov to lock for both shots.", false));
 
 			break;
 
@@ -310,17 +330,19 @@ Dictionary JustAMCPPromptBlaziumWorkflow::_get_runtime_test_loop_messages(const 
 
 	text += "Workflow:\n";
 
-	text += "1. Start the game with `blazium_editor_play_main`, `blazium_editor_play_scene`, or `blazium_project_run` according to the target.\n";
+	text += "1. Start the game with `blazium_editor_play_main`, `blazium_editor_play_scene`, or `blazium_project_run`. Pass `seed`, `fixed_fps`, and `frozen` on `blazium_editor_play_scene` when the run must be repeatable or start paused.\n";
 
-	text += "2. Call `blazium_wait`, then inspect readiness with `blazium_editor_is_playing`, `blazium_get_runtime_status`, `blazium_runtime_info`, and `blazium_runtime_get_errors`.\n";
+	text += "2. Call `blazium_wait`, then inspect readiness with `blazium_editor_is_playing`, `blazium_get_runtime_status`, `blazium_runtime_info`, `blazium_runtime_get_errors`, and `blazium://play/clock`.\n";
 
-	text += "3. If an input sequence is provided, drive it with `blazium_simulate_action`, `blazium_simulate_key`, `blazium_simulate_mouse_click`, or runtime UI tools.\n";
+	text += "3. While frozen, advance with `blazium_runtime_step` (`duration_ms` or `frames`) or `blazium_runtime_step_until` (a GDScript predicate, capped by `max_frames`). Put `inputs` on the step so `inject_action`, `inject_key`, and `inject_mouse_click` run inside the unpaused window. Set speed with `blazium_runtime_set_time_scale`.\n";
 
-	text += "4. Capture evidence with `blazium_take_game_screenshot`, `blazium_editor_get_errors`, `blazium_runtime_get_tree`, and `blazium_runtime_batch_get_properties` when useful.\n";
+	text += "4. If an input sequence is provided outside a frozen step, drive it with `blazium_simulate_action`, `blazium_simulate_key`, `blazium_simulate_mouse_click`, or runtime UI tools.\n";
 
-	text += "5. If stop_after is true, stop with `blazium_editor_stop_play` before editing scripts.\n";
+	text += "5. Capture evidence with `blazium_take_game_screenshot`, `blazium_editor_get_errors`, `blazium_runtime_get_tree`, and `blazium_runtime_batch_get_properties` when useful.\n";
 
-	text += "6. Return observed behavior, errors, screenshots or resource references, and next fixes.\n";
+	text += "6. If stop_after is true, stop with `blazium_editor_stop_play` before editing scripts.\n";
+
+	text += "7. Return observed behavior, errors, screenshots or resource references, and next fixes.\n";
 
 	messages.push_back(_make_text_message(text));
 
@@ -331,6 +353,8 @@ Dictionary JustAMCPPromptBlaziumWorkflow::_get_runtime_test_loop_messages(const 
 	messages.push_back(_make_resource_message("blazium://logs/recent"));
 
 	messages.push_back(_make_resource_message("blazium://performance"));
+
+	messages.push_back(_make_resource_message("blazium://play/clock"));
 
 	Dictionary result;
 
@@ -447,6 +471,31 @@ Dictionary JustAMCPPromptBlaziumWorkflow::_get_diagnostics_triage_messages(const
 	return result;
 }
 
+Dictionary JustAMCPPromptBlaziumWorkflow::_get_visual_proof_messages(const Dictionary &p_args) {
+	const String change = p_args.has("change") ? String(p_args["change"]) : "[change]";
+	const String camera = p_args.has("camera") ? String(p_args["camera"]) : "";
+	String text = "You are proving a visual change in the Blazium editor.\n\n";
+	text += "Change: " + change + "\n";
+	text += "Camera: " + (camera.is_empty() ? "[use the current 3D editor camera]" : camera) + "\n\n";
+	text += "Workflow:\n";
+	text += "1. Read `blazium_editor_get_camera`. If a camera was provided, apply it with `blazium_editor_set_camera` (position, rotation, fov).\n";
+	text += "2. Capture the before shot with `blazium_editor_take_screenshot`.\n";
+	text += "3. Make the requested change with the existing scene, shader, or particle tools.\n";
+	text += "4. Set the same camera again with `blazium_editor_set_camera`.\n";
+	text += "5. Capture the after shot with `blazium_editor_take_screenshot`.\n";
+	text += "6. Compare the two PNG paths with `blazium_runtime_compare_screenshots`.\n";
+	text += "7. Report the camera pose, both paths, and whether the compare tool found a difference.\n";
+	Array messages;
+	messages.push_back(_make_text_message(text));
+	_append_common_context(messages);
+	messages.push_back(_make_resource_message("blazium://editor/state"));
+	Dictionary result;
+	result["description"] = "Blazium Visual Proof";
+	result["messages"] = messages;
+	result["ok"] = true;
+	return result;
+}
+
 Dictionary JustAMCPPromptBlaziumWorkflow::get_messages(const Dictionary &p_args) {
 	switch (kind) {
 		case PROJECT_INTAKE:
@@ -463,6 +512,9 @@ Dictionary JustAMCPPromptBlaziumWorkflow::get_messages(const Dictionary &p_args)
 
 		case DIAGNOSTICS_TRIAGE:
 			return _get_diagnostics_triage_messages(p_args);
+
+		case VISUAL_PROOF:
+			return _get_visual_proof_messages(p_args);
 	}
 
 	return _make_error_result("Unknown Blazium workflow prompt.");

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  justamcp_prompt_blazium_workflows.h                                   */
+/*  justamcp_gap_fill.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -29,48 +29,24 @@
 
 #pragma once
 
-#ifdef TOOLS_ENABLED
+#include "core/variant/dictionary.h"
 
-#include "justamcp_prompt.h"
+Dictionary justamcp_editor_get_camera(const Dictionary &p_args);
+Dictionary justamcp_editor_set_camera(const Dictionary &p_args);
+Dictionary justamcp_editor_list_dialogs(const Dictionary &p_args);
+Dictionary justamcp_editor_dismiss_dialog(const Dictionary &p_args);
+Dictionary justamcp_editor_list_actions(const Dictionary &p_args);
+Dictionary justamcp_editor_invoke_action(const Dictionary &p_args);
+Dictionary justamcp_editor_unsaved_state(const Dictionary &p_args);
+Dictionary justamcp_editor_save_all(const Dictionary &p_args);
+Dictionary justamcp_editor_surface_snapshot();
 
-class JustAMCPPromptBlaziumWorkflow : public JustAMCPPrompt {
-	GDCLASS(JustAMCPPromptBlaziumWorkflow, JustAMCPPrompt);
-
-public:
-	enum WorkflowKind {
-		PROJECT_INTAKE,
-		SCENE_BUILD,
-		RUNTIME_TEST_LOOP,
-		AUTOWORK_FIX_LOOP,
-		DIAGNOSTICS_TRIAGE,
-		VISUAL_PROOF,
-	};
-
-private:
-	WorkflowKind kind = PROJECT_INTAKE;
-
-	String _get_title() const;
-	String _get_description() const;
-	Array _get_arguments() const;
-	void _append_common_context(Array &r_messages) const;
-	Dictionary _get_project_intake_messages(const Dictionary &p_args);
-	Dictionary _get_scene_build_messages(const Dictionary &p_args);
-	Dictionary _get_runtime_test_loop_messages(const Dictionary &p_args);
-	Dictionary _get_autowork_fix_loop_messages(const Dictionary &p_args);
-	Dictionary _get_diagnostics_triage_messages(const Dictionary &p_args);
-	Dictionary _get_visual_proof_messages(const Dictionary &p_args);
-
-protected:
-	static void _bind_methods();
-
-public:
-	virtual String get_name() const override;
-	virtual Dictionary get_prompt() const override;
-	virtual Dictionary get_messages(const Dictionary &p_args) override;
-	virtual Dictionary complete(const Dictionary &p_argument) override;
-
-	JustAMCPPromptBlaziumWorkflow(WorkflowKind p_kind = PROJECT_INTAKE);
-	~JustAMCPPromptBlaziumWorkflow();
-};
-
-#endif
+Dictionary justamcp_scene3d_render_probe(const Dictionary &p_args);
+Dictionary justamcp_scene3d_set_debug_draw(const Dictionary &p_args);
+Dictionary justamcp_spatial_snap_to_surface(const Dictionary &p_args);
+Dictionary justamcp_spatial_repeat_along(const Dictionary &p_args);
+Dictionary justamcp_export_patch_pck(const Dictionary &p_args);
+Dictionary justamcp_asset_lib_search(const Dictionary &p_args);
+Dictionary justamcp_asset_lib_info(const Dictionary &p_args);
+Dictionary justamcp_asset_lib_install(const Dictionary &p_args);
+Dictionary justamcp_remote_control_run_headless_script(const Dictionary &p_args);

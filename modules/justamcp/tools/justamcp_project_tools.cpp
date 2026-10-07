@@ -127,14 +127,14 @@ Dictionary JustAMCPProjectTools::execute_tool(const String &p_tool_name, const D
 	}
 	if (tool_name == "project_run") {
 #ifdef TOOLS_ENABLED
-		if (bool(p_args.get("autosave", true)) && EditorInterface::get_singleton()) {
-			EditorInterface::get_singleton()->save_all_scenes();
-		}
-		if (!EditorInterface::get_singleton()) {
+		if (!EditorNode::get_singleton() || !EditorInterface::get_singleton()) {
 			Dictionary err;
 			err["ok"] = false;
 			err["error"] = "Editor interface unavailable.";
 			return err;
+		}
+		if (bool(p_args.get("autosave", true))) {
+			EditorInterface::get_singleton()->save_all_scenes();
 		}
 		if (bool(p_args.get("main", false))) {
 			EditorInterface::get_singleton()->play_main_scene();

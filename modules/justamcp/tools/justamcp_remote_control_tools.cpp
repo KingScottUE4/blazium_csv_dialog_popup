@@ -33,6 +33,7 @@
 
 #ifdef MODULE_REMOTE_CONTROL_ENABLED
 
+#include "justamcp_gap_fill.h"
 #include "justamcp_remote_control_tools.h"
 
 #include "justamcp_tool_schema_builder.h"
@@ -93,6 +94,8 @@ Array JustAMCPRemoteControlTools::get_tool_schemas(bool p_register_only, bool p_
 			Vector<String>{}, Vector<String>{});
 	add_schema("focus_window", "Bring the editor or playtest window to the foreground.",
 			Vector<String>{}, Vector<String>{});
+	add_schema("remote_control_run_headless_script", "Runs one extends SceneTree script in a separate headless editor process sandboxed to the open project. execute_gdscript_snippet stays Expression-only.",
+			Vector<String>{ "script", "string", "path", "string", "source", "string", "timeout_ms", "number" }, Vector<String>{});
 
 	return tools;
 }
@@ -216,6 +219,9 @@ Dictionary JustAMCPRemoteControlTools::execute_tool(const String &p_tool_name, c
 	}
 	if (tool_name == "focus_window") {
 		return focus_window(p_args);
+	}
+	if (tool_name == "remote_control_run_headless_script") {
+		return justamcp_remote_control_run_headless_script(p_args);
 	}
 	return _make_error("Unknown remote_control tool: " + p_tool_name);
 }

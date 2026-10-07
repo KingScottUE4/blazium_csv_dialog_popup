@@ -27,6 +27,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#include "justamcp_play_clock.h"
 #include "justamcp_runtime.h"
 
 #include "core/config/project_settings.h"
@@ -177,6 +178,7 @@ Dictionary JustAMCPRuntime::_cmd_runtime_capabilities(const Dictionary &p_params
 		"run_custom_command", "get_autoload", "find_nodes_by_script",
 		"batch_get_properties", "find_ui_elements", "click_button_by_text",
 		"navigate_to", "move_to", "monitor_properties",
+		"freeze", "step", "step_until", "set_time_scale", "click_world",
 		"auth_info", "performance",
 		nullptr
 	};
@@ -247,6 +249,7 @@ Dictionary JustAMCPRuntime::_cmd_set_paused(const Dictionary &p_params) {
 	}
 	const bool paused = bool(p_params.get("paused", true));
 	tree->set_pause(paused);
+	justamcp_note_play_frozen(paused);
 	ret["type"] = "paused";
 	ret["paused"] = tree->is_paused();
 	return ret;

@@ -67,6 +67,7 @@ Array JustAMCPResourceManifest::get_static_resource_schemas() {
 	resources.push_back(_manifest_resource_schema("blazium://project/info", "Project Info", "Project name, engine version, paths, active scene, and play state."));
 	resources.push_back(_manifest_resource_schema("blazium://project/settings", "Project Settings", "Common project settings subset."));
 	resources.push_back(_manifest_resource_schema("blazium://logs/recent", "Recent Logs", "Recent JustAMCP engine log lines."));
+	resources.push_back(_manifest_resource_schema("blazium://system/logs", "System Logs", "Engine log lines as JSON. Paginate with blazium://system/logs/cursor/{cursor}."));
 	resources.push_back(_manifest_resource_schema("blazium://materials", "Materials", "Material resources found under res://."));
 	resources.push_back(_manifest_resource_schema("blazium://input_map", "Input Map", "Project input actions and their configured events."));
 	resources.push_back(_manifest_resource_schema("blazium://performance", "Performance", "Performance singleton snapshot."));
@@ -77,7 +78,9 @@ Array JustAMCPResourceManifest::get_static_resource_schemas() {
 	resources.push_back(_manifest_resource_schema("blazium://guide/troubleshooting", "Troubleshooting Guide", "Common failures and recovery steps for runtime, project, and tool workflows.", "text/markdown"));
 	resources.push_back(_manifest_resource_schema("blazium://guide/tool-index", "Tool Index Guide", "Goal-oriented guide to the main JustAMCP tool families.", "text/markdown"));
 	resources.push_back(_manifest_resource_schema("blazium://guide/asset-tagging", "Asset Tagging Guide", "How to list, assign, verify, and search project asset tags through JustAMCP.", "text/markdown"));
-	resources.push_back(_manifest_resource_schema("blazium://editor/state", "Editor State", "Current editor play mode, active scene, and selection summary."));
+	resources.push_back(_manifest_resource_schema("blazium://editor/state", "Editor State", "Current editor play mode, active scene, camera, dialogs, and unsaved files."));
+	resources.push_back(_manifest_resource_schema("blazium://editor/dialogs", "Editor Dialogs", "Visible editor dialogs by title."));
+	resources.push_back(_manifest_resource_schema("blazium://play/clock", "Play Clock", "Seed, fixed fps, frozen flag, pause, and time scale for the live play clock."));
 	resources.push_back(_manifest_resource_schema("blazium://test/results", "Test Results", "Latest Autowork test results when available."));
 #ifdef MODULE_ASSETTAGS_ENABLED
 	resources.push_back(_manifest_resource_schema("blazium://tags/dictionary", "Asset Tag Dictionary", "Project asset tag dictionary tree."));
