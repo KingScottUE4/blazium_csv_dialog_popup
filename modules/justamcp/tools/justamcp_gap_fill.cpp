@@ -350,15 +350,180 @@ bool justamcp_script_write_requires_validate(const String &p_path, const Diction
 	return true;
 }
 
+static bool _bare_line_prefix(const String &p_source, const String &p_prefix) {
+	const Vector<String> lines = p_source.split("\n");
+	for (int i = 0; i < lines.size(); i++) {
+		const String line = lines[i].strip_edges();
+		if (line.begins_with(p_prefix) && (line.length() == p_prefix.length() || line[p_prefix.length()] == ' ' || line[p_prefix.length()] == '\t')) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool _token_at(const String &p_source, const String &p_token) {
+	int from = 0;
+	while (true) {
+		const int at = p_source.find(p_token, from);
+		if (at < 0) {
+			return false;
+		}
+		const bool left_ok = at == 0 || !(is_ascii_alphanumeric_char(p_source[at - 1]) || p_source[at - 1] == '_');
+		const int end = at + p_token.length();
+		const bool right_ok = end >= p_source.length() || !(is_ascii_alphanumeric_char(p_source[end]) || p_source[end] == '_');
+		if (left_ok && right_ok) {
+			return true;
+		}
+		from = at + 1;
+	}
+}
+
+static String _godot3_hint(const String &p_source) {
+	if (p_source.contains("yield(")) {
+		return "yield() is Godot 3. Use await.";
+	}
+	if (_bare_line_prefix(p_source, "export var")) {
+		return "export var is Godot 3. Use @export var.";
+	}
+	if (_bare_line_prefix(p_source, "onready var")) {
+		return "onready var is Godot 3. Use @onready var.";
+	}
+	if (p_source.contains(".instance(")) {
+		return "PackedScene.instance() is Godot 3. Use instantiate().";
+	}
+	if (_token_at(p_source, "KinematicBody2D") || _token_at(p_source, "KinematicBody")) {
+		return "KinematicBody is Godot 3. Use CharacterBody2D or CharacterBody3D.";
+	}
+	if (_token_at(p_source, "Spatial")) {
+		return "Spatial is Godot 3. Use Node3D.";
+	}
+	if (_token_at(p_source, "Sprite")) {
+		return "Sprite is Godot 3. Use Sprite2D or Sprite3D.";
+	}
+	if (p_source.contains("File.new(") || p_source.contains("Directory.new(")) {
+		return "File.new() and Directory.new() are Godot 3. Use FileAccess and DirAccess.";
+	}
+	const char *pools[] = { "PoolByteArray", "PoolIntArray", "PoolRealArray", "PoolStringArray", "PoolVector2Array", "PoolVector3Array", "PoolColorArray", nullptr };
+	for (int i = 0; pools[i]; i++) {
+		if (_token_at(p_source, pools[i])) {
+			return String(pools[i]) + " is Godot 3. Use the Packed*Array equivalent.";
+		}
+	}
+	const int connect_at = p_source.find("connect(\"");
+	if (connect_at >= 0) {
+		const String window = p_source.substr(connect_at, 96);
+		if (window.contains(", self,")) {
+			return "connect(\"name\", self, \"_method\") is Godot 3. Use signal_name.connect(_method).";
+		}
+	}
+	return String();
+}
+
 Dictionary justamcp_guard_gdscript_write(const String &p_path, const String &p_content, const Dictionary &p_params) {
 	if (!justamcp_script_write_requires_validate(p_path, p_params)) {
 		return Dictionary();
+	}
+	const String hint = _godot3_hint(p_content);
+	if (!hint.is_empty()) {
+		return _err(hint);
 	}
 	String error;
 	if (!justamcp_gdscript_source_compiles(p_content, error)) {
 		return _err("GDScript validation failed: " + error);
 	}
 	return Dictionary();
+}
+
+static String _quoted_ids(const String &p_text, const String &p_header) {
+	Vector<String> ids;
+	const Vector<String> lines = p_text.split("\n");
+	for (int i = 0; i < lines.size(); i++) {
+		const String line = lines[i].strip_edges();
+		if (!line.begins_with(p_header)) {
+			continue;
+		}
+		const int id_at = line.find("id=\"");
+		if (id_at < 0) {
+			continue;
+		}
+		const int start = id_at + 4;
+		const int end = line.find("\"", start);
+		if (end > start) {
+			ids.push_back(line.substr(start, end - start));
+		}
+	}
+	ids.sort();
+	return String(",").join(ids);
+}
+
+static String _uid_tokens(const String &p_text) {
+	Vector<String> uids;
+	int from = 0;
+	while (true) {
+		const int at = p_text.find("uid://", from);
+		if (at < 0) {
+			break;
+		}
+		int end = at + 6;
+		while (end < p_text.length()) {
+			const char32_t c = p_text[end];
+			if (!is_ascii_alphanumeric_char(c) && c != '_') {
+				break;
+			}
+			end++;
+		}
+		uids.push_back(p_text.substr(at, end - at));
+		from = end;
+	}
+	uids.sort();
+	return String(",").join(uids);
+}
+
+static String _load_steps(const String &p_text) {
+	const int at = p_text.find("load_steps=");
+	if (at < 0) {
+		return String();
+	}
+	int end = at + 11;
+	while (end < p_text.length() && is_digit(p_text[end])) {
+		end++;
+	}
+	return p_text.substr(at, end - at);
+}
+
+static bool _scene_path(const String &p_path) {
+	const String ext = p_path.get_extension().to_lower();
+	return ext == "tscn" || ext == "tres";
+}
+
+Dictionary justamcp_guard_scene_text(const String &p_path, const String &p_previous, const String &p_next) {
+	if (!_scene_path(p_path)) {
+		return Dictionary();
+	}
+	const bool structural = p_next.contains("uid://") || p_next.contains("load_steps=") || p_next.contains("[ext_resource") || p_next.contains("[sub_resource");
+	if (p_previous.is_empty()) {
+		if (structural) {
+			return _err("Refusing to invent uid://, load_steps, or ext_resource/sub_resource ids in " + p_path + ". Use scene tools for scene structure. Scalar properties and [connection] lines can be written as text.");
+		}
+		return Dictionary();
+	}
+	const String prev_uid = _uid_tokens(p_previous);
+	const String next_uid = _uid_tokens(p_next);
+	if (prev_uid != next_uid) {
+		return _err("Refusing to change uid:// values in " + p_path + ". Use scene tools for scene structure.");
+	}
+	if (_load_steps(p_previous) != _load_steps(p_next)) {
+		return _err("Refusing to change load_steps in " + p_path + ". Use scene tools for scene structure.");
+	}
+	if (_quoted_ids(p_previous, "[ext_resource") != _quoted_ids(p_next, "[ext_resource") || _quoted_ids(p_previous, "[sub_resource") != _quoted_ids(p_next, "[sub_resource")) {
+		return _err("Refusing to change ext_resource or sub_resource ids in " + p_path + ". Use scene tools for scene structure.");
+	}
+	return Dictionary();
+}
+
+int justamcp_export_smoke_timeout_ms(const Dictionary &p_args) {
+	const int requested = int(p_args.get("timeout_ms", 8000));
+	return CLAMP(requested, 1000, 30000);
 }
 
 Dictionary justamcp_editor_get_camera(const Dictionary &p_args) {

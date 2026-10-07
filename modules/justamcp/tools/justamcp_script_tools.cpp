@@ -274,6 +274,9 @@ Dictionary JustAMCPScriptTools::_create_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["created"] = true;
+	if (path.get_extension().to_lower() == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, content);
+	}
 	return MCP_SUCCESS(res);
 }
 
@@ -370,6 +373,9 @@ Dictionary JustAMCPScriptTools::_edit_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["changes_made"] = changes_made;
+	if (path.get_extension().to_lower() == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, content);
+	}
 	return MCP_SUCCESS(res);
 }
 
@@ -399,6 +405,9 @@ Dictionary JustAMCPScriptTools::_delete_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["deleted"] = true;
+	if (ext == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, String());
+	}
 	return MCP_SUCCESS(res);
 }
 

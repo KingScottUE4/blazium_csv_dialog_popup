@@ -34,6 +34,7 @@
 #ifdef TOOLS_ENABLED
 
 #include "../tools/justamcp_tool_schema_cache.h"
+
 #include "tests/test_macros.h"
 
 void test_justamcp_export_task_support_required() {
@@ -42,6 +43,7 @@ void test_justamcp_export_task_support_required() {
 		"blazium_list_android_devices",
 		"blazium_deploy_to_android",
 		"blazium_export_project",
+		"blazium_export_smoke",
 		"blazium_rescan_filesystem",
 		nullptr
 	};
