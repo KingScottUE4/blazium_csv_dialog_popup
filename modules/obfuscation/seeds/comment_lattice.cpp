@@ -410,6 +410,44 @@ static bool _path_has_target(const String &p_inner, const HashSet<String> &p_tar
 	return false;
 }
 
+// A reference is replaced with a call to _obfuscation_cref(), which only works
+// where a function call is allowed and runs on an instance. Constant
+// expressions (const, preload, enum, default arguments, annotations), static
+// initializers, extends paths and match patterns need the literal itself.
+static bool _cref_allowed_here(const String &p_out, const String &p_source, int p_after, bool p_node_path) {
+	const int line_start = p_out.rfind_char('\n') + 1;
+	const String prefix = p_out.substr(line_start).strip_edges();
+	if (prefix.ends_with("preload(") || prefix.ends_with("preload (")) {
+		return false;
+	}
+	static const char *const blocked[] = { "const ", "func ", "static ", "extends ", "class_name ", "signal ", "enum ", "match ", "class ", nullptr };
+	for (int k = 0; blocked[k]; k++) {
+		if (prefix.begins_with(blocked[k])) {
+			return false;
+		}
+	}
+	if (prefix.begins_with("@") && !(p_node_path && prefix.begins_with("@onready"))) {
+		return false;
+	}
+	// Inside a static function there is no instance to call it on.
+	const int static_func = MAX(p_out.rfind("\nstatic func "), p_out.begins_with("static func ") ? 0 : -1);
+	if (static_func >= 0 && static_func > p_out.rfind("\nfunc ")) {
+		return false;
+	}
+	if (prefix.is_empty()) {
+		// First thing on the line and followed by ':' is a match pattern (or a
+		// dictionary key on its own line, which loses nothing by staying put).
+		int j = p_after;
+		while (j < p_source.length() && (p_source[j] == ' ' || p_source[j] == '\t')) {
+			j++;
+		}
+		if (j < p_source.length() && (p_source[j] == ':' || p_source[j] == ',')) {
+			return false;
+		}
+	}
+	return true;
+}
+
 String ObfuscationCommentLattice::apply_cref(const String &p_source, const PackedByteArray &p_hmac_key, const String &p_packed_path, ObfuscationSourceMap::ScriptLang p_lang, const HashMap<String, String> &p_idents, const HashSet<String> &p_funcs, const HashSet<String> &p_scene_names, Vector<String> &r_lines) {
 	HashSet<String> targets;
 	HashSet<String> scene_vals;
@@ -447,12 +485,17 @@ String ObfuscationCommentLattice::apply_cref(const String &p_source, const Packe
 		if (p_lang == ObfuscationSourceMap::SCRIPT_LUAU) {
 			return "_obfuscation_cref(self, \"" + slot + "\")";
 		}
-		return "_obfuscation_cref(\"" + slot + "\")";
+		// str() gives the call a type, so `var path := <reference>` still infers.
+		return "str(_obfuscation_cref(\"" + slot + "\"))";
 	};
 
 	String out;
 	const int n = p_source.length();
 	int i = 0;
+	// A statement that needs constants (const FILES := {...}) can span lines:
+	// remember that while its brackets are open.
+	int depth = 0;
+	bool literal_only = false;
 	while (i < n) {
 		const char32_t c = p_source[i];
 		if (p_lang == ObfuscationSourceMap::SCRIPT_LUAU && c == '-' && i + 1 < n && p_source[i + 1] == '-') {
@@ -476,12 +519,25 @@ String ObfuscationCommentLattice::apply_cref(const String &p_source, const Packe
 			continue;
 		}
 		if (p_lang != ObfuscationSourceMap::SCRIPT_LUAU && c == '$' && i + 1 < n && _is_ident_start_cl(p_source[i + 1])) {
+			// Read the whole unquoted path ($UILayer/Menu), not just its first name.
 			i++;
-			const String id = _read_ident_cl(p_source, i);
-			if (scene_vals.has(id)) {
-				out += "get_node(" + cref_for('n', id) + ")";
+			const int path_start = i;
+			while (i < n && (_is_ident_cont_cl(p_source[i]) || (p_source[i] == '/' && i + 1 < n && (_is_ident_start_cl(p_source[i + 1]) || p_source[i + 1] == '%')) || (p_source[i] == '%' && i > path_start && p_source[i - 1] == '/'))) {
+				i++;
+			}
+			const String node_path = p_source.substr(path_start, i - path_start);
+			bool has_target = false;
+			const PackedStringArray segs = node_path.split("/");
+			for (const String &seg : segs) {
+				if (scene_vals.has(seg.trim_prefix("%"))) {
+					has_target = true;
+					break;
+				}
+			}
+			if (has_target && !literal_only && _cref_allowed_here(out, p_source, i, true)) {
+				out += "get_node(" + cref_for('n', node_path) + ")";
 			} else {
-				out += "$" + id;
+				out += "$" + node_path;
 			}
 			continue;
 		}
@@ -506,14 +562,8 @@ String ObfuscationCommentLattice::apply_cref(const String &p_source, const Packe
 			} else if (inner.find("/") >= 0 && _path_has_target(inner, targets)) {
 				tag = 'n';
 			}
-			if (tag != 0) {
-				String call = cref_for(tag, inner);
-				if (out.ends_with("preload(") || out.ends_with("preload (")) {
-					const int plen = out.ends_with("preload (") ? 9 : 8;
-					out = out.substr(0, out.length() - plen) + "load(" + call;
-				} else {
-					out += call;
-				}
+			if (tag != 0 && !literal_only && _cref_allowed_here(out, p_source, i, false)) {
+				out += cref_for(tag, inner);
 			} else {
 				out += lit;
 			}
@@ -522,6 +572,17 @@ String ObfuscationCommentLattice::apply_cref(const String &p_source, const Packe
 		if (_is_ident_start_cl(c)) {
 			out += _read_ident_cl(p_source, i);
 			continue;
+		}
+		if (c == '(' || c == '[' || c == '{') {
+			if (depth == 0) {
+				literal_only = !_cref_allowed_here(out, p_source, i, false);
+			}
+			depth++;
+		} else if ((c == ')' || c == ']' || c == '}') && depth > 0) {
+			depth--;
+			if (depth == 0) {
+				literal_only = false;
+			}
 		}
 		out += String::chr(c);
 		i++;
