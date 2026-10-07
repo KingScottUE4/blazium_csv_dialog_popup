@@ -54,6 +54,7 @@ else:
             "justamcp_pagination.cpp",
             "justamcp_project_registry.cpp",
             "justamcp_request_router.cpp",
+            "justamcp_play_clock.cpp",
             "justamcp_runtime.cpp",
             "justamcp_runtime_commands.cpp",
             "justamcp_runtime_input.cpp",

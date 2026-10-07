@@ -199,8 +199,13 @@ Dictionary JustAMCPSceneTools::set_current_scene(const Dictionary &p_args) {
 		ret["error"] = "Scene not found: " + path;
 		return ret;
 	}
-	if (EditorInterface::get_singleton()) {
+	if (EditorNode::get_singleton() && EditorInterface::get_singleton()) {
 		EditorInterface::get_singleton()->open_scene_from_path(path);
+	} else {
+		Dictionary ret;
+		ret["ok"] = false;
+		ret["error"] = "Editor interface unavailable.";
+		return ret;
 	}
 	Dictionary ret;
 	ret["ok"] = true;
@@ -222,9 +227,13 @@ Dictionary JustAMCPSceneTools::reload_scene(const Dictionary &p_args) {
 		ret["error"] = "No scene to reload.";
 		return ret;
 	}
-	if (EditorInterface::get_singleton()) {
-		EditorInterface::get_singleton()->reload_scene_from_path(path);
+	if (!EditorNode::get_singleton() || !EditorInterface::get_singleton()) {
+		Dictionary ret;
+		ret["ok"] = false;
+		ret["error"] = "Editor interface unavailable.";
+		return ret;
 	}
+	EditorInterface::get_singleton()->reload_scene_from_path(path);
 	Dictionary ret;
 	ret["ok"] = true;
 	ret["path"] = path;

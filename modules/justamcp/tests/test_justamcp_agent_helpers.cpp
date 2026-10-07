@@ -32,14 +32,19 @@
 #include "test_justamcp_agent_helpers.h"
 
 #include "../justamcp_mcp_tool_macros.h"
+#include "../justamcp_play_clock.h"
 #include "../tools/justamcp_agent_helpers.h"
 #include "../tools/justamcp_category_dispatch.h"
 #include "../tools/justamcp_settings_resolver.h"
 #include "../tools/justamcp_tool_executor.h"
 #include "../tools/justamcp_tool_schema_cache.h"
+
 #include "core/config/project_settings.h"
-#include "modules/modules_enabled.gen.h"
+#include "core/io/dir_access.h"
+#include "core/io/file_access.h"
 #include "tests/test_macros.h"
+
+#include "modules/modules_enabled.gen.h"
 
 #ifdef MODULE_AUTOWORK_ENABLED
 #include "modules/autowork/autowork_main.h"
@@ -236,6 +241,32 @@ void test_justamcp_agent_gap_schemas() {
 	CHECK(_schema_has(schemas, "blazium_qa_watch"));
 	CHECK(_schema_has(schemas, "blazium_qa_drive"));
 	CHECK(_schema_has(schemas, "blazium_qa_stop"));
+	CHECK(_schema_has(schemas, "blazium_runtime_freeze"));
+	CHECK(_schema_has(schemas, "blazium_runtime_step"));
+	CHECK(_schema_has(schemas, "blazium_runtime_step_until"));
+	CHECK(_schema_has(schemas, "blazium_runtime_set_time_scale"));
+	CHECK(_schema_has(schemas, "blazium_runtime_click_world"));
+	CHECK(_schema_has(schemas, "blazium_editor_get_camera"));
+	CHECK(_schema_has(schemas, "blazium_editor_set_camera"));
+	CHECK(_schema_has(schemas, "blazium_editor_list_dialogs"));
+	CHECK(_schema_has(schemas, "blazium_editor_dismiss_dialog"));
+	CHECK(_schema_has(schemas, "blazium_editor_list_actions"));
+	CHECK(_schema_has(schemas, "blazium_editor_invoke_action"));
+	CHECK(_schema_has(schemas, "blazium_editor_unsaved_state"));
+	CHECK(_schema_has(schemas, "blazium_editor_save_all"));
+	CHECK(_schema_has(schemas, "blazium_scene3d_render_probe"));
+	CHECK(_schema_has(schemas, "blazium_scene3d_set_debug_draw"));
+	CHECK(_schema_has(schemas, "blazium_spatial_snap_to_surface"));
+	CHECK(_schema_has(schemas, "blazium_spatial_repeat_along"));
+	CHECK(_schema_has(schemas, "blazium_export_patch_pck"));
+	CHECK(_schema_has(schemas, "blazium_asset_lib_search"));
+	CHECK(_schema_has(schemas, "blazium_asset_lib_info"));
+	CHECK(_schema_has(schemas, "blazium_asset_lib_install"));
+	const Dictionary play_schema = _schema_named(schemas, "blazium_editor_play_scene");
+	Dictionary play_props = Dictionary(Dictionary(play_schema.get("inputSchema", Dictionary())).get("properties", Dictionary()));
+	CHECK(play_props.has("seed"));
+	CHECK(play_props.has("fixed_fps"));
+	CHECK(play_props.has("frozen"));
 	CHECK(_schema_has(schemas, "blazium_edit_file"));
 	CHECK(_schema_has(schemas, "blazium_move_file"));
 	CHECK(_schema_has(schemas, "blazium_delete_file"));
@@ -267,6 +298,7 @@ void test_justamcp_agent_gap_schemas() {
 	CHECK(String(eval_schema.get("description", "")).findn("Disabled by default") != -1);
 	CHECK(_schema_has(disabled_included, "blazium_debugger_summary"));
 	CHECK(_schema_has(disabled_included, "blazium_focus_window"));
+	CHECK(_schema_has(disabled_included, "blazium_remote_control_run_headless_script"));
 #endif
 	CHECK(_schema_has(schemas, "blazium_asset_assign_uid"));
 	CHECK(_schema_has(schemas, "blazium_asset_update_uid"));
@@ -479,6 +511,81 @@ void test_justamcp_agent_gap_dispatch() {
 	CHECK(bool(flags.get("ascii", false)));
 	justamcp_apply_alias_query_flags("get_tileset_info", flags);
 	CHECK(bool(flags.get("tileset_only", false)));
+}
+
+void test_justamcp_play_clock_and_script_guard() {
+	Dictionary both;
+	both["duration_ms"] = 16;
+	both["frames"] = 1;
+	CHECK(!justamcp_validate_runtime_step_args(both).is_empty());
+	CHECK(!justamcp_validate_runtime_step_args(Dictionary()).is_empty());
+	Dictionary frames;
+	frames["frames"] = 1;
+	CHECK(justamcp_validate_runtime_step_args(frames).is_empty());
+	Dictionary huge;
+	huge["frames"] = 500;
+	CHECK(!justamcp_validate_runtime_step_args(huge).is_empty());
+	Dictionary negative_frames;
+	negative_frames["frames"] = -1;
+	CHECK(!justamcp_validate_runtime_step_args(negative_frames).is_empty());
+	Dictionary bad_fps;
+	bad_fps["fixed_fps"] = 0;
+	CHECK(!justamcp_validate_play_launch_args(bad_fps).is_empty());
+	Dictionary huge_fps;
+	huge_fps["fixed_fps"] = 999;
+	CHECK(!justamcp_validate_play_launch_args(huge_fps).is_empty());
+	Dictionary ok_fps;
+	ok_fps["fixed_fps"] = 60;
+	ok_fps["seed"] = 7;
+	CHECK(justamcp_validate_play_launch_args(ok_fps).is_empty());
+	Dictionary until_missing;
+	CHECK(!justamcp_validate_runtime_step_until_args(until_missing).is_empty());
+	Dictionary until_ok;
+	until_ok["expr"] = "true";
+	CHECK(justamcp_validate_runtime_step_until_args(until_ok).is_empty());
+	Dictionary until_long;
+	until_long["expr"] = String("x").repeat(600);
+	CHECK(!justamcp_validate_runtime_step_until_args(until_long).is_empty());
+
+	String compile_error;
+	CHECK(justamcp_gdscript_source_compiles("extends Node\nfunc ready() -> void:\n\tpass\n", compile_error));
+	CHECK(!justamcp_gdscript_source_compiles("func (", compile_error));
+	Dictionary validate_on;
+	CHECK(justamcp_script_write_requires_validate("res://player.gd", validate_on));
+	validate_on["validate"] = false;
+	CHECK(!justamcp_script_write_requires_validate("res://player.gd", validate_on));
+	CHECK(!justamcp_script_write_requires_validate("res://player.cs", Dictionary()));
+
+	Dictionary blocked = justamcp_guard_gdscript_write("res://player.gd", "func (", Dictionary());
+	CHECK(blocked.has("ok"));
+	CHECK(!bool(blocked.get("ok", true)));
+	Dictionary allow;
+	allow["validate"] = false;
+	CHECK(justamcp_guard_gdscript_write("res://player.gd", "func (", allow).is_empty());
+	CHECK(justamcp_guard_gdscript_write("res://player.cs", "func (", Dictionary()).is_empty());
+
+	JustAMCPToolExecutor executor;
+	Dictionary bad_script;
+	bad_script["path"] = "user://justamcp_gap_invalid.gd";
+	bad_script["content"] = "func broken(\n";
+	Dictionary refused = executor.execute_tool("create_script", bad_script);
+	CHECK(!bool(refused.get("ok", true)));
+	CHECK(String(refused.get("error", "")).findn("validation") != -1);
+	CHECK(!FileAccess::exists("user://justamcp_gap_invalid.gd"));
+
+	Dictionary forced;
+	forced["path"] = "user://justamcp_gap_forced.gd";
+	forced["content"] = "func broken(\n";
+	forced["validate"] = false;
+	Dictionary written = executor.execute_tool("create_script", forced);
+	CHECK(String(written.get("error", "")).findn("validation") == -1);
+	if (FileAccess::exists("user://justamcp_gap_forced.gd")) {
+		DirAccess::remove_absolute(ProjectSettings::get_singleton()->globalize_path("user://justamcp_gap_forced.gd"));
+	}
+
+	Dictionary step = executor.execute_tool("runtime_step", Dictionary());
+	CHECK(step.has("ok"));
+	CHECK(!bool(step.get("ok", true)));
 }
 
 #endif

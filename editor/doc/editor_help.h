@@ -229,6 +229,7 @@ protected:
 
 public:
 	static void generate_doc(bool p_use_cache = true, bool p_use_script_cache = true);
+	static void ensure_doc_data();
 	static void cleanup_doc();
 	static void load_script_doc_cache();
 	static void regenerate_script_doc_cache();

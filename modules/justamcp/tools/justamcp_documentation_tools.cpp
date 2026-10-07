@@ -46,6 +46,9 @@ JustAMCPDocumentationTools::~JustAMCPDocumentationTools() {
 }
 
 DocTools *JustAMCPDocumentationTools::_get_doc_tools() const {
+	if (!EditorHelp::get_doc_data() || EditorHelp::get_doc_data()->class_list.is_empty()) {
+		EditorHelp::ensure_doc_data();
+	}
 	return EditorHelp::get_doc_data();
 }
 

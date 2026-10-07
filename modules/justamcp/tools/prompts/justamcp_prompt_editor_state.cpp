@@ -30,7 +30,9 @@
 #ifdef TOOLS_ENABLED
 
 #include "justamcp_prompt_editor_state.h"
+
 #include "../../justamcp_editor_scene_access.h"
+
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
 
@@ -72,7 +74,8 @@ Dictionary JustAMCPPromptEditorState::get_messages(const Dictionary &p_args) {
 	content["type"] = "text";
 
 	String target = p_args.has("target") ? String(Variant(p_args["target"])) : "all";
-	String summary = "Editor State: ";
+	String summary_prefix = "Also read blazium://editor/state and blazium://editor/dialogs. List unsaved files with blazium_editor_unsaved_state and save them with blazium_editor_save_all. List editor actions with blazium_editor_list_actions and invoke one with blazium_editor_invoke_action. Dismiss a dialog only by title with blazium_editor_dismiss_dialog. ";
+	String summary = summary_prefix + "Editor State: ";
 
 #ifdef TOOLS_ENABLED
 	if (EditorNode::get_singleton() && EditorInterface::get_singleton()) {

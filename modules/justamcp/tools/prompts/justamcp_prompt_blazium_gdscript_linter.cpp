@@ -101,6 +101,9 @@ Dictionary JustAMCPPromptBlaziumGDScriptLinter::get_messages(const Dictionary &p
 	text += String("BAD:  var GRAVITY = 980\n");
 	text += String("GOOD: const GRAVITY: float = 980.0\n\n");
 
+	text += String("## Writes\n");
+	text += String("`blazium_create_script`, `blazium_edit_script`, and `blazium_patch_script` refuse a .gd file when it does not compile. `validate` defaults to true. Pass `validate` false only when you intentionally keep a broken intermediate. .cs files are written as given. Call `blazium_validate_script` before you attach the result.\n\n");
+
 	text += String("## Required Output\n");
 	text += String("1. The fully rewritten GDScript file with all types applied.\n");
 	text += String("2. A change summary listing every variable and function that was updated.\n");

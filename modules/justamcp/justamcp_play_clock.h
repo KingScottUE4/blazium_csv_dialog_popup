@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  justamcp_prompt_blazium_workflows.h                                   */
+/*  justamcp_play_clock.h                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -29,50 +29,18 @@
 
 #pragma once
 
-#ifdef TOOLS_ENABLED
+#include "core/variant/dictionary.h"
 
-#include "justamcp_prompt.h"
-
-#include "core/string/ustring.h"
-
-class JustAMCPPromptBlaziumWorkflow : public JustAMCPPrompt {
-	GDCLASS(JustAMCPPromptBlaziumWorkflow, JustAMCPPrompt);
-
-public:
-	enum WorkflowKind {
-		PROJECT_INTAKE,
-		SCENE_BUILD,
-		RUNTIME_TEST_LOOP,
-		AUTOWORK_FIX_LOOP,
-		DIAGNOSTICS_TRIAGE,
-		VISUAL_PROOF,
-	};
-
-private:
-	WorkflowKind kind = PROJECT_INTAKE;
-
-	String _get_title() const;
-	String _get_description() const;
-	Array _get_arguments() const;
-	void _append_common_context(Array &r_messages) const;
-	Dictionary _get_project_intake_messages(const Dictionary &p_args);
-	Dictionary _get_scene_build_messages(const Dictionary &p_args);
-	Dictionary _get_runtime_test_loop_messages(const Dictionary &p_args);
-	Dictionary _get_autowork_fix_loop_messages(const Dictionary &p_args);
-	Dictionary _get_diagnostics_triage_messages(const Dictionary &p_args);
-	Dictionary _get_visual_proof_messages(const Dictionary &p_args);
-
-protected:
-	static void _bind_methods();
-
-public:
-	virtual String get_name() const override;
-	virtual Dictionary get_prompt() const override;
-	virtual Dictionary get_messages(const Dictionary &p_args) override;
-	virtual Dictionary complete(const Dictionary &p_argument) override;
-
-	JustAMCPPromptBlaziumWorkflow(WorkflowKind p_kind = PROJECT_INTAKE);
-	~JustAMCPPromptBlaziumWorkflow();
-};
-
-#endif
+Dictionary justamcp_validate_play_launch_args(const Dictionary &p_args);
+Dictionary justamcp_validate_runtime_step_args(const Dictionary &p_args);
+Dictionary justamcp_validate_runtime_step_until_args(const Dictionary &p_args);
+Dictionary justamcp_play_clock_snapshot();
+void justamcp_note_play_launch_args(const Dictionary &p_args);
+void justamcp_note_play_frozen(bool p_frozen);
+void justamcp_note_play_time_scale(double p_scale);
+void justamcp_prepare_play_clock_environment(const Dictionary &p_args);
+void justamcp_clear_play_clock_environment();
+bool justamcp_try_play_clock_command(const String &p_command, const Dictionary &p_params, Dictionary &r_result);
+bool justamcp_gdscript_source_compiles(const String &p_source, String &r_error);
+bool justamcp_script_write_requires_validate(const String &p_path, const Dictionary &p_params);
+Dictionary justamcp_guard_gdscript_write(const String &p_path, const String &p_content, const Dictionary &p_params);

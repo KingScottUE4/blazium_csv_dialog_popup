@@ -107,6 +107,7 @@ void JustAMCPRuntime::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("list_tools"), &JustAMCPRuntime::list_tools);
 	ClassDB::bind_method(D_METHOD("is_listening"), &JustAMCPRuntime::is_listening);
 	ClassDB::bind_method(D_METHOD("load_project_mcp_scripts"), &JustAMCPRuntime::load_project_mcp_scripts);
+	ClassDB::bind_method(D_METHOD("_apply_inherited_play_clock"), &JustAMCPRuntime::_apply_inherited_play_clock);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "port"), "set_port", "get_port");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
@@ -137,6 +138,9 @@ JustAMCPRuntime::JustAMCPRuntime() {
 
 	if (enabled) {
 		_start_server();
+	}
+	if (OS::get_singleton() && (OS::get_singleton()->has_environment("JUSTAMCP_PLAY_SEED") || OS::get_singleton()->has_environment("JUSTAMCP_PLAY_FIXED_FPS") || OS::get_singleton()->has_environment("JUSTAMCP_PLAY_FROZEN") || OS::get_singleton()->has_environment("JUSTAMCP_PLAY_TIME_SCALE"))) {
+		call_deferred("_apply_inherited_play_clock");
 	}
 }
 

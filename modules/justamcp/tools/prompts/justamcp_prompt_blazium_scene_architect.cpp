@@ -107,6 +107,9 @@ Dictionary JustAMCPPromptBlaziumSceneArchitect::get_messages(const Dictionary &p
 	text += String("- A Health node manages health. A Movement node manages movement.\n");
 	text += String("- The root node orchestrates children via signal connections in _ready().\n\n");
 
+	text += String("## Placement\n");
+	text += String("Read the 3D editor camera with `blazium_editor_get_camera` and set it with `blazium_editor_set_camera` before you screenshot the result. Place a node on a surface with `blazium_spatial_snap_to_surface`. Place copies along a segment with `blazium_spatial_repeat_along` (count is capped at 32).\n\n");
+
 	text += String("## Required Output Format\n");
 	text += String("Return exactly three sections:\n");
 	text += String("1. Scene Tree - node names and GDScript types in a hierarchy diagram.\n");
