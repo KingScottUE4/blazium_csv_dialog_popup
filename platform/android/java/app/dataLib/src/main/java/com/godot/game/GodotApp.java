@@ -30,9 +30,12 @@
 
 package com.godot.game;
 
+import app.blazium.godot.BlaziumActivity;
+
 /**
- * @deprecated Use {@link BlaziumApp}.
+ * Compatibility activity kept for older projects.
+ * The export template launches BlaziumApp.
  */
 @Deprecated
-public class GodotApp extends BlaziumApp {
+public class GodotApp extends BlaziumActivity {
 }
