@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="EditorExportPlatformWindowsScreensaver" inherits="EditorExportPlatformWindows" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="EditorExportPlatformWindowsScreensaver" inherits="EditorExportPlatformWindows" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
 		Exports a Windows [code].scr[/code] using screensaver-flavored templates.
 	</brief_description>
@@ -89,6 +89,8 @@
 			Default monitor index for [code]single[/code] and [code]clone[/code] when [code]--screen[/code] / [code]/s:N[/code] is not passed. [code]-1[/code] keeps the engine primary-screen default. Packed as [code]blazium/screensaver/screen[/code].
 		</member>
 		<member name="screensaver/unlock_scene" type="String" setter="" getter="">
+		</member>
+		<member name="shader_baker/enabled" type="bool" setter="" getter="">
 		</member>
 		<member name="ssh_remote_deploy/cleanup_script" type="String" setter="" getter="">
 		</member>
