@@ -49,7 +49,7 @@ BlaziumGoapEditorPlugin::~BlaziumGoapEditorPlugin() {
 	}
 	if (bottom_panel) {
 		remove_blazium_item("GOAP", "GOAP");
-		bottom_panel->queue_free();
+		memdelete(bottom_panel);
 		bottom_panel = nullptr;
 	}
 }

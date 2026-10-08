@@ -443,7 +443,7 @@ void WarcryEditorPlugin::_teardown_dock() {
 
 	if (dock_root) {
 		remove_blazium_item("Warcry", "Warcry");
-		dock_root->queue_free();
+		memdelete(dock_root);
 		dock_root = nullptr;
 	}
 	host_edit = nullptr;

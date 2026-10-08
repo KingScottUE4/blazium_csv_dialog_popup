@@ -2201,8 +2201,8 @@ void MultiuserEditorPlugin::_teardown_dock() {
 	if (dock) {
 		remove_blazium_item("Multiuser", "Session");
 		remove_blazium_item("Multiuser", "Chat");
-		dock->queue_free();
-		chat_dock->queue_free();
+		memdelete(dock);
+		memdelete(chat_dock);
 		dock = nullptr;
 		chat_dock = nullptr;
 	}

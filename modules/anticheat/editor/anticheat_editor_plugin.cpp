@@ -301,7 +301,7 @@ void AnticheatEditorPlugin::_teardown_dock() {
 	}
 	if (dock_root) {
 		remove_blazium_item("Anticheat", "Anticheat");
-		dock_root->queue_free();
+		memdelete(dock_root);
 		dock_root = nullptr;
 		log = nullptr;
 		player_id_edit = nullptr;

@@ -70,6 +70,11 @@ AutoworkEditorPlugin::AutoworkEditorPlugin() {
 }
 
 AutoworkEditorPlugin::~AutoworkEditorPlugin() {
+	if (main_panel) {
+		remove_blazium_item("Autowork", "Autowork");
+		memdelete(main_panel);
+		main_panel = nullptr;
+	}
 }
 
 void AutoworkEditorPlugin::_run_tests_pressed() {

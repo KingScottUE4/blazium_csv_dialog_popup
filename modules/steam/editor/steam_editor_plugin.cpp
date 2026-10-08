@@ -411,7 +411,7 @@ void SteamEditorPlugin::_teardown_dock() {
 	}
 
 	remove_blazium_item("Steam", "Steam");
-	dock_root->queue_free();
+	memdelete(dock_root);
 	dock_root = nullptr;
 	app_id_edit = nullptr;
 	identity_edit = nullptr;

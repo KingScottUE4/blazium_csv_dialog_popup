@@ -364,7 +364,7 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 
 			if (apps_dock) {
 				remove_blazium_item("JustAMCP", "Apps");
-				apps_dock->queue_free();
+				memdelete(apps_dock);
 				apps_dock = nullptr;
 				apps_list = nullptr;
 			}

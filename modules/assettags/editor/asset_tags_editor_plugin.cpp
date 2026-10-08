@@ -345,7 +345,7 @@ void AssetTagsEditorPlugin::_teardown_tab() {
 	}
 	if (tags_tab) {
 		remove_blazium_item("Asset Tags", "Tag Dictionary");
-		tags_tab->queue_free();
+		memdelete(tags_tab);
 		tags_tab = nullptr;
 		tag_tree = nullptr;
 		new_tag_edit = nullptr;
