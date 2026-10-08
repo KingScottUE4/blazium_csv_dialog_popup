@@ -202,14 +202,14 @@ void LuauEditorPlugin::_setup_repl() {
 	buttons->add_child(format_button);
 	vbox->add_child(buttons);
 
-	add_control_to_bottom_panel(main_panel, "Luau REPL");
+	add_blazium_window("Luau", "REPL", main_panel);
 	_init_repl_state();
 	_append_output("Luau REPL ready.");
 }
 
 void LuauEditorPlugin::_teardown_repl() {
 	if (main_panel) {
-		remove_control_from_bottom_panel(main_panel);
+		remove_blazium_item("Luau", "REPL");
 		memdelete(main_panel);
 		main_panel = nullptr;
 	}

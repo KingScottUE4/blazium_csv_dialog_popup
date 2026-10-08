@@ -684,9 +684,9 @@ void InterDVDEditorPlugin::_notification(int p_what) {
 		add_inspector_plugin(title_set_inspector_plugin);
 		menu_page_inspector_plugin.instantiate();
 		add_inspector_plugin(menu_page_inspector_plugin);
-		add_tool_menu_item(TTR("Create Interactive DVD Scene"), callable_mp(this, &InterDVDEditorPlugin::_create_dvd_scene));
+		add_blazium_action("Interactive DVD", "Create Scene", callable_mp(this, &InterDVDEditorPlugin::_create_dvd_scene));
 	} else if (p_what == NOTIFICATION_EXIT_TREE) {
-		remove_tool_menu_item(TTR("Create Interactive DVD Scene"));
+		remove_blazium_item("Interactive DVD", "Create Scene");
 		if (menu_page_inspector_plugin.is_valid()) {
 			remove_inspector_plugin(menu_page_inspector_plugin);
 			menu_page_inspector_plugin.unref();

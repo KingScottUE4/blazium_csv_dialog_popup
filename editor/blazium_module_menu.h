@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  blazium_goap_editor_plugin.cpp                                        */
+/*  blazium_module_menu.h                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -27,31 +27,53 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "blazium_goap_editor_plugin.h"
+#pragma once
 
-#ifdef TOOLS_ENABLED
+#include "core/object/object.h"
+#include "core/string/ustring.h"
+#include "core/templates/hash_map.h"
+#include "core/templates/vector.h"
+#include "core/variant/callable.h"
 
-void BlaziumGoapEditorPlugin::_bind_methods() {
-}
+class Control;
+class PopupMenu;
+class Window;
 
-BlaziumGoapEditorPlugin::BlaziumGoapEditorPlugin() {
-	bottom_panel = memnew(BlaziumGoapBottomPanel);
-	add_blazium_window("GOAP", "GOAP", bottom_panel);
+// Owns the main-menu Blazium entry. Modules register windows and actions here
+// instead of parenting controls into docks, toolbars, or other core editor UI.
+class BlaziumModuleMenu : public Object {
+	struct MenuEntry {
+		int id = 0;
+		String module;
+		String title;
+		Control *control = nullptr;
+		Callable action;
+		bool is_window = false;
+	};
 
-	debugger_plugin.instantiate();
-	debugger_plugin->bind_bottom_panel(bottom_panel);
-	add_debugger_plugin(debugger_plugin);
-}
+	static BlaziumModuleMenu *singleton;
 
-BlaziumGoapEditorPlugin::~BlaziumGoapEditorPlugin() {
-	if (debugger_plugin.is_valid()) {
-		remove_debugger_plugin(debugger_plugin);
-	}
-	if (bottom_panel) {
-		remove_blazium_item("GOAP", "GOAP");
-		memdelete(bottom_panel);
-		bottom_panel = nullptr;
-	}
-}
+	PopupMenu *root_menu = nullptr;
+	HashMap<String, PopupMenu *> module_menus;
+	HashMap<Control *, Window *> windows;
+	Vector<MenuEntry> entries;
+	int next_id = 1;
+	int window_cascade = 0;
 
-#endif // TOOLS_ENABLED
+	PopupMenu *_get_module_menu(const String &p_module);
+	void _on_id_pressed(int p_id);
+	void _open_window(Control *p_control, const String &p_title);
+	void _release_entry(int p_index);
+
+public:
+	static BlaziumModuleMenu *get_singleton() { return singleton; }
+
+	BlaziumModuleMenu();
+	~BlaziumModuleMenu();
+
+	PopupMenu *get_menu() const { return root_menu; }
+
+	void add_window(const String &p_module, const String &p_title, Control *p_control);
+	void add_action(const String &p_module, const String &p_title, const Callable &p_callable);
+	void remove_item(const String &p_module, const String &p_title);
+};

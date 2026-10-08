@@ -388,7 +388,7 @@ void SteamEditorPlugin::_setup_dock() {
 	dock_root->add_child(fields_grid);
 	dock_root->add_child(buttons_grid);
 	dock_root->add_child(log);
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock_root);
+	add_blazium_window("Steam", "Steam", dock_root);
 
 	Steam *steam = Steam::get_singleton();
 	if (steam) {
@@ -410,8 +410,8 @@ void SteamEditorPlugin::_teardown_dock() {
 		steam->disconnect("workshop_query_completed", callable_mp(this, &SteamEditorPlugin::_on_workshop_query_completed));
 	}
 
-	remove_control_from_docks(dock_root);
-	dock_root->queue_free();
+	remove_blazium_item("Steam", "Steam");
+	memdelete(dock_root);
 	dock_root = nullptr;
 	app_id_edit = nullptr;
 	identity_edit = nullptr;

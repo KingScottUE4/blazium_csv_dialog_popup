@@ -74,6 +74,7 @@ class BackgroundProgress;
 class DependencyErrorDialog;
 class DockSplitContainer;
 class DynamicFontImportSettingsDialog;
+class BlaziumModuleMenu;
 class EditorAbout;
 class EditorBuildProfileManager;
 class EditorBottomPanel;
@@ -359,6 +360,7 @@ private:
 	PopupMenu *project_menu = nullptr;
 	PopupMenu *debug_menu = nullptr;
 	PopupMenu *settings_menu = nullptr;
+	BlaziumModuleMenu *blazium_module_menu = nullptr;
 	PopupMenu *help_menu = nullptr;
 	PopupMenu *tool_menu = nullptr;
 	PopupMenu *export_as_menu = nullptr;

@@ -437,11 +437,7 @@ void MultiuserEditorPlugin::_notification(int p_what) {
 				inspector_plugin.unref();
 			}
 			_teardown_dock();
-			if (status_label) {
-				remove_control_from_container(CONTAINER_TOOLBAR, status_label);
-				status_label->queue_free();
-				status_label = nullptr;
-			}
+			status_label = nullptr;
 		} break;
 	}
 }
@@ -1687,20 +1683,7 @@ void MultiuserEditorPlugin::_route_action(int p_sender_net_id, const Dictionary 
 			return;
 		}
 		send_chat(vformat("Peer %s has started remote Automated Testing...", local_peer_id));
-
-		Autowork *aw = memnew(Autowork);
-		EditorInterface::get_singleton()->get_base_control()->add_child(aw);
-		aw->add_directory("res://");
-		aw->run_tests();
-
-		int passes = aw->get_pass_count();
-		int fails = aw->get_fail_count();
-		int pendings = aw->get_pending_count();
-
-		String results = vformat("Autowork Results [%s]: Passed: %d | Failed: %d | Pending: %d", local_peer_id, passes, fails, pendings);
-		send_chat(results);
-
-		aw->queue_free();
+		_start_yielded_autowork();
 	} else if (type == multiuser_editor::kActionCursorUpdate) {
 		const int min_cur_ms = MAX(0, int(MULTIUSER_GET("blazium/multiuser_editor/limits/cursor_update_min_interval_ms", 50)));
 		if (min_cur_ms > 0) {
@@ -2202,7 +2185,7 @@ void MultiuserEditorPlugin::_update_ui() {
 
 void MultiuserEditorPlugin::_setup_dock() {
 	dock = memnew(MultiuserEditorDock);
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock);
+	add_blazium_window("Multiuser", "Session", dock);
 	dock->set_session_branch_default(String(MULTIUSER_GET("blazium/multiuser_editor/git_session_branch_name", "multiuser_session_{timestamp}")));
 	dock->set_merge_target_default(String(MULTIUSER_GET("blazium/multiuser_editor/git_merge_target_branch", "main")));
 	last_enabled_state = bool(MULTIUSER_GET("blazium/multiuser_editor/enabled", false));
@@ -2211,15 +2194,15 @@ void MultiuserEditorPlugin::_setup_dock() {
 	chat_dock = memnew(MultiuserChatDock);
 	chat_dock->set_module_enabled(last_enabled_state);
 	chat_dock->set_chat_history_max(MAX(16, int(MULTIUSER_GET("blazium/multiuser_editor/limits/chat_history_max", 256))));
-	add_control_to_dock(DOCK_SLOT_LEFT_BR, chat_dock);
+	add_blazium_window("Multiuser", "Chat", chat_dock);
 }
 
 void MultiuserEditorPlugin::_teardown_dock() {
 	if (dock) {
-		remove_control_from_docks(dock);
-		remove_control_from_docks(chat_dock);
-		dock->queue_free();
-		chat_dock->queue_free();
+		remove_blazium_item("Multiuser", "Session");
+		remove_blazium_item("Multiuser", "Chat");
+		memdelete(dock);
+		memdelete(chat_dock);
 		dock = nullptr;
 		chat_dock = nullptr;
 	}
@@ -2230,7 +2213,10 @@ void MultiuserEditorPlugin::_setup_status_indicator() {
 	status_label->set_text(TTR("Multiuser Editor"));
 	status_label->add_theme_color_override("font_color", Color(0.3, 1.0, 0.3));
 	status_label->hide();
-	add_control_to_container(CONTAINER_TOOLBAR, status_label);
+	if (dock) {
+		dock->add_child(status_label);
+		dock->move_child(status_label, 0);
+	}
 }
 
 void MultiuserEditorPlugin::_connect_network_signals() {
@@ -4892,20 +4878,29 @@ void MultiuserEditorPlugin::trigger_autowork() {
 
 	if (bool(MULTIUSER_GET("blazium/multiuser_editor/allow_remote_autowork", false))) {
 		send_chat(vformat("Peer %s has started remote Automated Testing...", local_peer_id));
+		_start_yielded_autowork();
+	}
+}
 
-		Autowork *aw = memnew(Autowork);
-		EditorInterface::get_singleton()->get_base_control()->add_child(aw);
-		aw->add_directory("res://");
-		aw->run_tests();
+void MultiuserEditorPlugin::_start_yielded_autowork() {
+	Autowork *aw = memnew(Autowork);
+	EditorInterface::get_singleton()->get_base_control()->add_child(aw);
+	aw->set_yield_frames(true);
+	aw->add_directory("res://");
+	aw->connect("tests_finished", callable_mp(this, &MultiuserEditorPlugin::_on_autowork_finished).bind(aw));
+	aw->run_tests();
+}
 
-		int passes = aw->get_pass_count();
-		int fails = aw->get_fail_count();
-		int pendings = aw->get_pending_count();
-
-		String results = vformat("Autowork Results [%s]: Passed: %d | Failed: %d | Pending: %d", local_peer_id, passes, fails, pendings);
-		send_chat(results);
-
-		aw->queue_free();
+void MultiuserEditorPlugin::_on_autowork_finished(Autowork *p_runner) {
+	if (!p_runner) {
+		return;
+	}
+	const int passes = p_runner->get_pass_count();
+	const int fails = p_runner->get_fail_count();
+	const int pendings = p_runner->get_pending_count();
+	send_chat(vformat("Autowork Results [%s]: Passed: %d | Failed: %d | Pending: %d", local_peer_id, passes, fails, pendings));
+	if (p_runner->is_inside_tree()) {
+		p_runner->queue_free();
 	}
 }
 
