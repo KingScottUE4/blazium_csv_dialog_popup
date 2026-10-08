@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  jolt_custom_double_sided_shape.h                                      */
+/*  editor_debugger_server_messageport.cpp                                */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,46 +28,70 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#include "editor_debugger_server_messageport.h"
 
-#include "jolt_custom_decorated_shape.h"
-#include "jolt_custom_shape_type.h"
+#include "editor/editor_log.h"
+#include "editor/editor_node.h"
 
-class JoltCustomDoubleSidedShapeSettings final : public JoltCustomDecoratedShapeSettings {
-public:
-	bool back_face_collision = false;
+extern "C" {
+bool godot_js_editor_debugger_active();
+void godot_js_editor_debugger_cb(void (*p_callback)(int p_id));
+}
 
-	JoltCustomDoubleSidedShapeSettings() = default;
+EditorDebuggerServerMessagePort *EditorDebuggerServerMessagePort::singleton = nullptr;
 
-	JoltCustomDoubleSidedShapeSettings(const ShapeSettings *p_inner_settings, bool p_back_face_collision) :
-			JoltCustomDecoratedShapeSettings(p_inner_settings), back_face_collision(p_back_face_collision) {}
+void EditorDebuggerServerMessagePort::_add_session(int p_session) {
+	ERR_FAIL_NULL(singleton);
+	singleton->pending.push_back(p_session);
+}
 
-	JoltCustomDoubleSidedShapeSettings(const JPH::Shape *p_inner_shape, bool p_back_face_collision) :
-			JoltCustomDecoratedShapeSettings(p_inner_shape), back_face_collision(p_back_face_collision) {}
+void EditorDebuggerServerMessagePort::initialize() {
+	EditorDebuggerServer::register_protocol_handler("messageport://", EditorDebuggerServerMessagePort::create);
+}
 
-	virtual JPH::Shape::ShapeResult Create() const override;
-};
+void EditorDebuggerServerMessagePort::poll() {
+}
 
-class JoltCustomDoubleSidedShape final : public JoltCustomDecoratedShape {
-	bool back_face_collision = false;
+String EditorDebuggerServerMessagePort::get_uri() const {
+	return "messageport://";
+}
 
-public:
-	static void register_type();
+Error EditorDebuggerServerMessagePort::start(const String &p_uri) {
+	godot_js_editor_debugger_cb(&_add_session);
+	return OK;
+}
 
-	JoltCustomDoubleSidedShape() :
-			JoltCustomDecoratedShape(JoltCustomShapeSubType::DOUBLE_SIDED) {}
+void EditorDebuggerServerMessagePort::stop() {
+	godot_js_editor_debugger_cb(nullptr);
+	pending.clear();
+}
 
-	JoltCustomDoubleSidedShape(const JoltCustomDoubleSidedShapeSettings &p_settings, JPH::Shape::ShapeResult &p_result) :
-			JoltCustomDecoratedShape(JoltCustomShapeSubType::DOUBLE_SIDED, p_settings, p_result), back_face_collision(p_settings.back_face_collision) {
-		if (!p_result.HasError()) {
-			p_result.Set(this);
-		}
-	}
+bool EditorDebuggerServerMessagePort::is_active() const {
+	return godot_js_editor_debugger_active();
+}
 
-	JoltCustomDoubleSidedShape(const JPH::Shape *p_inner_shape, bool p_back_face_collision) :
-			JoltCustomDecoratedShape(JoltCustomShapeSubType::DOUBLE_SIDED, p_inner_shape), back_face_collision(p_back_face_collision) {}
+bool EditorDebuggerServerMessagePort::is_connection_available() const {
+	return pending.size();
+}
 
-	virtual void CastRay(const JPH::RayCast &p_ray, const JPH::RayCastSettings &p_ray_cast_settings, const JPH::SubShapeIDCreator &p_sub_shape_id_creator, JPH::CastRayCollector &p_collector, const JPH::ShapeFilter &p_shape_filter = JPH::ShapeFilter()) const override;
+Ref<RemoteDebuggerPeer> EditorDebuggerServerMessagePort::take_connection() {
+	ERR_FAIL_COND_V(!is_connection_available(), Ref<RemoteDebuggerPeer>());
+	Ref<RemoteDebuggerPeerMessagePort> peer = memnew(RemoteDebuggerPeerMessagePort(pending.front()->get()));
+	pending.pop_front();
+	return peer;
+}
 
-	bool should_collide_with_back_faces() const { return back_face_collision; }
-};
+EditorDebuggerServerMessagePort::EditorDebuggerServerMessagePort() {
+	ERR_FAIL_COND(singleton != nullptr);
+	singleton = this;
+}
+
+EditorDebuggerServerMessagePort::~EditorDebuggerServerMessagePort() {
+	stop();
+	singleton = nullptr;
+}
+
+Ref<EditorDebuggerServer> EditorDebuggerServerMessagePort::create(const String &p_protocol) {
+	ERR_FAIL_COND_V(p_protocol != "messageport://", nullptr);
+	return memnew(EditorDebuggerServerMessagePort);
+}

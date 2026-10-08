@@ -623,8 +623,8 @@ void LuauScriptInstance::notification(int p_notification, bool p_reversed) {
 	}
 }
 
-Ref<Script> LuauScriptInstance::get_script() const {
-	return script;
+Script *LuauScriptInstance::get_script() const {
+	return script.ptr();
 }
 
 ScriptLanguage *LuauScriptInstance::get_language() {

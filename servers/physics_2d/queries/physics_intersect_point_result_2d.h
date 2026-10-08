@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  jolt_custom_user_data_shape.h                                         */
+/*  physics_intersect_point_result_2d.h                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -30,29 +30,30 @@
 
 #pragma once
 
-#include "jolt_custom_decorated_shape.h"
-#include "jolt_custom_shape_type.h"
+#include "core/object/ref_counted.h"
+#include "servers/physics_2d/physics_server_2d_types.h"
 
-class JoltCustomUserDataShapeSettings final : public JoltCustomDecoratedShapeSettings {
+class PhysicsIntersectPointResult2D : public RefCounted {
+	GDCLASS(PhysicsIntersectPointResult2D, RefCounted);
+
+	friend class PhysicsDirectSpaceState2D;
+
+	LocalVector<PS2DT::ShapeResult> result;
+	int intersection_count = 0;
+
+protected:
+	static void _bind_methods();
+
 public:
-	using JoltCustomDecoratedShapeSettings::JoltCustomDecoratedShapeSettings;
+	PhysicsIntersectPointResult2D(int p_max_intersections = 32);
 
-	virtual ShapeResult Create() const override;
-};
+	int get_max_intersections() const;
+	void set_max_intersections(int p_max_intersections);
 
-class JoltCustomUserDataShape final : public JoltCustomDecoratedShape {
-public:
-	static void register_type();
+	int get_intersection_count() const;
 
-	JoltCustomUserDataShape() :
-			JoltCustomDecoratedShape(JoltCustomShapeSubType::OVERRIDE_USER_DATA) {}
-
-	JoltCustomUserDataShape(const JoltCustomUserDataShapeSettings &p_settings, ShapeResult &p_result) :
-			JoltCustomDecoratedShape(JoltCustomShapeSubType::OVERRIDE_USER_DATA, p_settings, p_result) {
-		if (!p_result.HasError()) {
-			p_result.Set(this);
-		}
-	}
-
-	virtual JPH::uint64 GetSubShapeUserData(const JPH::SubShapeID &p_sub_shape_id) const override { return GetUserData(); }
+	RID get_collider_rid(int p_intersection_index) const;
+	ObjectID get_collider_id(int p_intersection_index) const;
+	Object *get_collider(int p_intersection_index) const;
+	int get_collider_shape(int p_intersection_index) const;
 };

@@ -53,5 +53,5 @@ print("Swappy installed successfully.\n")
 # Complete message
 color_print(f'{Ansi.GREEN}Swappy was installed to "{swappy_folder}" successfully!')
 color_print(
-    f'{Ansi.GREEN}You can now build Godot with Swappy support enabled by running "scons platform=android swappy=yes".'
+    f'{Ansi.GREEN}You can now build Blazium with Swappy support enabled by running "scons platform=android swappy=yes".'
 )

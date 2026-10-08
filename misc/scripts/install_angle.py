@@ -14,7 +14,7 @@ from misc.utility.color import Ansi, color_print
 # If cross-compiling (no LOCALAPPDATA), we install in `bin`
 deps_folder = os.getenv("LOCALAPPDATA")
 if deps_folder and not os.getenv("MSYSTEM"):
-    deps_folder = os.path.join(deps_folder, "Godot", "build_deps")
+    deps_folder = os.path.join(deps_folder, "Blazium", "build_deps")
 else:
     deps_folder = os.path.join("bin", "build_deps")
 
@@ -70,4 +70,4 @@ print("ANGLE installed successfully.\n")
 
 # Complete message
 color_print(f'{Ansi.GREEN}All ANGLE components were installed to "{deps_folder}" successfully!')
-color_print(f'{Ansi.GREEN}You can now build Godot with statically linked ANGLE by running "scons angle=yes".')
+color_print(f'{Ansi.GREEN}You can now build Blazium with statically linked ANGLE by running "scons angle=yes".')

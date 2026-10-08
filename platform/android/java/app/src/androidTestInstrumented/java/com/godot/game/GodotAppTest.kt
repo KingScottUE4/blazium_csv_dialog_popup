@@ -37,6 +37,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.godot.game.app.BuildConfig
 import com.godot.game.test.GodotAppInstrumentedTestPlugin
 import app.blazium.godot.Godot
 import app.blazium.godot.GodotActivity.Companion.EXTRA_COMMAND_LINE_PARAMS
