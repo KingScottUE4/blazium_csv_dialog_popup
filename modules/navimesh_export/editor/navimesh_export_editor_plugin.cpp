@@ -177,6 +177,7 @@ NavimeshExportEditorPlugin::NavimeshExportEditorPlugin() {
 	inspector_plugin.instantiate();
 	add_inspector_plugin(inspector_plugin);
 
+	export_panel = memnew(VBoxContainer);
 	spatial_hbox = memnew(HBoxContainer);
 	spatial_export = memnew(Button);
 	spatial_export->set_theme_type_variation(SceneStringName(FlatButton));
@@ -184,7 +185,7 @@ NavimeshExportEditorPlugin::NavimeshExportEditorPlugin() {
 	spatial_export->set_tooltip_text(TTR("Bake and export the selected NavigationRegion3D (and scene links) for a third-party server."));
 	spatial_export->connect(SceneStringName(pressed), callable_mp(this, &NavimeshExportEditorPlugin::_on_toolbar_export));
 	spatial_hbox->add_child(spatial_export);
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, spatial_hbox);
+	export_panel->add_child(spatial_hbox);
 	spatial_hbox->hide();
 
 	canvas_hbox = memnew(HBoxContainer);
@@ -194,13 +195,19 @@ NavimeshExportEditorPlugin::NavimeshExportEditorPlugin() {
 	canvas_export->set_tooltip_text(TTR("Bake and export the selected NavigationRegion2D (and scene links) for a third-party server."));
 	canvas_export->connect(SceneStringName(pressed), callable_mp(this, &NavimeshExportEditorPlugin::_on_toolbar_export));
 	canvas_hbox->add_child(canvas_export);
-	add_control_to_container(CONTAINER_CANVAS_EDITOR_MENU, canvas_hbox);
+	export_panel->add_child(canvas_hbox);
 	canvas_hbox->hide();
+	add_blazium_window("Navimesh Export", "Export", export_panel);
 }
 
 NavimeshExportEditorPlugin::~NavimeshExportEditorPlugin() {
 	if (inspector_plugin.is_valid()) {
 		remove_inspector_plugin(inspector_plugin);
+	}
+	if (export_panel) {
+		remove_blazium_item("Navimesh Export", "Export");
+		memdelete(export_panel);
+		export_panel = nullptr;
 	}
 }
 

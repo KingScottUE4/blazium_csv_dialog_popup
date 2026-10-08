@@ -72,7 +72,7 @@ void ColdStorageEditorPlugin::_notification(int p_what) {
 		case NOTIFICATION_ENTER_TREE: {
 			cold_storage_register_editor_settings();
 			_setup_status_indicator();
-			add_tool_menu_item("ColdStorage Configuration", callable_mp(this, &ColdStorageEditorPlugin::_show_configuration_dialog));
+			add_blazium_action("ColdStorage", "Configuration", callable_mp(this, &ColdStorageEditorPlugin::_show_configuration_dialog));
 
 			inspector_plugin.instantiate();
 			add_inspector_plugin(inspector_plugin);
@@ -80,7 +80,7 @@ void ColdStorageEditorPlugin::_notification(int p_what) {
 			set_process(true);
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
-			remove_tool_menu_item("ColdStorage Configuration");
+			remove_blazium_item("ColdStorage", "Configuration");
 			if (inspector_plugin.is_valid()) {
 				remove_inspector_plugin(inspector_plugin);
 				inspector_plugin.unref();

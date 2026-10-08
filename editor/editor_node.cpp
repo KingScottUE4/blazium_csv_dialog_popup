@@ -30,6 +30,8 @@
 
 #include "editor_node.h"
 
+#include "editor/blazium_module_menu.h"
+
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/extension/gdextension_manager.h"
@@ -9308,6 +9310,9 @@ EditorNode::EditorNode() {
 	settings_menu->connect(SceneStringName(id_pressed), callable_mp(this, &EditorNode::_menu_option));
 	_add_to_main_menu(TTRC("Editor"), settings_menu);
 
+	blazium_module_menu = memnew(BlaziumModuleMenu);
+	_add_to_main_menu(TTRC("Blazium"), blazium_module_menu->get_menu());
+
 	help_menu = memnew(PopupMenu);
 	help_menu->connect(SceneStringName(id_pressed), callable_mp(this, &EditorNode::_menu_option));
 	_add_to_main_menu(TTRC("Help"), help_menu);
@@ -9926,6 +9931,7 @@ EditorNode::~EditorNode() {
 	memdelete(progress_hb);
 	memdelete(project_upgrade_tool);
 	memdelete(editor_dock_manager);
+	memdelete(blazium_module_menu);
 
 	EditorSettings::destroy();
 	EditorThemeManager::finalize();

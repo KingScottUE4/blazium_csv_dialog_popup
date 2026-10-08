@@ -66,36 +66,43 @@ AutoworkEditorPlugin::AutoworkEditorPlugin() {
 
 	main_panel->add_child(output_log);
 
-	add_control_to_bottom_panel(main_panel, TTR("Autowork"));
+	add_blazium_window("Autowork", "Autowork", main_panel);
 }
 
 AutoworkEditorPlugin::~AutoworkEditorPlugin() {
 }
 
 void AutoworkEditorPlugin::_run_tests_pressed() {
+	if (run_button->is_disabled()) {
+		return;
+	}
 	output_log->clear();
 	output_log->append_text("[b]Initializing Autowork Tests...[/b]\n");
+	run_button->set_disabled(true);
+	callable_mp(this, &AutoworkEditorPlugin::_start_tests).call_deferred();
+}
 
-	// Ensure we run the test execution sequentially or deferred.
-	// Since tests can alter scene states, it is safe to instantiate
-	// Autowork, add it to the editor tree, and run it.
-
+void AutoworkEditorPlugin::_start_tests() {
 	Autowork *aw = memnew(Autowork);
 	EditorNode::get_singleton()->add_child(aw);
 
-	// Hook the plugin's UI label to the Logger before running.
 	if (aw->get_logger().is_valid()) {
 		aw->get_logger()->set_output_ui(output_log);
 	}
 
-	// Path to test directory
-	aw->add_directory("res://"); // Standard for project tests
-
-	// Execute tests synchronously
+	aw->set_yield_frames(true);
+	aw->add_directory("res://");
+	aw->connect("tests_finished", callable_mp(this, &AutoworkEditorPlugin::_on_tests_finished).bind(aw));
 	aw->run_tests();
+}
 
-	// Cleanup runner
-	aw->queue_free();
+void AutoworkEditorPlugin::_on_tests_finished(Autowork *p_runner) {
+	if (run_button) {
+		run_button->set_disabled(false);
+	}
+	if (p_runner && p_runner->is_inside_tree()) {
+		p_runner->queue_free();
+	}
 }
 
 #endif // TOOLS_ENABLED

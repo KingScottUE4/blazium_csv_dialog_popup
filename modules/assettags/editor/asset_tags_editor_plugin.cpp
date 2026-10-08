@@ -299,7 +299,7 @@ void AssetTagsEditorPlugin::_build_tab() {
 	action_row->add_child(undo_button);
 	tab->add_child(action_row);
 
-	add_control_to_container(CONTAINER_PROJECT_SETTING_TAB_RIGHT, tags_tab);
+	add_blazium_window("Asset Tags", "Tag Dictionary", tags_tab);
 
 	// Place immediately after General so the dictionary is not buried behind tab-bar scroll.
 	if (ProjectSettingsEditor *pse = ProjectSettingsEditor::get_singleton()) {
@@ -344,7 +344,7 @@ void AssetTagsEditorPlugin::_teardown_tab() {
 		}
 	}
 	if (tags_tab) {
-		remove_control_from_container(CONTAINER_PROJECT_SETTING_TAB_RIGHT, tags_tab);
+		remove_blazium_item("Asset Tags", "Tag Dictionary");
 		tags_tab->queue_free();
 		tags_tab = nullptr;
 		tag_tree = nullptr;

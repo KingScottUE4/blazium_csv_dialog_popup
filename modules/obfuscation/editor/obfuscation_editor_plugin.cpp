@@ -214,13 +214,13 @@ ObfuscationEditorPlugin::ObfuscationEditorPlugin() {
 	hint->set_text(TTR("Export injects marks. Generate and verify claim images with the BlazeSeal app."));
 	dock->add_child(hint);
 
-	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock);
+	add_blazium_window("Obfuscation", "Obfuscation", dock);
 	_refresh();
 }
 
 ObfuscationEditorPlugin::~ObfuscationEditorPlugin() {
 	if (dock) {
-		remove_control_from_docks(dock);
+		remove_blazium_item("Obfuscation", "Obfuscation");
 		memdelete(dock);
 		dock = nullptr;
 		status = nullptr;

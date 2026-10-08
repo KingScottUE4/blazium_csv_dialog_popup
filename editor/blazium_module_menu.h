@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  autowork_editor_plugin.h                                              */
+/*  blazium_module_menu.h                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -29,36 +29,51 @@
 
 #pragma once
 
-#ifdef TOOLS_ENABLED
-
+#include "core/object/object.h"
 #include "core/string/ustring.h"
-#include "editor/plugins/editor_plugin.h"
-#include "scene/gui/box_container.h"
-#include "scene/gui/button.h"
-#include "scene/gui/rich_text_label.h"
+#include "core/templates/hash_map.h"
+#include "core/templates/vector.h"
+#include "core/variant/callable.h"
 
-class Autowork;
+class Control;
+class PopupMenu;
+class Window;
 
-class AutoworkEditorPlugin : public EditorPlugin {
-	GDCLASS(AutoworkEditorPlugin, EditorPlugin);
+// Owns the main-menu Blazium entry. Modules register windows and actions here
+// instead of parenting controls into docks, toolbars, or other core editor UI.
+class BlaziumModuleMenu : public Object {
+	struct MenuEntry {
+		int id = 0;
+		String module;
+		String title;
+		Control *control = nullptr;
+		Callable action;
+		bool is_window = false;
+	};
 
-	VBoxContainer *main_panel;
-	Button *run_button;
-	RichTextLabel *output_log;
+	static BlaziumModuleMenu *singleton;
 
-	void _run_tests_pressed();
-	void _start_tests();
-	void _on_tests_finished(Autowork *p_runner);
+	PopupMenu *root_menu = nullptr;
+	HashMap<String, PopupMenu *> module_menus;
+	HashMap<Control *, Window *> windows;
+	Vector<MenuEntry> entries;
+	int next_id = 1;
+	int window_cascade = 0;
 
-protected:
-	static void _bind_methods();
+	PopupMenu *_get_module_menu(const String &p_module);
+	void _on_id_pressed(int p_id);
+	void _open_window(Control *p_control, const String &p_title);
+	void _release_entry(int p_index);
 
 public:
-	virtual String get_plugin_name() const override { return "Autowork"; }
-	bool has_main_screen() const override { return false; }
+	static BlaziumModuleMenu *get_singleton() { return singleton; }
 
-	AutoworkEditorPlugin();
-	~AutoworkEditorPlugin();
+	BlaziumModuleMenu();
+	~BlaziumModuleMenu();
+
+	PopupMenu *get_menu() const { return root_menu; }
+
+	void add_window(const String &p_module, const String &p_title, Control *p_control);
+	void add_action(const String &p_module, const String &p_title, const Callable &p_callable);
+	void remove_item(const String &p_module, const String &p_title);
 };
-
-#endif // TOOLS_ENABLED

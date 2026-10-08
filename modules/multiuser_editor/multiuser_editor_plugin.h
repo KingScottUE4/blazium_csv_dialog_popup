@@ -54,6 +54,7 @@ class EditorSelection;
 class EditorUndoRedoManager;
 class Timer;
 
+class Autowork;
 class MultiuserEditorPlugin;
 
 class Label;
@@ -133,6 +134,8 @@ private:
 	void _setup_dock();
 	void _teardown_dock();
 	void _setup_status_indicator();
+	void _start_yielded_autowork();
+	void _on_autowork_finished(Autowork *p_runner);
 	void _connect_network_signals();
 	void _disconnect_network_signals();
 

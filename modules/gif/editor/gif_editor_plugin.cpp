@@ -444,10 +444,10 @@ GIFEditorPlugin::GIFEditorPlugin() {
 	preview_generator.instantiate();
 	EditorResourcePreview::get_singleton()->add_preview_generator(preview_generator);
 
-	add_tool_menu_item(TTR("Record Editor Viewport GIF"), callable_mp(this, &GIFEditorPlugin::_record_editor_viewport));
-	add_tool_menu_item(TTR("Record Game Viewport GIF"), callable_mp(this, &GIFEditorPlugin::_record_game_viewport));
-	add_tool_menu_item(TTR("Record Full Editor Window GIF"), callable_mp(this, &GIFEditorPlugin::_record_full_window));
-	add_tool_menu_item(TTR("Export AnimationPlayer as GIF"), callable_mp(this, &GIFEditorPlugin::_export_animation_player));
+	add_blazium_action("GIF", "Record Editor Viewport", callable_mp(this, &GIFEditorPlugin::_record_editor_viewport));
+	add_blazium_action("GIF", "Record Game Viewport", callable_mp(this, &GIFEditorPlugin::_record_game_viewport));
+	add_blazium_action("GIF", "Record Full Editor Window", callable_mp(this, &GIFEditorPlugin::_record_full_window));
+	add_blazium_action("GIF", "Export AnimationPlayer", callable_mp(this, &GIFEditorPlugin::_export_animation_player));
 
 	save_dialog = memnew(EditorFileDialog);
 	save_dialog->set_file_mode(EditorFileDialog::FILE_MODE_SAVE_FILE);
@@ -458,10 +458,10 @@ GIFEditorPlugin::GIFEditorPlugin() {
 }
 
 GIFEditorPlugin::~GIFEditorPlugin() {
-	remove_tool_menu_item(TTR("Record Editor Viewport GIF"));
-	remove_tool_menu_item(TTR("Record Game Viewport GIF"));
-	remove_tool_menu_item(TTR("Record Full Editor Window GIF"));
-	remove_tool_menu_item(TTR("Export AnimationPlayer as GIF"));
+	remove_blazium_item("GIF", "Record Editor Viewport");
+	remove_blazium_item("GIF", "Record Game Viewport");
+	remove_blazium_item("GIF", "Record Full Editor Window");
+	remove_blazium_item("GIF", "Export AnimationPlayer");
 
 	if (capturing_game) {
 		capturing_game = false;

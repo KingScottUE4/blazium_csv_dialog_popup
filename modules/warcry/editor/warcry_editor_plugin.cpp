@@ -405,7 +405,7 @@ void WarcryEditorPlugin::_setup_dock() {
 	dock_root->add_child(user_vol_label);
 	dock_root->add_child(user_volume_slider);
 	dock_root->add_child(ptt_button);
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock_root);
+	add_blazium_window("Warcry", "Warcry", dock_root);
 
 	_load_settings();
 
@@ -442,7 +442,7 @@ void WarcryEditorPlugin::_teardown_dock() {
 	}
 
 	if (dock_root) {
-		remove_control_from_docks(dock_root);
+		remove_blazium_item("Warcry", "Warcry");
 		dock_root->queue_free();
 		dock_root = nullptr;
 	}

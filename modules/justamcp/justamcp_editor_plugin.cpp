@@ -298,7 +298,7 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 			inspector_plugin.instantiate();
 			EditorInspector::add_inspector_plugin(inspector_plugin);
 
-			add_tool_menu_item("JustAMCP Configuration", callable_mp(this, &JustAMCPEditorPlugin::_show_configuration_dialog));
+			add_blazium_action("JustAMCP", "Configuration", callable_mp(this, &JustAMCPEditorPlugin::_show_configuration_dialog));
 
 			if (editor_node) {
 				if (!editor_node->is_connected("scene_changed", callable_mp(this, &JustAMCPEditorPlugin::_invalidate_subscribed_editor_resources))) {
@@ -332,14 +332,14 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 			open_host->set_text("Open host");
 			open_host->connect("pressed", callable_mp(this, &JustAMCPEditorPlugin::_open_apps_host));
 			apps_dock->add_child(open_host);
-			add_control_to_dock(DOCK_SLOT_RIGHT_UL, apps_dock);
+			add_blazium_window("JustAMCP", "Apps", apps_dock);
 			_refresh_apps_dock();
 			call_deferred(SNAME("_auto_connect_bridges"));
 
 		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
-			remove_tool_menu_item("JustAMCP Configuration");
+			remove_blazium_item("JustAMCP", "Configuration");
 
 			if (inspector_plugin.is_valid()) {
 				EditorInspector::remove_inspector_plugin(inspector_plugin);
@@ -363,7 +363,7 @@ void JustAMCPEditorPlugin::_notification(int p_what) {
 			}
 
 			if (apps_dock) {
-				remove_control_from_docks(apps_dock);
+				remove_blazium_item("JustAMCP", "Apps");
 				apps_dock->queue_free();
 				apps_dock = nullptr;
 				apps_list = nullptr;

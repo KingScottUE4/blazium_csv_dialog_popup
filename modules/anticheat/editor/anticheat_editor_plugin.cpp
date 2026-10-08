@@ -189,7 +189,7 @@ void AnticheatEditorPlugin::_connect_signals() {
 
 void AnticheatEditorPlugin::_setup_dock() {
 	dock_root = memnew(VBoxContainer);
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock_root);
+	add_blazium_window("Anticheat", "Anticheat", dock_root);
 
 	Button *status = memnew(Button);
 	status->set_text("Status");
@@ -300,7 +300,7 @@ void AnticheatEditorPlugin::_teardown_dock() {
 		signals_connected = false;
 	}
 	if (dock_root) {
-		remove_control_from_docks(dock_root);
+		remove_blazium_item("Anticheat", "Anticheat");
 		dock_root->queue_free();
 		dock_root = nullptr;
 		log = nullptr;

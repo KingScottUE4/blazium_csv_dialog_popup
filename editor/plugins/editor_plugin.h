@@ -173,6 +173,10 @@ public:
 	void add_tool_submenu_item(const String &p_name, PopupMenu *p_submenu);
 	void remove_tool_menu_item(const String &p_name);
 
+	void add_blazium_window(const String &p_module, const String &p_title, Control *p_control);
+	void add_blazium_action(const String &p_module, const String &p_title, const Callable &p_callable);
+	void remove_blazium_item(const String &p_module, const String &p_title);
+
 	PopupMenu *get_export_as_menu();
 
 	void set_input_event_forwarding_always_enabled();
