@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SteamMultiplayerPeer" inherits="MultiplayerPeer" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A [MultiplayerPeer] that connects players through Steam Networking Sockets.
+	</brief_description>
+	<description>
+		A [MultiplayerPeer] that sends Godot's high-level multiplayer traffic (RPCs, [MultiplayerSpawner], [MultiplayerSynchronizer]) over Steam Networking Sockets. Players connect to each other by Steam ID, through the Steam Datagram Relay network, so no port forwarding or public IP address is needed and players' IP addresses stay hidden.
+		One player hosts with [method create_host] and becomes peer [code]1[/code]; the others connect with [method create_client] using the host's Steam ID, typically found through a Steam lobby (see [method Steam.create_lobby]). Clients only connect to the host, which relays messages between clients ([member SceneMultiplayer.server_relay]).
+		Steam must be initialized with [method Steam.initialize] first.
+		[codeblock]
+		# Host.
+		func _on_lobby_created(result: int, lobby_id: int):
+			var peer := SteamMultiplayerPeer.new()
+			peer.create_host()
+			multiplayer.multiplayer_peer = peer
+
+
+		# Client, after Steam.join_lobby().
+		func _on_lobby_joined(lobby_id: int, response: int):
+			var host_id := Steam.get_lobby_owner(lobby_id)
+			if response != Steam.LOBBY_ENTER_SUCCESS or host_id == Steam.get_local_steam_id():
+				return
+			var peer := SteamMultiplayerPeer.new()
+			peer.create_client(host_id)
+			multiplayer.multiplayer_peer = peer
+		[/codeblock]
+		[b]Note:[/b] Steam has no unordered reliable or ordered unreliable delivery. [constant MultiplayerPeer.TRANSFER_MODE_RELIABLE] is always ordered, and [constant MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED] drops packets that arrive after a newer one on the same channel. Channels only label packets; they don't create separate ordered streams.
+		[b]Note:[/b] Two Steam accounts are needed to test a connection; a player can't connect to themselves.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="create_client">
+			<return type="int" enum="Error" />
+			<param index="0" name="host_steam_id" type="int" />
+			<param index="1" name="virtual_port" type="int" default="0" />
+			<description>
+				Connects to the player [param host_steam_id], who must be hosting with [method create_host] on the same [param virtual_port]. The connection status is [constant MultiplayerPeer.CONNECTION_CONNECTING] until the host assigns this peer its ID; if the host can't be reached, it becomes [constant MultiplayerPeer.CONNECTION_DISCONNECTED] (which emits [signal MultiplayerAPI.connection_failed]).
+			</description>
+		</method>
+		<method name="create_host">
+			<return type="int" enum="Error" />
+			<param index="0" name="virtual_port" type="int" default="0" />
+			<param index="1" name="max_clients" type="int" default="32" />
+			<description>
+				Starts hosting on [param virtual_port] and becomes peer [code]1[/code]. Clients must connect to the same virtual port, which allows one game to run several independent hosts. At most [param max_clients] clients can be connected at once; [code]0[/code] means no limit.
+				Returns [constant OK], [constant ERR_UNCONFIGURED] if Steam isn't initialized, [constant ERR_UNAVAILABLE] if networking isn't supported, or [constant ERR_CANT_CREATE] if Steam refused to listen.
+			</description>
+		</method>
+		<method name="get_max_clients" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the client limit passed to [method create_host].
+			</description>
+		</method>
+		<method name="get_peer_id_for_steam_id" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="steam_id" type="int" />
+			<description>
+				Returns the peer ID of the connected peer with the Steam ID [param steam_id], or [code]0[/code] if there is none. On clients, only the host can be found this way.
+			</description>
+		</method>
+		<method name="get_peer_ping" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Returns the round-trip time to the peer [param peer_id] in milliseconds, or [code]-1[/code] if it isn't known.
+			</description>
+		</method>
+		<method name="get_peer_steam_id" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Returns the Steam ID of the peer [param peer_id], or [code]0[/code] if it isn't connected. The host knows the Steam IDs of all clients; clients only know the host's (peer [code]1[/code]).
+			</description>
+		</method>
+	</methods>
+</class>

@@ -34,6 +34,7 @@
 #include "steam_auth_result.h"
 #include "steam_inventory_item.h"
 #include "steam_item_definition.h"
+#include "steam_multiplayer_peer.h"
 #include "steam_workshop_item.h"
 
 #include "core/config/engine.h"
@@ -49,6 +50,7 @@
 
 #ifdef TESTS_ENABLED
 #include "tests/test_steam.h"
+#include "tests/test_steam_multiplayer_peer.h"
 #endif
 
 static Steam *steam_singleton = nullptr;
@@ -99,6 +101,7 @@ void initialize_steam_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(SteamInventoryItem);
 		GDREGISTER_CLASS(SteamItemDefinition);
 		GDREGISTER_CLASS(SteamWorkshopItem);
+		GDREGISTER_CLASS(SteamMultiplayerPeer);
 		GDREGISTER_CLASS(Steam);
 		steam_singleton = memnew(Steam);
 		Engine::get_singleton()->add_singleton(Engine::Singleton("Steam", Steam::get_singleton()));

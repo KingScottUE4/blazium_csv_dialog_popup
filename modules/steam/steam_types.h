@@ -40,6 +40,7 @@ enum SteamEResult {
 	STEAM_RESULT_EXPIRED = 16,
 	STEAM_RESULT_FAIL = 2,
 	STEAM_RESULT_IO_FAILURE = 15,
+	STEAM_RESULT_LIMIT_EXCEEDED = 25,
 };
 
 enum {
@@ -325,6 +326,210 @@ struct SteamRemoteStorageUnsubscribePublishedFileResult {
 
 #pragma pack(pop)
 
+// -----------------------------------------------------------------------------
+// Steam Networking Sockets and Matchmaking (lobbies) types.
+// -----------------------------------------------------------------------------
+
+enum {
+	STEAM_FRIENDS_CALLBACKS_BASE = 300,
+	STEAM_GAME_LOBBY_JOIN_REQUESTED_CALLBACK = STEAM_FRIENDS_CALLBACKS_BASE + 33,
+	STEAM_MATCHMAKING_CALLBACKS_BASE = 500,
+	STEAM_LOBBY_INVITE_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 3,
+	STEAM_LOBBY_ENTER_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 4,
+	STEAM_LOBBY_DATA_UPDATE_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 5,
+	STEAM_LOBBY_CHAT_UPDATE_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 6,
+	STEAM_LOBBY_MATCH_LIST_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 10,
+	STEAM_LOBBY_KICKED_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 12,
+	STEAM_LOBBY_CREATED_CALLBACK = STEAM_MATCHMAKING_CALLBACKS_BASE + 13,
+	STEAM_NETWORKING_SOCKETS_CALLBACKS_BASE = 1220,
+	STEAM_NET_CONNECTION_STATUS_CHANGED_CALLBACK = STEAM_NETWORKING_SOCKETS_CALLBACKS_BASE + 1,
+};
+
+typedef uint32_t SteamHSteamNetConnection;
+typedef uint32_t SteamHSteamListenSocket;
+typedef uint32_t SteamHSteamNetPollGroup;
+
+static constexpr SteamHSteamNetConnection STEAM_NET_CONNECTION_INVALID = 0;
+static constexpr SteamHSteamListenSocket STEAM_LISTEN_SOCKET_INVALID = 0;
+static constexpr SteamHSteamNetPollGroup STEAM_NET_POLL_GROUP_INVALID = 0;
+
+// ESteamNetworkingConnectionState.
+enum SteamNetConnectionState {
+	STEAM_NET_CONNECTION_STATE_NONE = 0,
+	STEAM_NET_CONNECTION_STATE_CONNECTING = 1,
+	STEAM_NET_CONNECTION_STATE_FINDING_ROUTE = 2,
+	STEAM_NET_CONNECTION_STATE_CONNECTED = 3,
+	STEAM_NET_CONNECTION_STATE_CLOSED_BY_PEER = 4,
+	STEAM_NET_CONNECTION_STATE_PROBLEM_DETECTED_LOCALLY = 5,
+};
+
+// k_nSteamNetworkingSend_* flags.
+enum {
+	STEAM_NETWORKING_SEND_UNRELIABLE = 0,
+	STEAM_NETWORKING_SEND_NO_NAGLE = 1,
+	STEAM_NETWORKING_SEND_NO_DELAY = 4,
+	STEAM_NETWORKING_SEND_RELIABLE = 8,
+};
+
+static constexpr int STEAM_NETWORKING_MAX_MESSAGE_SIZE = 512 * 1024; // k_cbMaxSteamNetworkingSocketsMessageSizeSend
+static constexpr int STEAM_NET_CONNECTION_END_APP_GENERIC = 1000; // k_ESteamNetConnectionEnd_App_Generic
+static constexpr int STEAM_NET_CONNECTION_END_APP_SERVER_FULL = 1001; // App-defined reason (k_ESteamNetConnectionEnd_App_Min + 1).
+static constexpr int STEAM_NETWORKING_IDENTITY_TYPE_STEAM_ID = 16; // k_ESteamNetworkingIdentityType_SteamID
+static constexpr int STEAM_NETWORKING_MAX_CONNECTION_CLOSE_REASON = 128;
+static constexpr int STEAM_NETWORKING_MAX_CONNECTION_DESCRIPTION = 128;
+static constexpr int STEAM_MAX_LOBBY_KEY_LENGTH = 255; // k_nMaxLobbyKeyLength
+
+#pragma pack(push, 1)
+
+struct SteamNetworkingIPAddrData {
+	uint8_t m_ipv6[16];
+	uint16_t m_port;
+};
+
+struct SteamNetworkingIdentityData {
+	int m_eType;
+	int m_cbSize;
+	union {
+		uint64_t m_steamID64;
+		uint8_t m_genericBytes[32];
+		char m_szUnknownRawString[128];
+		uint32_t m_reserved[32];
+	};
+};
+
+#pragma pack(pop)
+
+#ifdef STEAM_UGC_CALLBACK_PACK_SMALL
+#pragma pack(push, 4)
+#else
+#pragma pack(push, 8)
+#endif
+
+struct SteamNetConnectionInfo {
+	SteamNetworkingIdentityData m_identityRemote;
+	int64_t m_nUserData;
+	SteamHSteamListenSocket m_hListenSocket;
+	SteamNetworkingIPAddrData m_addrRemote;
+	uint16_t m__pad1;
+	uint32_t m_idPOPRemote;
+	uint32_t m_idPOPRelay;
+	int m_eState;
+	int m_eEndReason;
+	char m_szEndDebug[STEAM_NETWORKING_MAX_CONNECTION_CLOSE_REASON];
+	char m_szConnectionDescription[STEAM_NETWORKING_MAX_CONNECTION_DESCRIPTION];
+	int m_nFlags;
+	uint32_t reserved[63];
+};
+
+struct SteamNetConnectionRealTimeStatus {
+	int m_eState;
+	int m_nPing;
+	float m_flConnectionQualityLocal;
+	float m_flConnectionQualityRemote;
+	float m_flOutPacketsPerSec;
+	float m_flOutBytesPerSec;
+	float m_flInPacketsPerSec;
+	float m_flInBytesPerSec;
+	int m_nSendRateBytesPerSecond;
+	int m_cbPendingUnreliable;
+	int m_cbPendingReliable;
+	int m_cbSentUnackedReliable;
+	int64_t m_usecQueueTime;
+	uint32_t reserved[16];
+};
+
+struct SteamNetConnectionStatusChanged {
+	enum { k_iCallback = STEAM_NET_CONNECTION_STATUS_CHANGED_CALLBACK };
+
+	SteamHSteamNetConnection m_hConn;
+	SteamNetConnectionInfo m_info;
+	int m_eOldState;
+};
+
+struct SteamGameLobbyJoinRequested {
+	enum { k_iCallback = STEAM_GAME_LOBBY_JOIN_REQUESTED_CALLBACK };
+
+	uint64_t m_steamIDLobby;
+	uint64_t m_steamIDFriend;
+};
+
+struct SteamLobbyInvite {
+	enum { k_iCallback = STEAM_LOBBY_INVITE_CALLBACK };
+
+	uint64_t m_ulSteamIDUser;
+	uint64_t m_ulSteamIDLobby;
+	uint64_t m_ulGameID;
+};
+
+struct SteamLobbyEnter {
+	enum { k_iCallback = STEAM_LOBBY_ENTER_CALLBACK };
+
+	uint64_t m_ulSteamIDLobby;
+	uint32_t m_rgfChatPermissions;
+	bool m_bLocked;
+	uint32_t m_EChatRoomEnterResponse;
+};
+
+struct SteamLobbyDataUpdate {
+	enum { k_iCallback = STEAM_LOBBY_DATA_UPDATE_CALLBACK };
+
+	uint64_t m_ulSteamIDLobby;
+	uint64_t m_ulSteamIDMember;
+	uint8_t m_bSuccess;
+};
+
+struct SteamLobbyChatUpdate {
+	enum { k_iCallback = STEAM_LOBBY_CHAT_UPDATE_CALLBACK };
+
+	uint64_t m_ulSteamIDLobby;
+	uint64_t m_ulSteamIDUserChanged;
+	uint64_t m_ulSteamIDMakingChange;
+	uint32_t m_rgfChatMemberStateChange;
+};
+
+struct SteamLobbyMatchList {
+	enum { k_iCallback = STEAM_LOBBY_MATCH_LIST_CALLBACK };
+
+	uint32_t m_nLobbiesMatching;
+};
+
+struct SteamLobbyKicked {
+	enum { k_iCallback = STEAM_LOBBY_KICKED_CALLBACK };
+
+	uint64_t m_ulSteamIDLobby;
+	uint64_t m_ulSteamIDAdmin;
+	uint8_t m_bKickedDueToDisconnect;
+};
+
+struct SteamLobbyCreated {
+	enum { k_iCallback = STEAM_LOBBY_CREATED_CALLBACK };
+
+	int m_eResult;
+	uint64_t m_ulSteamIDLobby;
+};
+
+#pragma pack(pop)
+
+// SteamNetworkingMessage_t uses the default alignment. Only messages
+// allocated by Steam are read; they are freed with
+// SteamAPI_SteamNetworkingMessage_t_Release.
+struct SteamNetworkingMessage {
+	void *m_pData;
+	int m_cbSize;
+	SteamHSteamNetConnection m_conn;
+	SteamNetworkingIdentityData m_identityPeer;
+	int64_t m_nConnUserData;
+	int64_t m_usecTimeReceived;
+	int64_t m_nMessageNumber;
+	void (*m_pfnFreeData)(SteamNetworkingMessage *p_msg);
+	void (*m_pfnRelease)(SteamNetworkingMessage *p_msg);
+	int m_nChannel;
+	int m_nFlags;
+	int64_t m_nUserData;
+	uint16_t m_idxLane;
+	uint16_t _pad1__;
+};
+
 // Layout checks against the Steamworks SDK (1.62 - 1.65) on 64-bit targets.
 #if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
 #ifdef STEAM_UGC_CALLBACK_PACK_SMALL
@@ -341,4 +546,22 @@ static_assert(sizeof(SteamUGCItemInstalled) == 32, "ItemInstalled layout mismatc
 static_assert(sizeof(SteamUGCDownloadItemResult) == 24, "DownloadItemResult layout mismatch");
 #endif
 static_assert(sizeof(SteamUGCQueryCompleted) == 280, "SteamUGCQueryCompleted layout mismatch");
+#endif
+
+// Networking and matchmaking layout checks (Steamworks SDK 1.60 - 1.64).
+static_assert(sizeof(SteamNetworkingIPAddrData) == 18, "SteamNetworkingIPAddr layout mismatch");
+static_assert(sizeof(SteamNetworkingIdentityData) == 136, "SteamNetworkingIdentity layout mismatch");
+static_assert(sizeof(SteamNetConnectionInfo) == 696, "SteamNetConnectionInfo_t layout mismatch");
+static_assert(sizeof(SteamNetConnectionRealTimeStatus) == 120, "SteamNetConnectionRealTimeStatus_t layout mismatch");
+#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+static_assert(sizeof(SteamNetworkingMessage) == 216, "SteamNetworkingMessage_t layout mismatch");
+#endif
+#ifdef STEAM_UGC_CALLBACK_PACK_SMALL
+static_assert(sizeof(SteamNetConnectionStatusChanged) == 704, "SteamNetConnectionStatusChangedCallback_t layout mismatch");
+static_assert(sizeof(SteamLobbyEnter) == 20, "LobbyEnter_t layout mismatch");
+static_assert(sizeof(SteamLobbyCreated) == 12, "LobbyCreated_t layout mismatch");
+#else
+static_assert(sizeof(SteamNetConnectionStatusChanged) == 712, "SteamNetConnectionStatusChangedCallback_t layout mismatch");
+static_assert(sizeof(SteamLobbyEnter) == 24, "LobbyEnter_t layout mismatch");
+static_assert(sizeof(SteamLobbyCreated) == 16, "LobbyCreated_t layout mismatch");
 #endif
