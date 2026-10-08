@@ -110,7 +110,7 @@ void JustAMCPSceneTools::_reload_scene_in_editor(const String &p_scene_path) {
 		return;
 	}
 	Node *edited = JustAMCPEditorSceneAccess::get_edited_root();
-	if (edited && edited->get_scene_file_path() == p_scene_path) {
+	if (edited && edited->get_scene_file_path() == p_scene_path && EditorNode::get_singleton() && EditorInterface::get_singleton()) {
 		EditorInterface::get_singleton()->reload_scene_from_path(p_scene_path);
 	}
 }

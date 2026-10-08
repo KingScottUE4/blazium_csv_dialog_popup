@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  justamcp_editor_filesystem.h                                          */
+/*  justamcp_gap_fill.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             BLAZIUM ENGINE                             */
@@ -29,11 +29,24 @@
 
 #pragma once
 
-#include "core/string/ustring.h"
+#include "core/variant/dictionary.h"
 
-namespace JustAMCPEditorFilesystem {
+Dictionary justamcp_editor_get_camera(const Dictionary &p_args);
+Dictionary justamcp_editor_set_camera(const Dictionary &p_args);
+Dictionary justamcp_editor_list_dialogs(const Dictionary &p_args);
+Dictionary justamcp_editor_dismiss_dialog(const Dictionary &p_args);
+Dictionary justamcp_editor_list_actions(const Dictionary &p_args);
+Dictionary justamcp_editor_invoke_action(const Dictionary &p_args);
+Dictionary justamcp_editor_unsaved_state(const Dictionary &p_args);
+Dictionary justamcp_editor_save_all(const Dictionary &p_args);
+Dictionary justamcp_editor_surface_snapshot();
 
-void refresh_path(const String &p_path);
-String class_index_status(const String &p_path, const String &p_source);
-
-} //namespace JustAMCPEditorFilesystem
+Dictionary justamcp_scene3d_render_probe(const Dictionary &p_args);
+Dictionary justamcp_scene3d_set_debug_draw(const Dictionary &p_args);
+Dictionary justamcp_spatial_snap_to_surface(const Dictionary &p_args);
+Dictionary justamcp_spatial_repeat_along(const Dictionary &p_args);
+Dictionary justamcp_export_patch_pck(const Dictionary &p_args);
+Dictionary justamcp_asset_lib_search(const Dictionary &p_args);
+Dictionary justamcp_asset_lib_info(const Dictionary &p_args);
+Dictionary justamcp_asset_lib_install(const Dictionary &p_args);
+Dictionary justamcp_remote_control_run_headless_script(const Dictionary &p_args);

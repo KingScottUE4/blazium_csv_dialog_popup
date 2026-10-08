@@ -27,7 +27,9 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#include "../justamcp_editor_filesystem.h"
 #include "../justamcp_mcp_tool_macros.h"
+#include "../justamcp_play_clock.h"
 #include "../justamcp_read_limits.h"
 #include "justamcp_script_tools.h"
 
@@ -186,6 +188,10 @@ Dictionary JustAMCPScriptTools::_patch_script(const Dictionary &p_params) {
 	}
 
 	if (changed) {
+		Dictionary guard = justamcp_guard_gdscript_write(path, content, p_params);
+		if (guard.has("ok") && !bool(guard["ok"])) {
+			return guard;
+		}
 		file = FileAccess::open(path, FileAccess::WRITE);
 		if (file.is_null()) {
 			return MCP_INTERNAL("Cannot write script");
@@ -198,6 +204,9 @@ Dictionary JustAMCPScriptTools::_patch_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["patched"] = changed;
+	if (changed && path.get_extension().to_lower() == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, content);
+	}
 	return MCP_SUCCESS(res);
 }
 

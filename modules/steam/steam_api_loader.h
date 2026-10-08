@@ -47,6 +47,9 @@ public:
 	typedef void *ISteamUtilsPtr;
 	typedef void *ISteamInventoryPtr;
 	typedef void *ISteamUGCPtr;
+	typedef void *ISteamNetworkingSocketsPtr;
+	typedef void *ISteamNetworkingUtilsPtr;
+	typedef void *ISteamMatchmakingPtr;
 
 private:
 	void *library_handle = nullptr;
@@ -54,6 +57,8 @@ private:
 	bool stats_loaded = false;
 	bool inventory_loaded = false;
 	bool workshop_loaded = false;
+	bool networking_loaded = false;
+	bool matchmaking_loaded = false;
 
 	// Core API
 	typedef int (*SteamAPI_InitFlatFn)(char *p_out_err_msg);
@@ -179,6 +184,51 @@ private:
 	typedef SteamAPICallHandle_t (*ISteamUGC_StopPlaytimeTrackingForAllItemsFn)(ISteamUGCPtr p_self);
 	typedef bool (*ISteamUGC_ShowWorkshopEULAFn)(ISteamUGCPtr p_self);
 	typedef uint32_t (*ISteamUtils_GetAppIDFn)(ISteamUtilsPtr p_self);
+
+	// ISteamNetworkingSockets / ISteamNetworkingUtils flat API. Configuration
+	// options are never passed, so they are typed as opaque pointers.
+	typedef ISteamNetworkingSocketsPtr (*SteamAPI_SteamNetworkingSocketsFn)();
+	typedef ISteamNetworkingUtilsPtr (*SteamAPI_SteamNetworkingUtilsFn)();
+	typedef SteamHSteamListenSocket (*ISteamNetworkingSockets_CreateListenSocketP2PFn)(ISteamNetworkingSocketsPtr p_self, int p_virtual_port, int p_num_options, const void *p_options);
+	typedef SteamHSteamNetConnection (*ISteamNetworkingSockets_ConnectP2PFn)(ISteamNetworkingSocketsPtr p_self, const SteamNetworkingIdentityData *p_identity, int p_virtual_port, int p_num_options, const void *p_options);
+	typedef int (*ISteamNetworkingSockets_AcceptConnectionFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection);
+	typedef bool (*ISteamNetworkingSockets_CloseConnectionFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection, int p_reason, const char *p_debug, bool p_enable_linger);
+	typedef bool (*ISteamNetworkingSockets_CloseListenSocketFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamListenSocket p_socket);
+	typedef int (*ISteamNetworkingSockets_SendMessageToConnectionFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection, const void *p_data, uint32_t p_size, int p_send_flags, int64_t *r_message_number);
+	typedef int (*ISteamNetworkingSockets_FlushMessagesOnConnectionFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection);
+	typedef bool (*ISteamNetworkingSockets_GetConnectionInfoFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection, SteamNetConnectionInfo *r_info);
+	typedef int (*ISteamNetworkingSockets_GetConnectionRealTimeStatusFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection, SteamNetConnectionRealTimeStatus *r_status, int p_num_lanes, void *r_lanes);
+	typedef SteamHSteamNetPollGroup (*ISteamNetworkingSockets_CreatePollGroupFn)(ISteamNetworkingSocketsPtr p_self);
+	typedef bool (*ISteamNetworkingSockets_DestroyPollGroupFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetPollGroup p_poll_group);
+	typedef bool (*ISteamNetworkingSockets_SetConnectionPollGroupFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetConnection p_connection, SteamHSteamNetPollGroup p_poll_group);
+	typedef int (*ISteamNetworkingSockets_ReceiveMessagesOnPollGroupFn)(ISteamNetworkingSocketsPtr p_self, SteamHSteamNetPollGroup p_poll_group, SteamNetworkingMessage **r_messages, int p_max_messages);
+	typedef void (*SteamNetworkingMessage_ReleaseFn)(SteamNetworkingMessage *p_message);
+	typedef void (*ISteamNetworkingUtils_InitRelayNetworkAccessFn)(ISteamNetworkingUtilsPtr p_self);
+
+	// ISteamMatchmaking flat API (lobbies). Enum parameters are passed as int.
+	typedef ISteamMatchmakingPtr (*SteamAPI_SteamMatchmakingFn)();
+	typedef SteamAPICallHandle_t (*ISteamMatchmaking_RequestLobbyListFn)(ISteamMatchmakingPtr p_self);
+	typedef void (*ISteamMatchmaking_AddStringFilterFn)(ISteamMatchmakingPtr p_self, const char *p_key, const char *p_value, int p_comparison);
+	typedef void (*ISteamMatchmaking_AddNumericalFilterFn)(ISteamMatchmakingPtr p_self, const char *p_key, int p_value, int p_comparison);
+	typedef void (*ISteamMatchmaking_AddIntFilterFn)(ISteamMatchmakingPtr p_self, int p_value);
+	typedef uint64_t (*ISteamMatchmaking_GetLobbyByIndexFn)(ISteamMatchmakingPtr p_self, int p_index);
+	typedef SteamAPICallHandle_t (*ISteamMatchmaking_CreateLobbyFn)(ISteamMatchmakingPtr p_self, int p_lobby_type, int p_max_members);
+	typedef SteamAPICallHandle_t (*ISteamMatchmaking_JoinLobbyFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id);
+	typedef void (*ISteamMatchmaking_LeaveLobbyFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id);
+	typedef bool (*ISteamMatchmaking_LobbyUserBoolFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, uint64_t p_steam_id);
+	typedef int (*ISteamMatchmaking_LobbyIntFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id);
+	typedef uint64_t (*ISteamMatchmaking_GetLobbyMemberByIndexFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, int p_index);
+	typedef const char *(*ISteamMatchmaking_GetLobbyDataFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, const char *p_key);
+	typedef bool (*ISteamMatchmaking_SetLobbyDataFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, const char *p_key, const char *p_value);
+	typedef bool (*ISteamMatchmaking_GetLobbyDataByIndexFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, int p_index, char *r_key, int p_key_size, char *r_value, int p_value_size);
+	typedef bool (*ISteamMatchmaking_DeleteLobbyDataFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, const char *p_key);
+	typedef const char *(*ISteamMatchmaking_GetLobbyMemberDataFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, uint64_t p_steam_id, const char *p_key);
+	typedef void (*ISteamMatchmaking_SetLobbyMemberDataFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, const char *p_key, const char *p_value);
+	typedef bool (*ISteamMatchmaking_LobbyIntSetterFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, int p_value);
+	typedef bool (*ISteamMatchmaking_SetLobbyJoinableFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, bool p_joinable);
+	typedef uint64_t (*ISteamMatchmaking_GetLobbyOwnerFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id);
+	typedef void (*ISteamFriends_ActivateGameOverlayInviteDialogFn)(ISteamFriendsPtr p_self, uint64_t p_lobby_id);
+	typedef const char *(*ISteamFriends_GetFriendPersonaNameFn)(ISteamFriendsPtr p_self, uint64_t p_steam_id);
 
 	SteamAPI_InitFlatFn fn_init_flat = nullptr;
 	SteamAPI_ShutdownFn fn_shutdown = nullptr;
@@ -325,11 +375,63 @@ private:
 	SteamAPI_SteamUtilsFn fn_ugc_steam_utils = nullptr;
 	ISteamUtils_GetAppIDFn fn_utils_get_app_id = nullptr;
 
+	SteamAPI_SteamNetworkingSocketsFn fn_steam_networking_sockets = nullptr;
+	SteamAPI_SteamNetworkingUtilsFn fn_steam_networking_utils = nullptr;
+	ISteamNetworkingSockets_CreateListenSocketP2PFn fn_net_create_listen_socket_p2p = nullptr;
+	ISteamNetworkingSockets_ConnectP2PFn fn_net_connect_p2p = nullptr;
+	ISteamNetworkingSockets_AcceptConnectionFn fn_net_accept_connection = nullptr;
+	ISteamNetworkingSockets_CloseConnectionFn fn_net_close_connection = nullptr;
+	ISteamNetworkingSockets_CloseListenSocketFn fn_net_close_listen_socket = nullptr;
+	ISteamNetworkingSockets_SendMessageToConnectionFn fn_net_send_message_to_connection = nullptr;
+	ISteamNetworkingSockets_FlushMessagesOnConnectionFn fn_net_flush_messages_on_connection = nullptr;
+	ISteamNetworkingSockets_GetConnectionInfoFn fn_net_get_connection_info = nullptr;
+	ISteamNetworkingSockets_GetConnectionRealTimeStatusFn fn_net_get_connection_real_time_status = nullptr;
+	ISteamNetworkingSockets_CreatePollGroupFn fn_net_create_poll_group = nullptr;
+	ISteamNetworkingSockets_DestroyPollGroupFn fn_net_destroy_poll_group = nullptr;
+	ISteamNetworkingSockets_SetConnectionPollGroupFn fn_net_set_connection_poll_group = nullptr;
+	ISteamNetworkingSockets_ReceiveMessagesOnPollGroupFn fn_net_receive_messages_on_poll_group = nullptr;
+	SteamNetworkingMessage_ReleaseFn fn_net_message_release = nullptr;
+	ISteamNetworkingUtils_InitRelayNetworkAccessFn fn_net_init_relay_network_access = nullptr;
+
+	SteamAPI_SteamMatchmakingFn fn_steam_matchmaking = nullptr;
+	ISteamMatchmaking_RequestLobbyListFn fn_mm_request_lobby_list = nullptr;
+	ISteamMatchmaking_AddStringFilterFn fn_mm_add_string_filter = nullptr;
+	ISteamMatchmaking_AddNumericalFilterFn fn_mm_add_numerical_filter = nullptr;
+	ISteamMatchmaking_AddIntFilterFn fn_mm_add_slots_available_filter = nullptr;
+	ISteamMatchmaking_AddIntFilterFn fn_mm_add_distance_filter = nullptr;
+	ISteamMatchmaking_AddIntFilterFn fn_mm_add_result_count_filter = nullptr;
+	ISteamMatchmaking_GetLobbyByIndexFn fn_mm_get_lobby_by_index = nullptr;
+	ISteamMatchmaking_CreateLobbyFn fn_mm_create_lobby = nullptr;
+	ISteamMatchmaking_JoinLobbyFn fn_mm_join_lobby = nullptr;
+	ISteamMatchmaking_LeaveLobbyFn fn_mm_leave_lobby = nullptr;
+	ISteamMatchmaking_LobbyUserBoolFn fn_mm_invite_user_to_lobby = nullptr;
+	ISteamMatchmaking_LobbyIntFn fn_mm_get_num_lobby_members = nullptr;
+	ISteamMatchmaking_GetLobbyMemberByIndexFn fn_mm_get_lobby_member_by_index = nullptr;
+	ISteamMatchmaking_GetLobbyDataFn fn_mm_get_lobby_data = nullptr;
+	ISteamMatchmaking_SetLobbyDataFn fn_mm_set_lobby_data = nullptr;
+	ISteamMatchmaking_LobbyIntFn fn_mm_get_lobby_data_count = nullptr;
+	ISteamMatchmaking_GetLobbyDataByIndexFn fn_mm_get_lobby_data_by_index = nullptr;
+	ISteamMatchmaking_DeleteLobbyDataFn fn_mm_delete_lobby_data = nullptr;
+	ISteamMatchmaking_GetLobbyMemberDataFn fn_mm_get_lobby_member_data = nullptr;
+	ISteamMatchmaking_SetLobbyMemberDataFn fn_mm_set_lobby_member_data = nullptr;
+	ISteamMatchmaking_LobbyIntSetterFn fn_mm_set_lobby_member_limit = nullptr;
+	ISteamMatchmaking_LobbyIntFn fn_mm_get_lobby_member_limit = nullptr;
+	ISteamMatchmaking_LobbyIntSetterFn fn_mm_set_lobby_type = nullptr;
+	ISteamMatchmaking_SetLobbyJoinableFn fn_mm_set_lobby_joinable = nullptr;
+	ISteamMatchmaking_GetLobbyOwnerFn fn_mm_get_lobby_owner = nullptr;
+	ISteamMatchmaking_LobbyUserBoolFn fn_mm_set_lobby_owner = nullptr;
+	ISteamFriends_ActivateGameOverlayInviteDialogFn fn_friends_activate_game_overlay_invite_dialog = nullptr;
+	ISteamFriends_GetFriendPersonaNameFn fn_friends_get_friend_persona_name = nullptr;
+
 	bool _load_symbol(const char *p_name, void *&r_symbol, bool p_optional = false);
 	bool _load_stats_symbols();
 	bool _load_inventory_symbols();
 	bool _load_workshop_symbols();
 	void _clear_workshop_symbols();
+	bool _load_networking_symbols();
+	void _clear_networking_symbols();
+	bool _load_matchmaking_symbols();
+	void _clear_matchmaking_symbols();
 
 public:
 	static constexpr int kGetTicketForWebApiResponseCallback = 168; // k_iSteamUserCallbacks(100) + 68
@@ -340,6 +442,8 @@ public:
 	bool has_stats_support() const { return stats_loaded; }
 	bool has_inventory_support() const { return inventory_loaded; }
 	bool has_workshop_support() const { return workshop_loaded; }
+	bool has_networking_support() const { return networking_loaded; }
+	bool has_matchmaking_support() const { return matchmaking_loaded; }
 
 	int init_flat(String &r_err_msg);
 	void shutdown();
@@ -492,4 +596,54 @@ public:
 	SteamAPICallHandle_t ugc_stop_playtime_tracking(ISteamUGCPtr p_ugc, const Vector<SteamPublishedFileId_t> &p_file_ids) const;
 	SteamAPICallHandle_t ugc_stop_playtime_tracking_for_all_items(ISteamUGCPtr p_ugc) const;
 	bool ugc_show_workshop_eula(ISteamUGCPtr p_ugc) const;
+
+	// Steam Networking Sockets. All wrappers return a safe failure value when
+	// the symbols are unavailable.
+	ISteamNetworkingSocketsPtr get_steam_networking_sockets() const;
+	ISteamNetworkingUtilsPtr get_steam_networking_utils() const;
+	void net_init_relay_network_access(ISteamNetworkingUtilsPtr p_utils) const;
+	SteamHSteamListenSocket net_create_listen_socket_p2p(ISteamNetworkingSocketsPtr p_sockets, int p_virtual_port) const;
+	SteamHSteamNetConnection net_connect_p2p(ISteamNetworkingSocketsPtr p_sockets, uint64_t p_steam_id, int p_virtual_port) const;
+	int net_accept_connection(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection) const;
+	bool net_close_connection(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection, int p_reason, const char *p_debug, bool p_enable_linger) const;
+	bool net_close_listen_socket(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamListenSocket p_socket) const;
+	int net_send_message_to_connection(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection, const void *p_data, uint32_t p_size, int p_send_flags) const;
+	int net_flush_messages_on_connection(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection) const;
+	bool net_get_connection_info(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection, SteamNetConnectionInfo &r_info) const;
+	bool net_get_connection_real_time_status(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection, SteamNetConnectionRealTimeStatus &r_status) const;
+	SteamHSteamNetPollGroup net_create_poll_group(ISteamNetworkingSocketsPtr p_sockets) const;
+	bool net_destroy_poll_group(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetPollGroup p_poll_group) const;
+	bool net_set_connection_poll_group(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection, SteamHSteamNetPollGroup p_poll_group) const;
+	int net_receive_messages_on_poll_group(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetPollGroup p_poll_group, SteamNetworkingMessage **r_messages, int p_max_messages) const;
+	void net_release_message(SteamNetworkingMessage *p_message) const;
+
+	// Steam Matchmaking (lobbies).
+	ISteamMatchmakingPtr get_steam_matchmaking() const;
+	SteamAPICallHandle_t mm_request_lobby_list(ISteamMatchmakingPtr p_matchmaking) const;
+	void mm_add_request_lobby_list_string_filter(ISteamMatchmakingPtr p_matchmaking, const char *p_key, const char *p_value, int p_comparison) const;
+	void mm_add_request_lobby_list_numerical_filter(ISteamMatchmakingPtr p_matchmaking, const char *p_key, int p_value, int p_comparison) const;
+	void mm_add_request_lobby_list_filter_slots_available(ISteamMatchmakingPtr p_matchmaking, int p_slots) const;
+	void mm_add_request_lobby_list_distance_filter(ISteamMatchmakingPtr p_matchmaking, int p_distance) const;
+	void mm_add_request_lobby_list_result_count_filter(ISteamMatchmakingPtr p_matchmaking, int p_max_results) const;
+	uint64_t mm_get_lobby_by_index(ISteamMatchmakingPtr p_matchmaking, int p_index) const;
+	SteamAPICallHandle_t mm_create_lobby(ISteamMatchmakingPtr p_matchmaking, int p_lobby_type, int p_max_members) const;
+	SteamAPICallHandle_t mm_join_lobby(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id) const;
+	void mm_leave_lobby(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id) const;
+	bool mm_invite_user_to_lobby(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, uint64_t p_steam_id) const;
+	int mm_get_num_lobby_members(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id) const;
+	uint64_t mm_get_lobby_member_by_index(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, int p_index) const;
+	String mm_get_lobby_data(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, const char *p_key) const;
+	bool mm_set_lobby_data(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, const char *p_key, const char *p_value) const;
+	Dictionary mm_get_all_lobby_data(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id) const;
+	bool mm_delete_lobby_data(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, const char *p_key) const;
+	String mm_get_lobby_member_data(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, uint64_t p_steam_id, const char *p_key) const;
+	void mm_set_lobby_member_data(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, const char *p_key, const char *p_value) const;
+	bool mm_set_lobby_member_limit(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, int p_max_members) const;
+	int mm_get_lobby_member_limit(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id) const;
+	bool mm_set_lobby_type(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, int p_lobby_type) const;
+	bool mm_set_lobby_joinable(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, bool p_joinable) const;
+	uint64_t mm_get_lobby_owner(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id) const;
+	bool mm_set_lobby_owner(ISteamMatchmakingPtr p_matchmaking, uint64_t p_lobby_id, uint64_t p_steam_id) const;
+	void friends_activate_game_overlay_invite_dialog(ISteamFriendsPtr p_friends, uint64_t p_lobby_id) const;
+	String friends_get_friend_persona_name(ISteamFriendsPtr p_friends, uint64_t p_steam_id) const;
 };

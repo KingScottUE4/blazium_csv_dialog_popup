@@ -28,9 +28,11 @@
 /**************************************************************************/
 
 #include "justamcp_asset_tools.h"
+
 #include "../justamcp_editor_filesystem.h"
 #include "../justamcp_mcp_tool_macros.h"
 #include "justamcp_agent_helpers.h"
+#include "justamcp_gap_fill.h"
 
 #include "core/config/project_settings.h"
 #include "core/crypto/crypto_core.h"
@@ -45,6 +47,15 @@ Dictionary JustAMCPAssetTools::execute_tool(const String &p_tool_name, const Dic
 	String tool_name = p_tool_name;
 	if (tool_name.begins_with("asset_")) {
 		tool_name = tool_name.substr(String("asset_").length());
+	}
+	if (tool_name == "lib_search") {
+		return justamcp_asset_lib_search(p_args);
+	}
+	if (tool_name == "lib_info") {
+		return justamcp_asset_lib_info(p_args);
+	}
+	if (tool_name == "lib_install") {
+		return justamcp_asset_lib_install(p_args);
 	}
 	if (tool_name == "generate_2d_asset") {
 		return generate_2d_asset(p_args);

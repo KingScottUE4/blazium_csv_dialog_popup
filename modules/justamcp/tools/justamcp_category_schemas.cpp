@@ -48,10 +48,10 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 
 	current_category = "editor_tools";
 	is_core = false;
-	add_schema("editor_play_scene", "Runs the currently active or specified scene. With duration_ms, plays, delivers timed inputs (kind/type action|key|mouse|target|motion, at_ms, hold_ms), captures a screenshot, and stops.",
-			Vector<String>{ "scene_path", "string", "duration_ms", "number", "inputs", "array", "prompt", "string" }, Vector<String>{}, "optional");
-	add_schema("editor_run_scene", "Alias of editor_play_scene for timed playtest runs with duration_ms, inputs (kind/type, at_ms, hold_ms, action/key/x/y/target), screenshot, and delivery report.",
-			Vector<String>{ "scene_path", "string", "duration_ms", "number", "inputs", "array", "prompt", "string" }, Vector<String>{}, "optional");
+	add_schema("editor_play_scene", "Runs the currently active or specified scene. Optional seed, fixed_fps (1-240), and frozen are passed into the play process. With duration_ms, plays, delivers timed inputs (kind/type action|key|mouse|target|motion, at_ms, hold_ms), captures a screenshot, and stops.",
+			Vector<String>{ "scene_path", "string", "duration_ms", "number", "inputs", "array", "prompt", "string", "seed", "number", "fixed_fps", "number", "frozen", "boolean" }, Vector<String>{}, "optional");
+	add_schema("editor_run_scene", "Alias of editor_play_scene for timed playtest runs with duration_ms, inputs, seed, fixed_fps, frozen, screenshot, and delivery report.",
+			Vector<String>{ "scene_path", "string", "duration_ms", "number", "inputs", "array", "prompt", "string", "seed", "number", "fixed_fps", "number", "frozen", "boolean" }, Vector<String>{}, "optional");
 	add_schema("editor_play_main", "Runs the project's main scene.",
 			Vector<String>{}, Vector<String>{});
 	add_schema("editor_stop_play", "Terminates an active play session.",
@@ -89,6 +89,22 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 	add_schema("editor_reload_project", "Requests an editor restart to reload the project.",
 			Vector<String>{ "save", "boolean" }, Vector<String>{}, "optional");
 	add_schema("editor_save_all_scenes", "Saves all open editor scenes.",
+			Vector<String>{}, Vector<String>{});
+	add_schema("editor_save_all", "Saves all open editor scenes and scripts.",
+			Vector<String>{}, Vector<String>{});
+	add_schema("editor_get_camera", "Reads the 3D editor viewport camera position, rotation, and fov.",
+			Vector<String>{ "index", "number" }, Vector<String>{});
+	add_schema("editor_set_camera", "Sets the 3D editor viewport camera position, rotation in degrees, and fov.",
+			Vector<String>{ "index", "number", "position", "any", "rotation", "any", "fov", "number" }, Vector<String>{});
+	add_schema("editor_list_dialogs", "Lists visible editor dialogs by title.",
+			Vector<String>{}, Vector<String>{});
+	add_schema("editor_dismiss_dialog", "Hides one visible editor dialog whose title matches.",
+			Vector<String>{ "title", "string" }, Vector<String>{ "title" });
+	add_schema("editor_list_actions", "Lists editor command palette actions.",
+			Vector<String>{ "limit", "number" }, Vector<String>{});
+	add_schema("editor_invoke_action", "Runs one editor command palette action by name.",
+			Vector<String>{ "name", "string", "action", "string" }, Vector<String>{});
+	add_schema("editor_unsaved_state", "Lists unsaved scenes and scripts.",
 			Vector<String>{}, Vector<String>{});
 	add_schema("editor_get_signals", "Lists signals for a class or node in the edited scene.",
 			Vector<String>{ "class_name", "string", "node_path", "string" }, Vector<String>{});
@@ -169,6 +185,10 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "node_path", "string", "layers", "number" }, Vector<String>{ "node_path", "layers" });
 	add_schema("navigation_get_info", "Lists navigation regions and agents below a scene node.",
 			Vector<String>{ "node_path", "string" }, Vector<String>{});
+	add_schema("spatial_snap_to_surface", "Moves a Node3D onto the top of the nearest visual bounds below it, or onto an explicit target node.",
+			Vector<String>{ "node_path", "string", "target_path", "string", "max_distance", "number", "offset", "number" }, Vector<String>{ "node_path" });
+	add_schema("spatial_repeat_along", "Duplicates a node along a segment. count is the number of copies and is capped at 32.",
+			Vector<String>{ "node_path", "string", "from", "any", "to", "any", "count", "number" }, Vector<String>{ "node_path", "count" });
 
 	current_category = "runtime_tools";
 	is_core = false;
@@ -230,6 +250,16 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "node", "string", "position", "object", "property", "string" }, Vector<String>{ "node", "position" });
 	add_schema("runtime_monitor_properties", "Snapshots selected live runtime node properties.",
 			Vector<String>{ "node", "string", "properties", "array" }, Vector<String>{ "node", "properties" });
+	add_schema("runtime_freeze", "Pauses or resumes the live SceneTree and records the play clock frozen flag. paused defaults to true.",
+			Vector<String>{ "paused", "boolean" }, Vector<String>{});
+	add_schema("runtime_step", "Unpauses, delivers optional inputs with the existing inject commands, advances duration_ms or frames, then pauses again if the clock was frozen. Provide duration_ms or frames, not both.",
+			Vector<String>{ "duration_ms", "number", "frames", "number", "inputs", "array" }, Vector<String>{});
+	add_schema("runtime_step_until", "Steps one frame at a time until a GDScript expression is true, or max_frames is reached.",
+			Vector<String>{ "expr", "string", "expression", "string", "max_frames", "number", "inputs", "array" }, Vector<String>{});
+	add_schema("runtime_set_time_scale", "Sets Engine.time_scale on the live runtime. Range 0 to 16.",
+			Vector<String>{ "time_scale", "number", "scale", "number" }, Vector<String>{});
+	add_schema("runtime_click_world", "Projects a 3D pick from screen coordinates or a node, raycasts, and clicks that screen point with the existing mouse inject.",
+			Vector<String>{ "x", "number", "y", "number", "node", "string", "node_path", "string", "length", "number", "button", "number" }, Vector<String>{});
 
 	current_category = "scene_tools";
 	is_core = true;
@@ -468,8 +498,10 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 	is_core = false;
 	add_schema("list_export_presets", "Reads and returns all export presets from export_presets.cfg.",
 			Vector<String>{}, Vector<String>{});
-	add_schema("export_project", "Triggers a headless Godot export operation.",
+	add_schema("export_project", "Runs a headless export and returns the process exit status and export path.",
 			Vector<String>{ "preset_index", "number", "preset_name", "string", "debug", "boolean" }, Vector<String>{}, "required");
+	add_schema("export_smoke", "Launches an exported binary for a bounded interval and returns exit status, timeout, and the output tail.",
+			Vector<String>{ "path", "string", "timeout_ms", "number" }, Vector<String>{ "path" }, "required");
 	add_schema("export_release", "Exports the project using the release preset.",
 			Vector<String>{ "preset_name", "string", "preset_index", "number" }, Vector<String>{}, "required");
 	add_schema("export_debug", "Exports the project using the debug preset.",
@@ -484,6 +516,8 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "preset_name", "string", "preset_index", "number" }, Vector<String>{});
 	add_schema("deploy_to_android", "Exports, installs, and optionally launches an Android build through adb.",
 			Vector<String>{ "preset_name", "string", "preset_index", "number", "device_serial", "string", "debug", "boolean", "skip_export", "boolean", "launch", "boolean" }, Vector<String>{}, "required");
+	add_schema("export_patch_pck", "Packs project files newer than a base pack, or an explicit file list, into a patch PCK.",
+			Vector<String>{ "output", "string", "base_pack", "string", "files", "array" }, Vector<String>{ "output" });
 
 	current_category = "batch_tools";
 	is_core = false;
@@ -510,10 +544,10 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "path", "string", "recursive", "boolean", "max_results", "number" }, Vector<String>{});
 	add_schema("read_script", "Fetches source text directly from a godot script file.",
 			Vector<String>{ "path", "string" }, Vector<String>{ "path" });
-	add_schema("create_script", "Writes a script file providing a default extending template out of the box.",
-			Vector<String>{ "path", "string", "content", "string", "extends", "string", "class_name", "string" }, Vector<String>{ "path" });
-	add_schema("edit_script", "Modifies an existing script intelligently mapping regex replacements or direct injection.",
-			Vector<String>{ "path", "string", "content", "string", "insert_at_line", "number", "text", "string", "replacements", "array" }, Vector<String>{ "path" });
+	add_schema("create_script", "Writes a script file providing a default extending template out of the box. .gd content is refused unless it compiles. validate defaults to true. .cs is written as given.",
+			Vector<String>{ "path", "string", "content", "string", "extends", "string", "class_name", "string", "validate", "boolean" }, Vector<String>{ "path" });
+	add_schema("edit_script", "Modifies an existing script intelligently mapping regex replacements or direct injection. .gd writes are refused unless the result compiles. validate defaults to true.",
+			Vector<String>{ "path", "string", "content", "string", "insert_at_line", "number", "text", "string", "replacements", "array", "validate", "boolean" }, Vector<String>{ "path" });
 	add_schema("attach_script", "Binds a target Godot Resource Script onto a Scene Node dynamically.",
 			Vector<String>{ "node_path", "string", "script_path", "string" }, Vector<String>{ "node_path", "script_path" });
 	add_schema("delete_script", "Deletes a script file from the project.",
@@ -530,8 +564,8 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "path", "string", "pattern", "string" }, Vector<String>{ "pattern" });
 	add_schema("find_script_symbols", "Extracts classes, functions, variables, signals, constants, and enum symbols from scripts.",
 			Vector<String>{ "path", "string" }, Vector<String>{});
-	add_schema("patch_script", "Patches a script by replacing or inserting around an anchor.",
-			Vector<String>{ "path", "string", "anchor", "string", "search", "string", "replacement", "string", "replace", "string", "insert_before", "string", "insert_after", "string" }, Vector<String>{ "path" });
+	add_schema("patch_script", "Patches a script by replacing or inserting around an anchor. .gd writes are refused unless the result compiles. validate defaults to true.",
+			Vector<String>{ "path", "string", "anchor", "string", "search", "string", "replacement", "string", "replace", "string", "insert_before", "string", "insert_after", "string", "validate", "boolean" }, Vector<String>{ "path" });
 	add_schema("validate_script", "Compiles a GDScript implicitly returning if valid or syntax errors mapped out.",
 			Vector<String>{ "path", "string" }, Vector<String>{ "path" });
 
@@ -646,6 +680,10 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "parent_path", "string", "name", "string", "node_path", "string", "projection", "string", "fov", "number", "size", "number", "near", "number", "far", "number", "cull_mask", "number", "current", "boolean", "position", "any", "rotation", "any", "look_at", "any", "environment_path", "string" }, Vector<String>{ "parent_path" });
 	add_schema("add_gridmap", "Mints and instantiates Godot high performance GridMap bounding memory grids locally.",
 			Vector<String>{ "parent_path", "string", "name", "string", "node_path", "string", "mesh_library_path", "string", "cell_size", "any", "position", "any", "cells", "array" }, Vector<String>{ "parent_path" });
+	add_schema("scene3d_render_probe", "Reports whether Node3D instances are visible, inside the editor camera frustum, on the camera cull mask, and how their material cull mode is set.",
+			Vector<String>{ "node_path", "string", "limit", "number" }, Vector<String>{});
+	add_schema("scene3d_set_debug_draw", "Sets the 3D editor viewport debug draw mode.",
+			Vector<String>{ "mode", "string", "index", "number" }, Vector<String>{ "mode" });
 
 	current_category = "shader_tools";
 	is_core = false;
@@ -741,6 +779,12 @@ void JustAMCPCategorySchemas::register_category_schemas(const JustAMCPCategorySc
 			Vector<String>{ "svg_code", "string", "filename", "string", "save_path", "string", "scale", "number" }, Vector<String>{ "svg_code", "filename" });
 	add_schema("save_pixel_art", "Writes a sandboxed PNG (path or base64) to res://assets/generated/ plus optional metadata JSON. Does not call hosted image generation.",
 			Vector<String>{ "path", "string", "source_path", "string", "filename", "string", "png_base64", "string", "metadata", "object" }, Vector<String>{});
+	add_schema("asset_lib_search", "Searches the Asset Library repository configured in Editor Settings.",
+			Vector<String>{ "query", "string", "filter", "string", "max_results", "number" }, Vector<String>{});
+	add_schema("asset_lib_info", "Reads one Asset Library entry by id from the configured repository.",
+			Vector<String>{ "asset_id", "number", "id", "number" }, Vector<String>{});
+	add_schema("asset_lib_install", "Downloads an Asset Library entry and extracts it inside the open project.",
+			Vector<String>{ "asset_id", "number", "id", "number", "destination", "string" }, Vector<String>{});
 
 	current_category = "blueprint_tools";
 	is_core = false;

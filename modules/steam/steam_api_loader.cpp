@@ -176,6 +176,14 @@ bool SteamAPILoader::try_load() {
 	if (!workshop_loaded) {
 		_clear_workshop_symbols();
 	}
+	networking_loaded = _load_networking_symbols();
+	if (!networking_loaded) {
+		_clear_networking_symbols();
+	}
+	matchmaking_loaded = _load_matchmaking_symbols();
+	if (!matchmaking_loaded) {
+		_clear_matchmaking_symbols();
+	}
 	return true;
 }
 
@@ -372,6 +380,8 @@ void SteamAPILoader::unload() {
 	stats_loaded = false;
 	inventory_loaded = false;
 	_clear_workshop_symbols();
+	_clear_networking_symbols();
+	_clear_matchmaking_symbols();
 	fn_steam_user_stats = nullptr;
 	fn_request_current_stats = nullptr;
 	fn_get_achievement = nullptr;

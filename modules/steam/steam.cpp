@@ -123,6 +123,7 @@ void Steam::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("inventory_definitions_updated"));
 
 	_bind_workshop_methods();
+	_bind_matchmaking_methods();
 }
 
 Steam *Steam::get_singleton() {
@@ -165,6 +166,9 @@ void Steam::_reset_ticket_state() {
 
 void Steam::_handle_callback(int p_callback_id, const void *p_data, int p_size) {
 	if (_handle_workshop_callback(p_callback_id, p_data, p_size)) {
+		return;
+	}
+	if (_handle_networking_callback(p_callback_id, p_data, p_size)) {
 		return;
 	}
 
@@ -302,7 +306,9 @@ void Steam::_dispatch_callbacks() {
 						workshop_pending_calls.erase(call_completed->m_hAsyncCall);
 					}
 
-					if (has_result && !(is_workshop_call && failed)) {
+					if (_handle_lobby_call_completed(call_completed->m_hAsyncCall, has_result && !failed, result.ptr(), (int)call_completed->m_cubParam)) {
+						// Lobby call result, including IO failures.
+					} else if (has_result && !(is_workshop_call && failed)) {
 						_handle_callback(call_completed->m_iCallback, result.ptr(), (int)call_completed->m_cubParam);
 					} else if (is_workshop_call) {
 						// IO failure (e.g. Steam servers unreachable): still report back to the game.
@@ -401,6 +407,21 @@ Error Steam::initialize(int p_app_id) {
 		}
 	}
 
+	if (loader.has_networking_support()) {
+		steam_networking_sockets = loader.get_steam_networking_sockets();
+		steam_networking_utils = loader.get_steam_networking_utils();
+		if (!steam_networking_sockets) {
+			_log_debug("Steam Networking Sockets interface unavailable");
+		}
+	}
+
+	if (loader.has_matchmaking_support()) {
+		steam_matchmaking = loader.get_steam_matchmaking();
+		if (!steam_matchmaking) {
+			_log_debug("Steam Matchmaking interface unavailable");
+		}
+	}
+
 	initialized = true;
 	_log_debug("Steam initialized");
 
@@ -415,6 +436,7 @@ void Steam::shutdown() {
 		loader.cancel_auth_ticket(steam_user, pending_auth_ticket);
 	}
 	_reset_ticket_state();
+	_clear_networking_state();
 	loader.shutdown();
 	steam_user = nullptr;
 	steam_user_stats = nullptr;

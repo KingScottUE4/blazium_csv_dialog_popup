@@ -31,6 +31,7 @@
 
 #include "../justamcp_editor_filesystem.h"
 #include "../justamcp_editor_scene_access.h"
+#include "../justamcp_play_clock.h"
 #include "../justamcp_read_limits.h"
 
 #ifdef TOOLS_ENABLED
@@ -255,6 +256,11 @@ Dictionary JustAMCPScriptTools::_create_script(const Dictionary &p_params) {
 		DirAccess::make_dir_recursive_absolute(dir_path);
 	}
 
+	Dictionary guard = justamcp_guard_gdscript_write(path, content, p_params);
+	if (guard.has("ok") && !bool(guard["ok"])) {
+		return guard;
+	}
+
 	Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
 	if (file.is_null()) {
 		return MCP_INTERNAL("Cannot create script");
@@ -268,6 +274,9 @@ Dictionary JustAMCPScriptTools::_create_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["created"] = true;
+	if (path.get_extension().to_lower() == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, content);
+	}
 	return MCP_SUCCESS(res);
 }
 
@@ -346,6 +355,11 @@ Dictionary JustAMCPScriptTools::_edit_script(const Dictionary &p_params) {
 		return MCP_SUCCESS(res);
 	}
 
+	Dictionary guard = justamcp_guard_gdscript_write(path, content, p_params);
+	if (guard.has("ok") && !bool(guard["ok"])) {
+		return guard;
+	}
+
 	file = FileAccess::open(path, FileAccess::WRITE);
 	if (file.is_null()) {
 		return MCP_INTERNAL("Cannot write script");
@@ -359,6 +373,9 @@ Dictionary JustAMCPScriptTools::_edit_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["changes_made"] = changes_made;
+	if (path.get_extension().to_lower() == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, content);
+	}
 	return MCP_SUCCESS(res);
 }
 
@@ -388,6 +405,9 @@ Dictionary JustAMCPScriptTools::_delete_script(const Dictionary &p_params) {
 	Dictionary res;
 	res["path"] = path;
 	res["deleted"] = true;
+	if (ext == "gd") {
+		res["class_index"] = JustAMCPEditorFilesystem::class_index_status(path, String());
+	}
 	return MCP_SUCCESS(res);
 }
 

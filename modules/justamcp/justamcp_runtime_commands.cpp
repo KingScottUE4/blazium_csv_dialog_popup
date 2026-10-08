@@ -27,6 +27,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#include "justamcp_play_clock.h"
 #include "justamcp_project_registry.h"
 #include "justamcp_read_limits.h"
 #include "justamcp_runtime.h"
@@ -168,6 +169,11 @@ Dictionary JustAMCPRuntime::execute_command(const String &p_command, const Dicti
 		return _cmd_tags_list(p_params);
 	} else if (p_command == "tags_find_assets") {
 		return _cmd_tags_find_assets(p_params);
+	}
+
+	Dictionary clock_result;
+	if (justamcp_try_play_clock_command(p_command, p_params, clock_result)) {
+		return clock_result;
 	}
 
 	Dictionary ret;

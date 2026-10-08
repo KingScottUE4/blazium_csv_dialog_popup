@@ -29,8 +29,10 @@
 
 #include "justamcp_export_tools.h"
 
+#include "../justamcp_play_clock.h"
 #include "../justamcp_server.h"
 #include "../justamcp_tool_context.h"
+#include "justamcp_gap_fill.h"
 
 #include "core/config/project_settings.h"
 #include "core/io/config_file.h"
@@ -58,6 +60,12 @@ Dictionary JustAMCPExportTools::_execute_blocking_tool_sync(const String &p_tool
 	}
 	if (p_tool_name == "deploy_to_android") {
 		return _deploy_to_android(p_args);
+	}
+	if (p_tool_name == "export_project") {
+		return _export_project(p_args);
+	}
+	if (p_tool_name == "export_smoke") {
+		return _export_smoke(p_args);
 	}
 	Dictionary err;
 	err["ok"] = false;
@@ -117,13 +125,22 @@ bool JustAMCPExportTools::_try_schedule_blocking_tool(const String &p_tool_name,
 Dictionary JustAMCPExportTools::execute_tool(const String &p_tool_name, const Dictionary &p_args) {
 	if (p_tool_name == "list_export_presets") {
 		return _list_export_presets(p_args);
-	} else if (p_tool_name == "export_project") {
-		return _export_project(p_args);
 	} else if (p_tool_name == "get_export_info") {
 		return _get_export_info(p_args);
-	} else if (p_tool_name == "list_android_devices" || p_tool_name == "deploy_to_android") {
+	} else if (p_tool_name == "list_android_devices" || p_tool_name == "deploy_to_android" || p_tool_name == "export_project" || p_tool_name == "export_release" || p_tool_name == "export_debug" || p_tool_name == "export_custom" || p_tool_name == "export_smoke") {
+		Dictionary export_args = p_args.duplicate();
+		String tool_name = p_tool_name;
+		if (p_tool_name == "export_release") {
+			export_args["debug"] = false;
+			tool_name = "export_project";
+		} else if (p_tool_name == "export_debug") {
+			export_args["debug"] = true;
+			tool_name = "export_project";
+		} else if (p_tool_name == "export_custom") {
+			tool_name = "export_project";
+		}
 		Dictionary pending;
-		if (_try_schedule_blocking_tool(p_tool_name, p_args, pending)) {
+		if (_try_schedule_blocking_tool(tool_name, export_args, pending)) {
 			return pending;
 		}
 		if (Thread::is_main_thread()) {
@@ -133,17 +150,11 @@ Dictionary JustAMCPExportTools::execute_tool(const String &p_tool_name, const Di
 			err["_justamcp_async_required"] = true;
 			return err;
 		}
-		return _execute_blocking_tool_sync(p_tool_name, p_args);
+		return _execute_blocking_tool_sync(tool_name, export_args);
+	} else if (p_tool_name == "export_patch_pck") {
+		return justamcp_export_patch_pck(p_args);
 	} else if (p_tool_name == "get_android_preset_info") {
 		return _get_android_preset_info(p_args);
-	} else if (p_tool_name == "export_release" || p_tool_name == "export_debug" || p_tool_name == "export_custom") {
-		Dictionary export_args = p_args.duplicate();
-		if (p_tool_name == "export_release") {
-			export_args["debug"] = false;
-		} else if (p_tool_name == "export_debug") {
-			export_args["debug"] = true;
-		}
-		return _export_project(export_args);
 	}
 
 	return MCP_ERROR(-32601, "Method not found: " + p_tool_name);
@@ -329,15 +340,105 @@ Dictionary JustAMCPExportTools::_export_project(const Dictionary &p_params) {
 	}
 
 	String flag = debug ? "--export-debug" : "--export-release";
-	String command = vformat("\"%s\" --headless --path \"%s\" %s \"%s\"", godot_path, project_path, flag, target_name);
+	List<String> args;
+	args.push_back("--headless");
+	args.push_back("--path");
+	args.push_back(project_path);
+	args.push_back(flag);
+	args.push_back(target_name);
+	args.push_back(export_path);
+	justamcp_report_progress(1, 2, "Running export");
+	Dictionary run = _run_blocking(godot_path, args);
+	const int exit_code = int(run.get("exit_code", -1));
+	const String output = String(run.get("stdout", ""));
+	if (!bool(run.get("ok", false)) || exit_code != 0) {
+		Dictionary data;
+		data["preset"] = target_name;
+		data["export_path"] = export_path;
+		data["exit_code"] = exit_code;
+		data["stdout"] = output.substr(MAX(0, output.length() - 4000));
+		return MCP_ERROR_DATA(-32000, "Export failed.", data);
+	}
 
 	Dictionary res;
 	res["preset"] = target_name;
 	res["export_path"] = export_path;
 	res["debug"] = debug;
-	res["command"] = command;
-	res["message"] = "Run the command above to export. Direct export from editor plugin is not supported in Godot 4 via simple MCP calls yet.";
-	justamcp_report_progress(2, 2, "Export command prepared");
+	res["exit_code"] = exit_code;
+	res["stdout"] = output.substr(MAX(0, output.length() - 4000));
+	justamcp_report_progress(2, 2, "Export finished");
+	return MCP_SUCCESS(res);
+}
+
+Dictionary JustAMCPExportTools::_export_smoke(const Dictionary &p_params) {
+	if (Thread::is_main_thread()) {
+		Dictionary err;
+		err["ok"] = false;
+		err["error"] = "OS::execute refused on main thread";
+		return err;
+	}
+	String path = p_params.get("path", "");
+	if (path.is_empty()) {
+		return MCP_INVALID_PARAMS("Missing param: path");
+	}
+	if (path.begins_with("res://") && ProjectSettings::get_singleton()) {
+		path = ProjectSettings::get_singleton()->globalize_path(path);
+	}
+	if (!FileAccess::exists(path)) {
+		return MCP_NOT_FOUND("Export artifact '" + path + "'");
+	}
+	const int timeout_ms = justamcp_export_smoke_timeout_ms(p_params);
+	const String log_path = path + ".justamcp_smoke.log";
+	List<String> args;
+	ProcessID pid = 0;
+	Error err = FAILED;
+#ifdef WINDOWS_ENABLED
+	args.push_back("/c");
+	args.push_back(vformat("\"%s\" > \"%s\" 2>&1", path, log_path));
+	err = OS::get_singleton()->create_process("cmd.exe", args, &pid);
+#else
+	args.push_back("-c");
+	args.push_back(vformat("\"%s\" > \"%s\" 2>&1", path, log_path));
+	err = OS::get_singleton()->create_process("/bin/sh", args, &pid);
+#endif
+	if (err != OK || pid == 0) {
+		return MCP_INTERNAL("Failed to launch export artifact: " + path);
+	}
+	const uint64_t started = OS::get_singleton()->get_ticks_msec();
+	bool timed_out = false;
+	while (OS::get_singleton()->is_process_running(pid)) {
+		if (justamcp_is_cancel_requested() || int(OS::get_singleton()->get_ticks_msec() - started) >= timeout_ms) {
+			timed_out = int(OS::get_singleton()->get_ticks_msec() - started) >= timeout_ms;
+			OS::get_singleton()->kill(pid);
+#ifdef WINDOWS_ENABLED
+			List<String> kill_args;
+			kill_args.push_back("/F");
+			kill_args.push_back("/T");
+			kill_args.push_back("/PID");
+			kill_args.push_back(itos(pid));
+			String kill_output;
+			int kill_exit = 0;
+			OS::get_singleton()->execute("taskkill", kill_args, &kill_output, &kill_exit, true);
+#endif
+			break;
+		}
+		OS::get_singleton()->delay_usec(50000);
+	}
+	int exit_code = -1;
+	if (!timed_out) {
+		exit_code = OS::get_singleton()->get_process_exit_code(pid);
+	}
+	String output;
+	if (FileAccess::exists(log_path)) {
+		output = FileAccess::get_file_as_string(log_path);
+		DirAccess::remove_absolute(log_path);
+	}
+	Dictionary res;
+	res["path"] = path;
+	res["exit_code"] = exit_code;
+	res["timed_out"] = timed_out;
+	res["timeout_ms"] = timeout_ms;
+	res["stdout"] = output.substr(MAX(0, output.length() - 4000));
 	return MCP_SUCCESS(res);
 }
 

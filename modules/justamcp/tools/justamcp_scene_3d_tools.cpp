@@ -30,10 +30,13 @@
 #ifdef TOOLS_ENABLED
 
 #include "justamcp_scene_3d_tools.h"
+
 #include "../justamcp_editor_scene_access.h"
+#include "../justamcp_mcp_tool_macros.h"
+#include "justamcp_gap_fill.h"
+
 #include "core/io/resource_loader.h"
 #include "editor/editor_undo_redo_manager.h"
-#include "modules/gridmap/grid_map.h"
 #include "scene/3d/camera_3d.h"
 #include "scene/3d/light_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
@@ -45,7 +48,7 @@
 #include "scene/resources/packed_scene.h"
 #include "scene/resources/sky.h"
 
-#include "../justamcp_mcp_tool_macros.h"
+#include "modules/gridmap/grid_map.h"
 
 JustAMCPScene3DTools::JustAMCPScene3DTools() {
 }
@@ -137,6 +140,12 @@ Dictionary JustAMCPScene3DTools::execute_tool(const String &p_tool_name, const D
 	}
 	if (p_tool_name == "add_gridmap") {
 		return add_gridmap(p_args);
+	}
+	if (p_tool_name == "scene3d_render_probe") {
+		return justamcp_scene3d_render_probe(p_args);
+	}
+	if (p_tool_name == "scene3d_set_debug_draw") {
+		return justamcp_scene3d_set_debug_draw(p_args);
 	}
 
 	return Dictionary();

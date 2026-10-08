@@ -829,11 +829,16 @@ void EditorInterface::stop_playing_scene() {
 }
 
 bool EditorInterface::is_playing_scene() const {
-	return EditorRunBar::get_singleton()->is_playing();
+	EditorRunBar *run_bar = EditorRunBar::get_singleton();
+	return run_bar && run_bar->is_playing();
 }
 
 String EditorInterface::get_playing_scene() const {
-	return EditorRunBar::get_singleton()->get_playing_scene();
+	EditorRunBar *run_bar = EditorRunBar::get_singleton();
+	if (!run_bar) {
+		return String();
+	}
+	return run_bar->get_playing_scene();
 }
 
 void EditorInterface::set_movie_maker_enabled(bool p_enabled) {
