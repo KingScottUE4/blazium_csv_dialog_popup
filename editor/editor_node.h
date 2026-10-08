@@ -74,6 +74,7 @@ class BackgroundProgress;
 class DependencyErrorDialog;
 class DockSplitContainer;
 class DynamicFontImportSettingsDialog;
+class BlaziumModuleMenu;
 class EditorAbout;
 class EditorBuildProfileManager;
 class EditorBottomPanel;
@@ -179,6 +180,7 @@ public:
 		PROJECT_PACK_AS_ZIP,
 		PROJECT_SETUP_ANDROID_BUILD,
 		PROJECT_OPEN_USER_DATA_FOLDER,
+		PROJECT_DOWNLOAD_SOURCE, // Web editor only
 		PROJECT_RELOAD_CURRENT_PROJECT,
 		PROJECT_QUIT_TO_PROJECT_MANAGER,
 
@@ -299,11 +301,17 @@ private:
 	OptionButton *renderer = nullptr;
 
 #ifdef ANDROID_ENABLED
-	VBoxContainer *base_vbox = nullptr; // It only contains the title_bar and main_box.
+	VBoxContainer *base_vbox = nullptr; // It only contains the title_bar, main_box, and vk_spacer.
 	BoxContainer *main_box = nullptr; // It only contains the touch_actions_panel and main_vbox.
 	TouchActionsPanel *touch_actions_panel = nullptr;
 	void _touch_actions_panel_mode_changed();
+
+	Control *vk_spacer = nullptr;
+	int last_vk_height = -1;
+	void _screen_orientation_changed(int p_new_orientation);
 #endif
+
+	bool portrait_mode = false;
 
 	ConfirmationDialog *video_restart_dialog = nullptr;
 
@@ -352,6 +360,7 @@ private:
 	PopupMenu *project_menu = nullptr;
 	PopupMenu *debug_menu = nullptr;
 	PopupMenu *settings_menu = nullptr;
+	BlaziumModuleMenu *blazium_module_menu = nullptr;
 	PopupMenu *help_menu = nullptr;
 	PopupMenu *tool_menu = nullptr;
 	PopupMenu *export_as_menu = nullptr;
@@ -440,7 +449,7 @@ private:
 	EditorBottomPanel *bottom_panel = nullptr;
 
 	Tree *disk_changed_list = nullptr;
-	LocalVector<String> disk_changed_scenes;
+	HashSet<String> disk_changed_scenes;
 	bool disk_changed_project = false;
 	ConfirmationDialog *disk_changed = nullptr;
 	ConfirmationDialog *project_data_missing = nullptr;
@@ -1071,6 +1080,8 @@ public:
 	bool validate_custom_directory();
 	void run_editor_script(const Ref<Script> &p_script);
 	bool is_scene_unsaved(int p_idx);
+
+	bool is_portrait() const { return portrait_mode; }
 };
 
 struct EditorProgressBG {

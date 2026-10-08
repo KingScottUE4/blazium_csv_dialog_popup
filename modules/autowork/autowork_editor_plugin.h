@@ -37,6 +37,8 @@
 #include "scene/gui/button.h"
 #include "scene/gui/rich_text_label.h"
 
+class Autowork;
+
 class AutoworkEditorPlugin : public EditorPlugin {
 	GDCLASS(AutoworkEditorPlugin, EditorPlugin);
 
@@ -45,6 +47,8 @@ class AutoworkEditorPlugin : public EditorPlugin {
 	RichTextLabel *output_log;
 
 	void _run_tests_pressed();
+	void _start_tests();
+	void _on_tests_finished(Autowork *p_runner);
 
 protected:
 	static void _bind_methods();

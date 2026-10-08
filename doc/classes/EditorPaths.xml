@@ -6,10 +6,10 @@
 	<description>
 		This editor-only singleton returns OS-specific paths to various data folders and files. It can be used in editor plugins to ensure files are saved in the correct location on each operating system.
 		[b]Note:[/b] This singleton is not accessible in exported projects. Attempting to access it in an exported project will result in a script error as the singleton won't be declared. To prevent script errors in exported projects, use [method Engine.has_singleton] to check whether the singleton is available before using it.
-		[b]Note:[/b] On the Linux/BSD platform, Godot complies with the [url=https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html]XDG Base Directory Specification[/url]. You can override environment variables following the specification to change the editor and project data paths.
+		[b]Note:[/b] On the Linux/BSD platform, Blazium complies with the [url=https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html]XDG Base Directory Specification[/url]. You can override environment variables following the specification to change the editor and project data paths.
 	</description>
 	<tutorials>
-		<link title="File paths in Godot projects">$DOCS_URL/tutorials/io/data_paths.html</link>
+		<link title="File paths in Blazium projects">$DOCS_URL/tutorials/io/data_paths.html</link>
 	</tutorials>
 	<methods>
 		<method name="get_cache_dir" qualifiers="const">
@@ -18,9 +18,9 @@
 				Returns the absolute path to the user's cache folder. This folder should be used for temporary data that can be removed safely whenever the editor is closed (such as generated resource thumbnails).
 				[b]Default paths per platform:[/b]
 				[codeblock lang=text]
-				- Windows: %LOCALAPPDATA%\Godot\
-				- macOS: ~/Library/Caches/Godot/
-				- Linux: ~/.cache/godot/
+				- Windows: %LOCALAPPDATA%\Blazium\
+				- macOS: ~/Library/Caches/Blazium/
+				- Linux: ~/.cache/blazium/
 				[/codeblock]
 			</description>
 		</method>
@@ -30,9 +30,9 @@
 				Returns the absolute path to the user's configuration folder. This folder should be used for [i]persistent[/i] user configuration files.
 				[b]Default paths per platform:[/b]
 				[codeblock lang=text]
-				- Windows: %APPDATA%\Godot\                    (same as `get_data_dir()`)
-				- macOS: ~/Library/Application Support/Godot/  (same as `get_data_dir()`)
-				- Linux: ~/.config/godot/
+				- Windows: %APPDATA%\Blazium\                    (same as `get_data_dir()`)
+				- macOS: ~/Library/Application Support/Blazium/  (same as `get_data_dir()`)
+				- Linux: ~/.config/blazium/
 				[/codeblock]
 			</description>
 		</method>
@@ -42,9 +42,9 @@
 				Returns the absolute path to the user's data folder. This folder should be used for [i]persistent[/i] user data files such as installed export templates.
 				[b]Default paths per platform:[/b]
 				[codeblock lang=text]
-				- Windows: %APPDATA%\Godot\                    (same as `get_config_dir()`)
-				- macOS: ~/Library/Application Support/Godot/  (same as `get_config_dir()`)
-				- Linux: ~/.local/share/godot/
+				- Windows: %APPDATA%\Blazium\                    (same as `get_config_dir()`)
+				- macOS: ~/Library/Application Support/Blazium/  (same as `get_config_dir()`)
+				- Linux: ~/.local/share/blazium/
 				[/codeblock]
 			</description>
 		</method>
@@ -67,7 +67,7 @@
 				Self-contained mode can be enabled by creating a file named [code]._sc_[/code] or [code]_sc_[/code] in the same folder as the editor binary or macOS .app bundle while the editor is not running. See also [method get_self_contained_file].
 				[b]Note:[/b] On macOS, quarantine flag should be manually removed before using self-contained mode, see [url=https://docs.blazium.app/en/stable/tutorials/export/running_on_macos.html]Running on macOS[/url].
 				[b]Note:[/b] On macOS, placing [code]_sc_[/code] or any other file inside .app bundle will break digital signature and make it non-portable, consider placing it in the same folder as the .app bundle instead.
-				[b]Note:[/b] The Steam release of Godot uses self-contained mode by default.
+				[b]Note:[/b] The Steam release of Blazium uses self-contained mode by default.
 			</description>
 		</method>
 	</methods>

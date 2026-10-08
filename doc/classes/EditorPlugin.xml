@@ -395,6 +395,24 @@
 				Adds a script at [param path] to the Autoload list as [param name].
 			</description>
 		</method>
+		<method name="add_blazium_action">
+			<return type="void" />
+			<param index="0" name="module" type="String" />
+			<param index="1" name="title" type="String" />
+			<param index="2" name="callable" type="Callable" />
+			<description>
+				Adds an action named [param title] under the Blazium menu's [param module] submenu. When clicked, [param callable] is called.
+			</description>
+		</method>
+		<method name="add_blazium_window">
+			<return type="void" />
+			<param index="0" name="module" type="String" />
+			<param index="1" name="title" type="String" />
+			<param index="2" name="control" type="Control" />
+			<description>
+				Registers [param control] as a window named [param title] under the Blazium menu's [param module] submenu. The control is shown in its own window instead of an editor dock.
+			</description>
+		</method>
 		<method name="add_context_menu_plugin">
 			<return type="void" />
 			<param index="0" name="slot" type="int" enum="EditorContextMenuPlugin.ContextMenuSlot" />
@@ -634,6 +652,14 @@
 			<param index="0" name="name" type="String" />
 			<description>
 				Removes an Autoload [param name] from the list.
+			</description>
+		</method>
+		<method name="remove_blazium_item">
+			<return type="void" />
+			<param index="0" name="module" type="String" />
+			<param index="1" name="title" type="String" />
+			<description>
+				Removes a Blazium menu window or action registered with [method add_blazium_window] or [method add_blazium_action].
 			</description>
 		</method>
 		<method name="remove_context_menu_plugin">

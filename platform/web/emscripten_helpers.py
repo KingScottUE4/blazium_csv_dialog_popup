@@ -58,6 +58,7 @@ def create_template_zip(env, js, wasm, side):
         html = "#misc/dist/html/editor.html"
         cache = [
             "blazium.editor.html",
+            "blazium.editor.iframe.html",
             "offline.html",
             "blazium.editor.js",
             "blazium.editor.audio.worklet.js",
@@ -68,6 +69,8 @@ def create_template_zip(env, js, wasm, side):
             "inter-bold.woff2",
         ]
         opt_cache = ["blazium.editor.wasm"]
+
+        env["GODOT_WEB_FILESIZES"] = lambda: json.dumps({"blazium.editor.wasm": wasm.get_size()})
         subst_dict = {
             "___GODOT_VERSION___": get_build_version(False),
             "___GODOT_NAME___": "BlaziumEngine",
@@ -77,9 +80,18 @@ def create_template_zip(env, js, wasm, side):
             "___GODOT_THREADS_ENABLED___": "true" if env["threads"] else "false",
             "___GODOT_ENSURE_CROSSORIGIN_ISOLATION_HEADERS___": "true",
         }
-        html = env.Substfile(target="#bin/blazium${PROGSUFFIX}.html", source=html, SUBST_DICT=subst_dict)
+        subst_dict_sizes = dict(subst_dict)
+        subst_dict_sizes["___GODOT_EDITOR_FILESIZES___"] = "${GODOT_WEB_FILESIZES()}"
+        html = env.Substfile(target="#bin/blazium${PROGSUFFIX}.html", source=html, SUBST_DICT=subst_dict_sizes)
+        env.Depends(html, wasm)
         in_files.append(html)
         out_files.append(zip_dir.File(binary_name + ".html"))
+        iframe = env.Textfile(
+            target="#bin/blazium${PROGSUFFIX}.iframe.html",
+            source='<!DOCTYPE html>\n<html lang="en"><head><title></title></head></html>',
+        )
+        in_files.append(iframe)
+        out_files.append(zip_dir.File(binary_name + ".iframe.html"))
         # And logo/favicon
         in_files.append("#misc/dist/html/logo.svg")
         out_files.append(zip_dir.File("logo.svg"))

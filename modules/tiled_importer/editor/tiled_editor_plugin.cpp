@@ -34,9 +34,23 @@
 #include "core/input/shortcut.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
+#include "editor/docks/filesystem_dock.h"
 #include "editor/editor_node.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/separator.h"
+#include "scene/main/node.h"
+
+#include "modules/tiled_importer/tiled_tilemap_creator.h"
+
+static void _set_scene_owner(Node *p_node, Node *p_owner) {
+	if (!p_node) {
+		return;
+	}
+	p_node->set_owner(p_owner);
+	for (int i = 0; i < p_node->get_child_count(); i++) {
+		_set_scene_owner(p_node->get_child(i), p_owner);
+	}
+}
 
 void TiledEditorPlugin::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_on_reimport_pressed"), &TiledEditorPlugin::_on_reimport_pressed);
@@ -64,27 +78,62 @@ void TiledEditorPlugin::_notification(int p_what) {
 			btn_reimport->connect("pressed", callable_mp(this, &TiledEditorPlugin::_on_reimport_pressed));
 			vbox->add_child(btn_reimport);
 
-			add_control_to_bottom_panel(main_panel, "Tiled Maps");
+			add_blazium_window("Tiled", "Tiled Maps", main_panel);
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
 			if (main_panel) {
-				remove_control_from_bottom_panel(main_panel);
+				remove_blazium_item("Tiled", "Tiled Maps");
 				memdelete(main_panel);
+				main_panel = nullptr;
 			}
 		} break;
 	}
 }
 
 void TiledEditorPlugin::_on_reimport_pressed() {
+	String tmx_path;
+	FileSystemDock *dock = FileSystemDock::get_singleton();
+	if (dock) {
+		const Vector<String> paths = dock->get_selected_paths();
+		for (const String &path : paths) {
+			if (path.get_extension().to_lower() == "tmx") {
+				tmx_path = path;
+				break;
+			}
+		}
+	}
+	if (tmx_path.is_empty()) {
+		if (status_label) {
+			status_label->set_text("Select a .tmx file in the FileSystem dock first.");
+		}
+		return;
+	}
+
+	TiledTilemapCreator creator;
+	Node *map = creator.create_tilemap(tmx_path);
+	if (!map) {
+		if (status_label) {
+			status_label->set_text(vformat("Failed to rebuild %s.", tmx_path));
+		}
+		return;
+	}
+
+	Node *edited = EditorNode::get_singleton() ? EditorNode::get_singleton()->get_edited_scene() : nullptr;
+	if (edited) {
+		edited->add_child(map);
+		_set_scene_owner(map, edited);
+	} else if (EditorNode::get_singleton()) {
+		EditorNode::get_singleton()->set_edited_scene(map);
+	}
 	if (status_label) {
-		status_label->set_text("Attempting rebuild via native TiledTilemapCreator... (Select .tmx file first)");
+		status_label->set_text(vformat("Rebuilt %s.", tmx_path));
 	}
 }
 
 void TiledEditorPlugin::make_visible(bool p_visible) {
-	if (main_panel) {
-		main_panel->set_visible(p_visible);
-	}
+	// The maps panel lives in its own window. Hiding it here blanks that window
+	// when the editor changes main screens.
+	(void)p_visible;
 }
 
 TiledEditorPlugin::TiledEditorPlugin() {

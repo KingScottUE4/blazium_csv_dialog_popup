@@ -32,7 +32,7 @@ def get_opts():
     # Dependencies folder.
     deps_folder = os.getenv("LOCALAPPDATA")
     if deps_folder:
-        deps_folder = os.path.join(deps_folder, "Godot", "build_deps")
+        deps_folder = os.path.join(deps_folder, "Blazium", "build_deps")
     else:
         # Cross-compiling, the deps install script puts things in `bin`.
         # Getting an absolute path to it is a bit hacky in Python.
@@ -155,7 +155,7 @@ def configure(env: "SConsEnvironment"):
             else:
                 env.Append(LINKFLAGS=["-fuse-ld=mold"])
         else:
-            env.Append(LINKFLAGS=["-fuse-ld=%s" % env["linker"]])
+            env.Append(LINKFLAGS=["-fuse-ld={}".format(env["linker"])])
 
     if env["use_coverage"]:
         env.Append(CCFLAGS=["-ftest-coverage", "-fprofile-arcs"])

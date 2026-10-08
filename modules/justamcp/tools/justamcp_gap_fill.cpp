@@ -671,8 +671,8 @@ Dictionary justamcp_editor_unsaved_state(const Dictionary &p_args) {
 		}
 	}
 	Array scripts;
-	if (EditorInterface::get_singleton() && EditorInterface::get_singleton()->get_script_editor()) {
-		PackedStringArray unsaved = EditorInterface::get_singleton()->get_script_editor()->get_unsaved_scripts();
+	if (EditorInterface::get_singleton() && EditorInterface::get_singleton()->get_script_editor() && EditorInterface::get_singleton()->get_script_editor()->get_script_container()) {
+		PackedStringArray unsaved = EditorInterface::get_singleton()->get_script_editor()->get_script_container()->get_unsaved_scripts();
 		for (int i = 0; i < unsaved.size(); i++) {
 			scripts.push_back(unsaved[i]);
 		}

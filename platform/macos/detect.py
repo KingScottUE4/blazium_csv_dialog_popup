@@ -3,7 +3,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from methods import detect_darwin_sdk_path, get_compiler_version, is_apple_clang, print_error, print_warning
-from platform_methods import detect_arch, detect_mvk, validate_arch
+from platform_methods import check_accesskit_version, detect_arch, detect_mvk, validate_arch
 
 if TYPE_CHECKING:
     from SCons.Script.SConscript import SConsEnvironment
@@ -30,7 +30,7 @@ def get_opts():
     # Dependencies folder.
     deps_folder = os.getenv("LOCALAPPDATA")
     if deps_folder:
-        deps_folder = os.path.join(deps_folder, "Godot", "build_deps")
+        deps_folder = os.path.join(deps_folder, "Blazium", "build_deps")
     else:
         # Cross-compiling, the deps install script puts things in `bin`.
         # Getting an absolute path to it is a bit hacky in Python.
@@ -235,13 +235,16 @@ def configure(env: "SConsEnvironment"):
 
     if env["accesskit"]:
         if os.path.exists(env["accesskit_sdk_path"]):
-            env.Prepend(CPPPATH=[env["accesskit_sdk_path"] + "/include"])
-            if env["arch"] == "arm64" or env["arch"] == "universal":
-                env.Append(LINKFLAGS=["-L" + env["accesskit_sdk_path"] + "/lib/macos/arm64/static/"])
-            if env["arch"] == "x86_64" or env["arch"] == "universal":
-                env.Append(LINKFLAGS=["-L" + env["accesskit_sdk_path"] + "/lib/macos/x86_64/static/"])
-            env.Append(LINKFLAGS=["-laccesskit"])
-            env.Append(CPPDEFINES=["ACCESSKIT_ENABLED"])
+            if check_accesskit_version(env["accesskit_sdk_path"]):
+                env.Prepend(CPPPATH=[env["accesskit_sdk_path"] + "/include"])
+                if env["arch"] == "arm64" or env["arch"] == "universal":
+                    env.Append(LINKFLAGS=["-L" + env["accesskit_sdk_path"] + "/lib/macos/arm64/static/"])
+                if env["arch"] == "x86_64" or env["arch"] == "universal":
+                    env.Append(LINKFLAGS=["-L" + env["accesskit_sdk_path"] + "/lib/macos/x86_64/static/"])
+                env.Append(LINKFLAGS=["-laccesskit"])
+                env.Append(CPPDEFINES=["ACCESSKIT_ENABLED"])
+            else:
+                env["accesskit"] = False
         else:
             print_warning(
                 "The screen reader support driver requires dependencies to be installed.\n"

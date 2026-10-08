@@ -70,7 +70,7 @@ public:
 	virtual Variant callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) override;
 	virtual void notification(int p_notification, bool p_reversed = false) override;
 
-	virtual Ref<Script> get_script() const override;
+	virtual Script *get_script() const override;
 	virtual ScriptLanguage *get_language() override;
 	virtual const Variant get_rpc_config() const override;
 

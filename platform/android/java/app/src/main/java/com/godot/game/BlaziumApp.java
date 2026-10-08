@@ -40,6 +40,8 @@ import android.util.Log;
 import androidx.activity.EdgeToEdge;
 import androidx.core.splashscreen.SplashScreen;
 
+import com.godot.game.app.BuildConfig;
+
 /**
  * Template activity for Blazium Android builds.
  * Feel free to extend and modify this class for your custom logic.

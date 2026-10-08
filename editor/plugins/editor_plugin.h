@@ -127,7 +127,9 @@ protected:
 	GDVIRTUAL1(_forward_3d_force_draw_over_viewport, Control *)
 	GDVIRTUAL0RC(String, _get_plugin_name)
 	GDVIRTUAL0RC(Ref<Texture2D>, _get_plugin_icon)
+#ifndef DISABLE_DEPRECATED
 	GDVIRTUAL0RC(bool, _has_main_screen)
+#endif
 	GDVIRTUAL1(_make_visible, bool)
 	GDVIRTUAL1(_edit, Object *)
 	GDVIRTUAL1RC(bool, _handles, Object *)
@@ -171,6 +173,10 @@ public:
 	void add_tool_submenu_item(const String &p_name, PopupMenu *p_submenu);
 	void remove_tool_menu_item(const String &p_name);
 
+	void add_blazium_window(const String &p_module, const String &p_title, Control *p_control);
+	void add_blazium_action(const String &p_module, const String &p_title, const Callable &p_callable);
+	void remove_blazium_item(const String &p_module, const String &p_title);
+
 	PopupMenu *get_export_as_menu();
 
 	void set_input_event_forwarding_always_enabled();
@@ -197,7 +203,9 @@ public:
 	virtual const Ref<Texture2D> get_plugin_icon() const;
 	virtual String get_plugin_version() const;
 	virtual void set_plugin_version(const String &p_version);
+#ifndef DISABLE_DEPRECATED
 	virtual bool has_main_screen() const;
+#endif
 	virtual void make_visible(bool p_visible);
 	virtual void set_current() {}
 	virtual void edit(Object *p_object);

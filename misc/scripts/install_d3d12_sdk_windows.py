@@ -22,11 +22,11 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-# Base Godot dependencies path
+# Base Blazium dependencies path
 # If cross-compiling (no LOCALAPPDATA), we install in `bin`
 deps_folder = os.getenv("LOCALAPPDATA")
 if deps_folder and not os.getenv("MSYSTEM"):
-    deps_folder = os.path.join(deps_folder, "Godot", "build_deps")
+    deps_folder = os.path.join(deps_folder, "Blazium", "build_deps")
 else:
     deps_folder = os.path.join("bin", "build_deps")
 
@@ -144,4 +144,4 @@ print(f"DirectX 12 Agility SDK {agility_sdk_version} installed successfully.\n")
 
 # Complete message
 color_print(f'{Ansi.GREEN}All Direct3D 12 SDK components were installed to "{deps_folder}" successfully!')
-color_print(f'{Ansi.GREEN}You can now build Godot with Direct3D 12 support enabled by running "scons d3d12=yes".')
+color_print(f'{Ansi.GREEN}You can now build Blazium with Direct3D 12 support enabled by running "scons d3d12=yes".')

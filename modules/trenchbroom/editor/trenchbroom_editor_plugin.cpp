@@ -31,16 +31,16 @@
 
 #include "trenchbroom_editor_plugin.h"
 
-#include "modules/trenchbroom/trenchbroom_map.h"
-
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_string_names.h"
 #include "scene/gui/label.h"
 #include "scene/gui/progress_bar.h"
-#include "core/object/callable_mp.h"
+
+#include "modules/trenchbroom/trenchbroom_map.h"
 
 namespace {
 
@@ -92,7 +92,7 @@ void TrenchbroomEditorPlugin::_notification(int p_what) {
 			_register_editor_icons();
 			progress_container = _create_progress_bar();
 			progress_container->set_visible(false);
-			add_control_to_container(CONTAINER_INSPECTOR_BOTTOM, progress_container);
+			add_blazium_window("TrenchBroom", "Build Progress", progress_container);
 		} break;
 	}
 }
@@ -210,7 +210,7 @@ TrenchbroomEditorPlugin::~TrenchbroomEditorPlugin() {
 	_disconnect_map_signals(edited_map);
 
 	if (progress_container) {
-		remove_control_from_container(CONTAINER_INSPECTOR_BOTTOM, progress_container);
+		remove_blazium_item("TrenchBroom", "Build Progress");
 		memdelete(progress_container);
 		progress_container = nullptr;
 		progress_bar = nullptr;
