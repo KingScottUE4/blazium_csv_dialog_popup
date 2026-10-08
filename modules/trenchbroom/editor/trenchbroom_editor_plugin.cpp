@@ -31,16 +31,16 @@
 
 #include "trenchbroom_editor_plugin.h"
 
-#include "modules/trenchbroom/trenchbroom_map.h"
-
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_string_names.h"
 #include "scene/gui/label.h"
 #include "scene/gui/progress_bar.h"
-#include "core/object/callable_mp.h"
+
+#include "modules/trenchbroom/trenchbroom_map.h"
 
 namespace {
 

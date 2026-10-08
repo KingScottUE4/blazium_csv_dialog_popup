@@ -36,10 +36,11 @@
 #include "core/object/class_db.h"
 #include "editor/docks/filesystem_dock.h"
 #include "editor/editor_node.h"
-#include "modules/tiled_importer/tiled_tilemap_creator.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/separator.h"
 #include "scene/main/node.h"
+
+#include "modules/tiled_importer/tiled_tilemap_creator.h"
 
 static void _set_scene_owner(Node *p_node, Node *p_owner) {
 	if (!p_node) {

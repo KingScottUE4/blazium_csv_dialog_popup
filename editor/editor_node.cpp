@@ -30,8 +30,6 @@
 
 #include "editor_node.h"
 
-#include "editor/blazium_module_menu.h"
-
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/extension/gdextension_manager.h"
@@ -56,6 +54,7 @@
 #include "editor/audio/audio_stream_editor_plugin.h"
 #include "editor/audio/audio_stream_preview.h"
 #include "editor/audio/editor_audio_buses.h"
+#include "editor/blazium_module_menu.h"
 #include "editor/debugger/debugger_editor_plugin.h"
 #include "editor/debugger/editor_debugger_node.h"
 #include "editor/debugger/script_editor_debugger.h"
