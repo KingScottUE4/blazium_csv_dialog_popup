@@ -800,6 +800,7 @@ EditorExportPlatform::ExportNotifier::ExportNotifier(EditorExportPlatform &p_pla
 	if (!enabled) {
 		return;
 	}
+	EditorExport::get_singleton()->export_started();
 	HashSet<String> features = p_platform.get_features(p_preset, p_debug);
 	Vector<Ref<EditorExportPlugin>> export_plugins = EditorExport::get_singleton()->get_export_plugins();
 	//initial export plugin callback
@@ -831,6 +832,7 @@ EditorExportPlatform::ExportNotifier::~ExportNotifier() {
 		export_plugins.write[i]->_export_end_clear();
 		export_plugins.write[i]->set_export_preset(Ref<EditorExportPreset>());
 	}
+	EditorExport::get_singleton()->export_finished();
 }
 
 bool EditorExportPlatform::_export_customize_dictionary(Dictionary &dict, LocalVector<Ref<EditorExportPlugin>> &customize_resources_plugins) {
@@ -1145,6 +1147,11 @@ Dictionary EditorExportPlatform::get_internal_export_files(const Ref<EditorExpor
 		if (!include_data) {
 			Vector<String> translations = get_project_setting(p_preset, "internationalization/locale/translations");
 			for (const String &t : translations) {
+				// Export plugins (e.g. obfuscation) may have remapped the list to
+				// paths that only exist inside the exported pack.
+				if (!ResourceLoader::exists(t)) {
+					continue;
+				}
 				Ref<Translation> tr = ResourceLoader::load(t);
 				if (tr.is_valid() && TS->is_locale_using_support_data(tr->get_locale())) {
 					include_data = true;

@@ -37,11 +37,14 @@
 #include "core/io/file_access.h"
 #include "core/io/image.h"
 #include "core/io/json.h"
+#include "core/io/resource_loader.h"
 #include "core/object/object.h"
+#include "core/string/translation.h"
 #include "core/templates/list.h"
 #include "editor/export/editor_export_platform.h"
 #include "editor/export/editor_export_preset.h"
 #include "scene/main/node.h"
+#include "servers/text/text_server.h"
 
 #include "modules/modules_enabled.gen.h" // For gdscript.
 
@@ -196,6 +199,37 @@ void ObfuscationExportPlugin::_check_settings() {
 	}
 }
 
+// Scrambling rewrites the translation paths to names that only exist inside the
+// exported pack, so the export platform can no longer load the translations to
+// see whether their locales need the text server support data (ICU line
+// breaking for Thai, Lao, Khmer, Burmese...). Check the real files here, and
+// include the data for this export if any of them need it.
+void ObfuscationExportPlugin::_keep_text_server_data_check() {
+	if (TS.is_null() || !TS->has_feature(TextServer::FEATURE_USE_SUPPORT_DATA)) {
+		return;
+	}
+	const StringName include_setting = "internationalization/locale/include_text_server_data";
+	const Ref<EditorExportPreset> preset = get_export_preset();
+	if (bool(preset.is_valid() ? preset->get_project_setting(include_setting) : GLOBAL_GET(include_setting))) {
+		return;
+	}
+	const StringName translations_setting = "internationalization/locale/translations";
+	const PackedStringArray translations = preset.is_valid() ? preset->get_project_setting(translations_setting) : GLOBAL_GET(translations_setting);
+	for (const String &path : translations) {
+		if (!ResourceLoader::exists(path)) {
+			continue;
+		}
+		const Ref<Translation> tr = ResourceLoader::load(path);
+		if (tr.is_valid() && TS->is_locale_using_support_data(tr->get_locale())) {
+			if (!saved_settings.has(include_setting)) {
+				saved_settings[include_setting] = GLOBAL_GET(include_setting);
+			}
+			ProjectSettings::get_singleton()->set(include_setting, true);
+			return;
+		}
+	}
+}
+
 void ObfuscationExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_debug, const String &p_path, int p_flags) {
 	(void)p_debug;
 	(void)p_path;
@@ -241,6 +275,7 @@ void ObfuscationExportPlugin::_export_begin(const HashSet<String> &p_features, b
 
 	scramble_pack = bool(GLOBAL_GET("obfuscation/pack/scramble_names")) && ob->has_identity();
 	if (scramble_pack) {
+		_keep_text_server_data_check();
 		ob->build_pack_ident_maps(pack_idents, pack_funcs, pack_scene_names);
 		List<PropertyInfo> props;
 		ProjectSettings::get_singleton()->get_property_list(&props);

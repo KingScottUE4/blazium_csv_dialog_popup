@@ -642,6 +642,12 @@ void EditorNode::_gdextensions_reloaded() {
 }
 
 void EditorNode::_update_translations() {
+	if (EditorExport::get_singleton() && EditorExport::get_singleton()->is_exporting()) {
+		// Export plugins can point the translation settings at paths that only
+		// exist in the exported pack (e.g. obfuscation's scramble_names). The
+		// settings are restored when the export ends, which triggers a reload.
+		return;
+	}
 	Ref<TranslationDomain> main = TranslationServer::get_singleton()->get_main_domain();
 
 	TranslationServer::get_singleton()->load_project_translations(main);

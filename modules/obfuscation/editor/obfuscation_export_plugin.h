@@ -59,6 +59,7 @@ class ObfuscationExportPlugin : public EditorExportPlugin {
 	void _add_imported(const String &p_path, const String &p_dest, const HashSet<String> &p_features);
 	Variant _rewrite_setting(const Variant &p_value);
 	void _check_settings();
+	void _keep_text_server_data_check();
 
 protected:
 	static void _bind_methods() {}
