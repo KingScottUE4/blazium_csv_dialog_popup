@@ -52,6 +52,7 @@ class EditorExport : public Node {
 	bool block_save = false;
 	bool should_update_presets = false;
 	bool should_reload_presets = false;
+	int active_exports = 0;
 
 	static EditorExport *singleton;
 
@@ -67,6 +68,12 @@ protected:
 
 public:
 	static EditorExport *get_singleton() { return singleton; }
+
+	// True while export plugins may have changed project settings for an
+	// export (between their _export_begin and _export_end calls).
+	bool is_exporting() const { return active_exports > 0; }
+	void export_started() { active_exports++; }
+	void export_finished() { active_exports = MAX(0, active_exports - 1); }
 
 	// Encodes a platform/device pair into a single menu/device id and decodes it back.
 	static int encode_platform_device_id(int p_platform_idx, int p_device_idx) { return p_platform_idx * 10000 + p_device_idx; }
