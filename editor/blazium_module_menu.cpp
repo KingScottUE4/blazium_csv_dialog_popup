@@ -32,6 +32,7 @@
 #include "core/error/error_macros.h"
 #include "core/object/callable_mp.h"
 #include "editor/editor_node.h"
+#include "editor/editor_string_names.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
@@ -40,6 +41,7 @@
 #include "scene/gui/popup_menu.h"
 #include "scene/gui/scroll_container.h"
 #include "scene/main/window.h"
+#include "scene/resources/style_box_flat.h"
 #include "servers/display/display_server.h"
 
 // Drawn inside the window so the screen can be dragged even when the OS frame
@@ -78,6 +80,27 @@ class BlaziumModuleWindowFrame : public PanelContainer {
 
 protected:
 	static void _bind_methods() {}
+
+	bool updating_style = false;
+
+	void _notification(int p_what) {
+		// Adding the override sends THEME_CHANGED again.
+		if (p_what == NOTIFICATION_THEME_CHANGED && !updating_style) {
+			updating_style = true;
+			// The editor's panel color, as behind the selected scene tab,
+			// rather than the plain gray of a PanelContainer.
+			Ref<StyleBoxFlat> style;
+			style.instantiate();
+			style->set_bg_color(get_theme_color(SNAME("base_color"), EditorStringName(Editor)));
+			// The window has no OS frame; a thin edge keeps it apart from
+			// the editor behind it.
+			style->set_border_width_all(MAX(1, int(EDSCALE)));
+			style->set_border_color(get_theme_color(SNAME("contrast_color_1"), EditorStringName(Editor)));
+			style->set_content_margin_all(6 * EDSCALE);
+			add_theme_style_override(SceneStringName(panel), style);
+			updating_style = false;
+		}
+	}
 
 public:
 	void build(Window *p_window, const String &p_title, Control *p_content) {
