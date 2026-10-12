@@ -41,6 +41,7 @@
 #include "editor/editor_string_names.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "editor/scene/3d/node_3d_editor_plugin.h"
+#include "editor/scene/canvas_item_editor_plugin.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/2d/node_2d.h"
@@ -63,9 +64,14 @@ static constexpr real_t GRAB_DISTANCE = 8.0;
 static constexpr real_t CENTER_GRAB_DISTANCE = 10.0;
 static constexpr int RING_SEGMENTS = 64;
 // Snap steps where the 3D editor's don't apply.
-static constexpr real_t MOVE_SNAP_2D = 8.0;
-static constexpr real_t ROTATE_SNAP_2D = 15.0;
-static constexpr real_t SCALE_SNAP_2D = 0.1;
+// The 2D editor's snapping steps, so both views snap alike.
+static void _get_snap_2d(Point2 &r_step, Point2 &r_offset, real_t &r_rotation_step, real_t &r_scale_step) {
+	const Ref<CanvasItemManipulator> manipulator = CanvasItemEditor::get_singleton()->get_canvas_item_manipulator();
+	r_step = manipulator->get_grid_step() * Math::pow(2.0, manipulator->get_grid_step_multiplier());
+	r_offset = manipulator->get_grid_offset();
+	r_rotation_step = manipulator->get_snap_rotation_step();
+	r_scale_step = manipulator->get_snap_scale_step();
+}
 
 static real_t _wrap_angle(real_t p_angle) {
 	return Math::fposmod(p_angle + Math::PI, Math::TAU) - Math::PI;
@@ -543,22 +549,33 @@ void EditorPaneTools::_update_drag_2d(CanvasItem *p_item, const Point2 &p_pos, b
 	Point2 origin;
 	Vector2 axes[2];
 	_get_gizmo_2d(origin, axes);
+	Point2 snap_step;
+	Point2 snap_offset;
+	real_t snap_rotation = 0.0;
+	real_t snap_scale = 0.0;
+	_get_snap_2d(snap_step, snap_offset, snap_rotation, snap_scale);
 
 	switch (tool) {
 		case TOOL_MOVE: {
 			const Vector2 motion = p_pos - drag_from;
 			Point2 position;
 			if (drag_handle == HANDLE_X || drag_handle == HANDLE_Y) {
-				const Vector2 canvas_axis = canvas_inverse.basis_xform(drag_axes_2d[drag_handle - HANDLE_X]).normalized();
+				const int axis = drag_handle - HANDLE_X;
+				const Vector2 canvas_axis = canvas_inverse.basis_xform(drag_axes_2d[axis]).normalized();
 				real_t distance = canvas_inverse.basis_xform(motion).dot(canvas_axis);
-				if (p_snap) {
-					distance = Math::snapped(distance, MOVE_SNAP_2D);
+				if (p_snap && snap_step[axis] > 0) {
+					distance = Math::snapped(distance, snap_step[axis]);
 				}
 				position = drag_start_global_position + canvas_axis * distance;
 			} else {
 				position = drag_start_global_position + canvas_inverse.basis_xform(motion);
 				if (p_snap) {
-					position = position.snapped(Vector2(MOVE_SNAP_2D, MOVE_SNAP_2D));
+					// Onto the 2D editor's grid.
+					for (int i = 0; i < 2; i++) {
+						if (snap_step[i] > 0) {
+							position[i] = Math::snapped(position[i] - snap_offset[i], snap_step[i]) + snap_offset[i];
+						}
+					}
 				}
 			}
 			if (node_2d) {
@@ -571,8 +588,8 @@ void EditorPaneTools::_update_drag_2d(CanvasItem *p_item, const Point2 &p_pos, b
 		case TOOL_ROTATE: {
 			// The pivot stays where it was on screen while turning.
 			real_t angle = _wrap_angle((p_pos - origin).angle() - (drag_from - origin).angle());
-			if (p_snap) {
-				angle = Math::snapped(angle, Math::deg_to_rad(ROTATE_SNAP_2D));
+			if (p_snap && snap_rotation > 0) {
+				angle = Math::snapped(angle, snap_rotation);
 			}
 			if (node_2d) {
 				node_2d->set_rotation(drag_start_rotation + angle);
@@ -593,8 +610,8 @@ void EditorPaneTools::_update_drag_2d(CanvasItem *p_item, const Point2 &p_pos, b
 				factor.y = factor.x;
 			}
 			for (int i = 0; i < 2; i++) {
-				if (p_snap) {
-					factor[i] = Math::snapped(factor[i], SCALE_SNAP_2D);
+				if (p_snap && snap_scale > 0) {
+					factor[i] = Math::snapped(factor[i], snap_scale);
 				}
 				factor[i] = MAX(factor[i], (real_t)0.01);
 			}
@@ -949,17 +966,12 @@ void EditorPaneTools::set_show_handles(bool p_show) {
 	_queue_overlay_redraw();
 }
 
-String EditorPaneTools::get_hint() const {
-	switch (tool) {
-		case TOOL_MOVE:
-			return TTR("Click to select. Drag it or a handle to move it.");
-		case TOOL_ROTATE:
-			return TTR("Click to select. Drag it or a ring to turn it.");
-		case TOOL_SCALE:
-			return TTR("Click to select. Drag it or a handle to scale it.");
-		default:
-			return TTR("Click to select. Q W E R: select, move, rotate, scale.");
-	}
+bool EditorPaneTools::is_snap_enabled() const {
+	return snap_button->is_pressed();
+}
+
+void EditorPaneTools::_snap_toggled(bool p_pressed) {
+	_queue_overlay_redraw();
 }
 
 void EditorPaneTools::_set_tool(int p_tool) {
@@ -1095,8 +1107,10 @@ EditorPaneTools::EditorPaneTools() {
 	snap_button->set_theme_type_variation(SceneStringName(FlatButton));
 	snap_button->set_toggle_mode(true);
 	snap_button->set_focus_mode(FOCUS_ACCESSIBILITY);
-	snap_button->set_tooltip_text(TTRC("Use Snap (Y)\nHold Ctrl while dragging to do the opposite. In 3D, the steps are the 3D editor's."));
+	snap_button->set_tooltip_text(TTRC("Use Snap (Y)\nHold Ctrl while dragging to do the opposite. The steps are the 2D or 3D editor's."));
 	snap_button->set_accessibility_name(TTRC("Use Snap"));
+	// The 2D grid can be shown only while snapping.
+	snap_button->connect(SceneStringName(toggled), callable_mp(this, &EditorPaneTools::_snap_toggled));
 	add_child(snap_button);
 
 	add_child(memnew(VSeparator));

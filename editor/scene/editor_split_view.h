@@ -34,6 +34,7 @@
 #include "scene/gui/split_container.h"
 
 class Button;
+class CheckBox;
 class CodeEdit;
 class Camera3D;
 class CreateDialog;
@@ -42,18 +43,22 @@ class ScriptCreateDialog;
 class EditorInspector;
 class EditorPaneRotationControl;
 class EditorPaneTools;
+class HFlowContainer;
 class Label;
 class MenuButton;
 class MeshInstance3D;
 class PopupMenu;
 class Node;
 class PanelContainer;
+class PopupPanel;
 class SceneTreeEditor;
+class ShaderMaterial;
 class Script;
 class ScriptEditorBase;
 class SubViewport;
 class SubViewportContainer;
 class Window;
+class World2D;
 
 // One side of the split view: a header naming the scene, the scene's own
 // tree and inspector strips, and the content between them.
@@ -91,6 +96,7 @@ class EditorScenePane : public VBoxContainer {
 	MenuButton *tree_menu = nullptr;
 	PopupMenu *subresource_menu = nullptr;
 	SceneTreeEditor *tree = nullptr;
+	bool tree_fit_queued = false;
 
 	VBoxContainer *content = nullptr;
 
@@ -108,6 +114,10 @@ class EditorScenePane : public VBoxContainer {
 	// For 3D scenes, as the 3D editor's viewports have: the view menu, the
 	// information and frame time panels, and the grid.
 	MenuButton *view_menu = nullptr;
+	// For 2D scenes, the 2D editor's View menu, in the toolbar.
+	MenuButton *view_menu_2d = nullptr;
+	PopupMenu *view_grid_menu_2d = nullptr;
+	PopupMenu *view_gizmos_menu_2d = nullptr;
 	EditorPaneRotationControl *rotation_control = nullptr;
 	PopupMenu *view_advanced_menu = nullptr;
 	PanelContainer *info_panel = nullptr;
@@ -118,20 +128,42 @@ class EditorScenePane : public VBoxContainer {
 	Label *fps_label = nullptr;
 	MeshInstance3D *grid = nullptr;
 
-	// Beside the script editor: a live view of the edited scene itself.
-	SubViewportContainer *live_container = nullptr;
-	SubViewport *live_viewport = nullptr;
-	Camera3D *live_camera = nullptr;
-
 	// Beside the script editor: another open script, to compare.
 	VBoxContainer *code_container = nullptr;
+	enum CodeMenu {
+		CODE_FIND,
+		CODE_FIND_NEXT,
+		CODE_FIND_PREVIOUS,
+		CODE_GOTO_LINE,
+		CODE_GOTO_FUNCTION,
+	};
+	// Read-only tools for the code shown: Search, Go To and its history.
+	HBoxContainer *code_toolbar = nullptr;
+	MenuButton *code_search_menu = nullptr;
+	MenuButton *code_goto_menu = nullptr;
+	MenuButton *code_function_menu = nullptr;
+	Button *code_both_button = nullptr;
+	Button *code_back_button = nullptr;
+	Button *code_forward_button = nullptr;
 	CodeEdit *code_view = nullptr;
 	Label *code_placeholder = nullptr;
+	HFlowContainer *code_find_bar = nullptr;
+	LineEdit *code_find_text = nullptr;
+	Label *code_find_matches = nullptr;
+	Button *code_find_prev = nullptr;
+	Button *code_find_next = nullptr;
+	CheckBox *code_find_case = nullptr;
+	CheckBox *code_find_words = nullptr;
+	Button *code_find_close = nullptr;
+	PopupPanel *code_line_popup = nullptr;
+	LineEdit *code_line_text = nullptr;
 
 	void _draw_dot();
 	void _update_style();
 
 protected:
+	void _queue_fit_tree_strip();
+	void _fit_tree_strip();
 	void _notification(int p_what);
 
 public:
@@ -208,6 +240,30 @@ class EditorSplitView : public HSplitContainer {
 	};
 
 	// Which way the second pane looks, as named in its view menu.
+	// The 2D editor's View menu, for the pane's 2D scenes.
+	enum PaneView2DMenu {
+		PANE_2D_GRID_SHOW,
+		PANE_2D_GRID_SHOW_WHEN_SNAPPING,
+		PANE_2D_GRID_HIDE,
+		PANE_2D_GRID_TOGGLE,
+		PANE_2D_SHOW_RULERS,
+		PANE_2D_SHOW_GUIDES,
+		PANE_2D_SHOW_ORIGIN,
+		PANE_2D_SHOW_VIEWPORT,
+		PANE_2D_SHOW_INFORMATION,
+		PANE_2D_SHOW_FRAME_TIME,
+		PANE_2D_GIZMO_POSITION,
+		PANE_2D_GIZMO_LOCK,
+		PANE_2D_GIZMO_GROUP,
+		PANE_2D_GIZMO_TRANSFORMATION,
+		PANE_2D_CENTER_SELECTION,
+		PANE_2D_FRAME_SELECTION,
+		PANE_2D_CLEAR_GUIDES,
+		// The submenus themselves, apart from their items.
+		PANE_2D_GRID_MENU,
+		PANE_2D_GIZMOS_MENU,
+	};
+
 	enum PaneViewType {
 		PANE_VIEW_TYPE_USER,
 		PANE_VIEW_TYPE_TOP,
@@ -252,6 +308,16 @@ class EditorSplitView : public HSplitContainer {
 	// On the script screen; the pane shows the edited scene or, with
 	// showing_code, another open script.
 	bool showing_live = false;
+	// Beside the script editor the pane edits the edited scene itself: its
+	// viewport looks into the editor's world, where that scene is, and the
+	// scene it shows elsewhere waits out of the tree.
+	bool pane_live = false;
+	ObjectID pane_live_root;
+	// The 2D scene last fitted into the pane, and the size it was fitted to.
+	ObjectID preview_fit_root;
+	Size2 preview_fit_size;
+	bool syncing_live_selection = false;
+	Ref<World2D> preview_world_2d; // The pane's own 2D world, kept meanwhile.
 	bool showing_code = false;
 	bool compare_scripts = false;
 	ObjectID code_editor_id; // TextEditorBase shown in the pane.
@@ -263,6 +329,22 @@ class EditorSplitView : public HSplitContainer {
 	bool showing_scene_code = false;
 	Ref<Script> scene_code_script;
 	Ref<Script> code_static_script; // Shown without an open editor.
+
+	// The scripts view 2 has shown, by path, to step back and forth through.
+	static constexpr int CODE_HISTORY_MAX = 50;
+	Vector<String> code_history;
+	int code_history_pos = -1;
+	// The script editor given view 2's search by "Both Scripts", so it can
+	// be taken off again.
+	ObjectID code_other_search_id;
+
+	// View 2's grid, one material per plane, rebuilt as the 3D editor
+	// rebuilds its own: when the camera moves 10 m or its projection changes.
+	Ref<ShaderMaterial> preview_grid_materials[3];
+	bool preview_grid_drawn = false;
+	bool preview_grid_orthogonal = false;
+	real_t preview_grid_ortho_size = 0.0;
+	Vector3 preview_grid_position;
 	// The divider is kept apart for the script editor, which needs more room.
 	int scene_split_offset = 0;
 	int script_split_offset = 0;
@@ -293,28 +375,50 @@ class EditorSplitView : public HSplitContainer {
 	void _pick_default_preview();
 	void _release_preview();
 	void _update_preview_camera();
-	void _update_live_camera();
-	void _frame_view(Node *p_root, const Dictionary &p_state_3d, Camera3D *p_camera, SubViewport *p_viewport, const Size2 &p_size);
 	static OrbitView _orbit_from_state(Node *p_root, const Dictionary &p_state_3d);
+	OrbitView _preview_orbit_from_state(Node *p_root) const;
 	static void _apply_orbit(const OrbitView &p_orbit, Camera3D *p_camera, SubViewport *p_viewport);
 	static Transform2D _fit_project_window(const Size2 &p_size);
 	void _begin_custom_view();
 	void _set_pane_tree_root(Node *p_root);
-	void _live_gui_input(const Ref<InputEvent> &p_event);
-	void _open_live_scene_editor();
 	void _track_current_script();
 	void _script_changed(const Ref<Script> &p_script);
 	void _set_code_source(CodeEdit *p_source);
 	void _code_source_changed();
 	void _update_code_view();
-	void _code_gui_input(const Ref<InputEvent> &p_event);
-	void _edit_code_at(int p_line, int p_column);
 	void _code_toggled(bool p_pressed);
 	void _style_code_view(CodeEdit *p_style_from);
 	void _set_code_static(const Ref<Script> &p_script);
 	Ref<Script> _selected_node_script() const;
 	void _selection_changed();
 	void _update_scene_code_view();
+
+	Ref<Script> _shown_code_script() const;
+	CodeEdit *_edited_code_edit() const;
+	bool _code_both_scripts() const;
+	void _update_code_toolbar();
+	void _fill_code_menus();
+	void _code_menu_id_pressed(int p_id);
+	bool _code_shortcut_input(const Ref<InputEvent> &p_event);
+	void _code_find_show();
+	void _code_find_hide();
+	uint32_t _code_find_flags() const;
+	void _code_find_text_changed(const String &p_text);
+	void _code_find_submitted(const String &p_text);
+	void _code_find_options_changed(bool p_pressed);
+	void _code_find_input(const Ref<InputEvent> &p_event);
+	void _code_find(bool p_backwards);
+	static bool _code_search_in(CodeEdit *p_edit, const String &p_text, uint32_t p_flags, bool p_backwards, bool p_from_start);
+	static int _code_count_matches(CodeEdit *p_edit, const String &p_text, uint32_t p_flags, int &r_current);
+	void _update_code_find_matches();
+	void _clear_other_search();
+	void _code_line_popup();
+	void _code_line_submitted(const String &p_text);
+	void _fill_code_function_menu();
+	void _code_function_pressed(int p_index);
+	void _record_code_history(const String &p_path);
+	void _code_history_step(int p_step);
+	void _update_code_history_buttons();
 	void _set_setting(const String &p_name, const Variant &p_value);
 	bool _can_drop(const Point2 &p_point, const Variant &p_data) const;
 	void _drop(const Point2 &p_point, const Variant &p_data);
@@ -340,6 +444,16 @@ class EditorSplitView : public HSplitContainer {
 	void _pane_edit_subresource(int p_index);
 	void _update_pane_toolbar();
 	void _build_view_menu();
+	void _build_view_menu_2d();
+	void _view_menu_2d_option(int p_option);
+	bool _view_menu_2d_checked(int p_option) const;
+	void _set_view_menu_2d_checked(int p_option, bool p_checked);
+	bool _view_menu_2d_shortcut(const Ref<InputEvent> &p_event);
+	bool _is_grid_2d_visible() const;
+	void _focus_preview_2d(bool p_frame);
+	void _draw_preview_2d_under();
+	void _draw_preview_2d_over();
+	void _draw_locks_and_positions_2d(Node *p_node, const Transform2D &p_xform, Node *p_root);
 	void _view_menu_option(int p_option);
 	bool _view_menu_checked(int p_option) const;
 	void _set_view_menu_checked(int p_option, bool p_checked);
@@ -358,6 +472,10 @@ class EditorSplitView : public HSplitContainer {
 	void _focus_preview_bounds(bool p_frame);
 	void _align_selection_with_view(bool p_rotation_only);
 	void _build_preview_grid();
+	Node *_pane_scene() const;
+	void _set_pane_live(bool p_live);
+	void _sync_pane_live_selection();
+	void _update_preview_grid(bool p_force = false);
 	void _update_view_panels();
 	void _update_process();
 	void _set_preview_active(bool p_active);

@@ -130,6 +130,7 @@ private:
 	void _redo();
 	void _history_changed();
 	void _queue_overlay_redraw();
+	void _snap_toggled(bool p_pressed);
 
 protected:
 	void _notification(int p_what);
@@ -144,11 +145,11 @@ public:
 	// Input on the pane's viewport. Returns true when used.
 	bool handle_input(const Ref<InputEvent> &p_event);
 	bool is_dragging() const { return dragging; }
+	bool is_snap_enabled() const;
 	void set_show_selection(bool p_show);
 	void set_show_handles(bool p_show);
 	// Draws the selection and handles onto the overlay.
 	void draw_overlay();
-	String get_hint() const;
 	// The undo history of the scene shown, or INVALID_HISTORY.
 	int get_history_id() const;
 

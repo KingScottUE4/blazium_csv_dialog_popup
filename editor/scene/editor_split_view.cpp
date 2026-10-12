@@ -36,7 +36,10 @@
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
+#include "core/object/editor_language.h"
 #include "core/object/script_language.h"
+#include "core/string/char_utils.h"
+#include "core/templates/pair.h"
 #include "editor/docks/groups_dock.h"
 #include "editor/docks/inspector_dock.h"
 #include "editor/docks/scene_tree_dock.h"
@@ -70,14 +73,19 @@
 #include "scene/3d/visual_instance_3d.h"
 #include "scene/3d/world_environment.h"
 #include "scene/gui/button.h"
+#include "scene/gui/check_box.h"
 #include "scene/gui/code_edit.h"
+#include "scene/gui/flow_container.h"
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
 #include "scene/gui/menu_button.h"
 #include "scene/gui/panel.h"
 #include "scene/gui/panel_container.h"
+#include "scene/gui/popup.h"
 #include "scene/gui/popup_menu.h"
+#include "scene/gui/separator.h"
 #include "scene/gui/subviewport_container.h"
+#include "scene/gui/tree.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/viewport.h"
 #include "scene/main/window.h"
@@ -92,6 +100,10 @@
 #include "servers/rendering/rendering_server.h"
 
 // The look of the 3D editor's viewport menu and panels, drawn over the view.
+// A render layer the 3D editor's cameras don't draw (they use 0-19 and
+// 24-30), for the second pane's grid.
+static constexpr int SPLIT_VIEW_GRID_LAYER = 23;
+
 static void _split_view_dark_background_style(Control *p_control) {
 	const Ref<StyleBox> stylebox = EditorNode::get_singleton()->get_gui_base()->get_theme_stylebox(SNAME("Information3dViewport"), EditorStringName(EditorStyles));
 	const Ref<Theme> &editor_theme = EditorNode::get_singleton()->get_editor_theme();
@@ -116,8 +128,39 @@ void EditorScenePane::_draw_dot() {
 	dot->draw_circle(size / 2, MIN(size.x, size.y) / 2, color);
 }
 
+void EditorScenePane::_queue_fit_tree_strip() {
+	if (tree_fit_queued) {
+		return;
+	}
+	tree_fit_queued = true;
+	callable_mp(this, &EditorScenePane::_fit_tree_strip).call_deferred();
+}
+
+void EditorScenePane::_fit_tree_strip() {
+	tree_fit_queued = false;
+	const Tree *scene_tree = tree->get_scene_tree();
+	// The widest row, its panel and room for the scroll bar.
+	real_t needed = scene_tree->get_column_minimum_width(0) + 16 * EDSCALE;
+	const Ref<StyleBox> panel = scene_tree->get_theme_stylebox(SceneStringName(panel));
+	if (panel.is_valid()) {
+		needed += panel->get_minimum_size().width;
+	}
+	// Never narrower than before, and never more than about half the pane,
+	// so the view keeps its room; past that, the tree scrolls sideways.
+	const real_t narrowest = (focused ? 160 : 200) * EDSCALE;
+	const real_t widest = MAX(narrowest, Math::round(get_size().width * 0.45));
+	const real_t width = Math::ceil(CLAMP(needed, narrowest, widest));
+	if (!Math::is_equal_approx(width, tree_strip->get_custom_minimum_size().width)) {
+		tree_strip->set_custom_minimum_size(Size2(width, 0));
+	}
+}
+
 void EditorScenePane::_notification(int p_what) {
 	switch (p_what) {
+		case NOTIFICATION_RESIZED: {
+			_queue_fit_tree_strip(); // How wide the strip may get follows the pane.
+		} break;
+
 		case NOTIFICATION_THEME_CHANGED: {
 			_update_style();
 			const Color dim = get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor));
@@ -128,6 +171,15 @@ void EditorScenePane::_notification(int p_what) {
 			if (pick_button) {
 				pick_button->add_theme_font_override(SceneStringName(font), get_theme_font(SNAME("bold"), EditorStringName(EditorFonts)));
 				pick_button->set_button_icon(get_theme_icon(SNAME("arrow"), SNAME("OptionButton")));
+			}
+			if (code_toolbar) {
+				code_back_button->set_button_icon(get_editor_theme_icon(is_layout_rtl() ? SNAME("Forward") : SNAME("Back")));
+				code_forward_button->set_button_icon(get_editor_theme_icon(is_layout_rtl() ? SNAME("Back") : SNAME("Forward")));
+				code_both_button->set_button_icon(get_editor_theme_icon(SNAME("Instance")));
+				code_function_menu->set_button_icon(get_editor_theme_icon(SNAME("MemberMethod")));
+				code_find_prev->set_button_icon(get_editor_theme_icon(SNAME("MoveUp")));
+				code_find_next->set_button_icon(get_editor_theme_icon(SNAME("MoveDown")));
+				code_find_close->set_button_icon(get_editor_theme_icon(SNAME("Close")));
 			}
 			if (close_button) {
 				close_button->set_button_icon(get_editor_theme_icon(SNAME("Close")));
@@ -192,7 +244,7 @@ void EditorScenePane::set_active(bool p_active, bool p_editable) {
 		state_label->set_tooltip_text(TTRC("Click this side to edit it."));
 	} else {
 		state_label->set_text(TTRC("View only"));
-		state_label->set_tooltip_text(TTRC("This side is for looking. Click it to edit it."));
+		state_label->set_tooltip_text(TTRC("This side is for looking. Clicking it doesn't switch what you're editing."));
 	}
 	if (is_inside_tree()) {
 		_update_style();
@@ -253,7 +305,7 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 		code_button = memnew(Button);
 		code_button->set_flat(true);
 		code_button->set_toggle_mode(true);
-		code_button->set_tooltip_text(TTRC("Show another open script here instead of the scene. The script you switch away from moves here; click it to edit it."));
+		code_button->set_tooltip_text(TTRC("Show another open script here instead of the scene. The script you switch away from moves here."));
 		code_button->set_accessibility_name(TTRC("Compare Scripts"));
 		code_button->hide();
 		header_hb->add_child(code_button);
@@ -349,6 +401,10 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 	tree->set_v_size_flags(SIZE_EXPAND_FILL);
 	tree->set_update_when_invisible(false);
 	tree_strip->add_child(tree);
+	// Measure the widest row, so the strip can fit names instead of cutting
+	// them off; it is redrawn whenever its rows change.
+	tree->get_scene_tree()->set_column_clip_content(0, false);
+	tree->get_scene_tree()->connect(SceneStringName(draw), callable_mp(this, &EditorScenePane::_queue_fit_tree_strip));
 
 	content = memnew(VBoxContainer);
 	content->set_h_size_flags(SIZE_EXPAND_FILL);
@@ -359,6 +415,27 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 	if (!focused) {
 		tools = memnew(EditorPaneTools);
 		content->add_child(tools);
+
+		// The 2D editor's View menu, shown for 2D scenes.
+		HBoxContainer *view_2d_box = memnew(HBoxContainer);
+		view_2d_box->hide();
+		tools->add_child(view_2d_box);
+		view_2d_box->add_child(memnew(VSeparator));
+		view_menu_2d = memnew(MenuButton);
+		view_menu_2d->set_flat(false);
+		view_menu_2d->set_theme_type_variation("FlatMenuButton");
+		// TRANSLATORS: Noun, name of the 2D/3D View menus.
+		view_menu_2d->set_text(TTRC("View"));
+		view_menu_2d->set_switch_on_hover(true);
+		// Shown in the menu, but taken only by the pane (see _preview_gui_input()).
+		view_menu_2d->set_disable_shortcuts(true);
+		view_menu_2d->get_popup()->set_hide_on_checkable_item_selection(false);
+		view_2d_box->add_child(view_menu_2d);
+		view_grid_menu_2d = memnew(PopupMenu);
+		view_menu_2d->get_popup()->add_child(view_grid_menu_2d);
+		view_gizmos_menu_2d = memnew(PopupMenu);
+		view_gizmos_menu_2d->set_hide_on_checkable_item_selection(false);
+		view_menu_2d->get_popup()->add_child(view_gizmos_menu_2d);
 
 		viewport_container = memnew(SubViewportContainer);
 		viewport_container->set_stretch(true);
@@ -408,9 +485,6 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 		info_panel->set_h_grow_direction(GROW_DIRECTION_BEGIN);
 		info_panel->set_v_grow_direction(GROW_DIRECTION_BEGIN);
 		info_panel->set_anchors_and_offsets_preset(PRESET_BOTTOM_RIGHT, PRESET_MODE_MINSIZE, 8 * EDSCALE);
-		// Above the hint along the bottom.
-		info_panel->set_offset(SIDE_BOTTOM, -56 * EDSCALE);
-		info_panel->set_offset(SIDE_TOP, -56 * EDSCALE);
 		info_panel->hide();
 		viewport_container->add_child(info_panel);
 		info_label = memnew(Label);
@@ -442,26 +516,12 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 		frame_time_vbox->add_child(fps_label);
 
 		camera_3d = memnew(Camera3D);
+		// The scene's layers and the pane's grid, never the 3D editor's own
+		// gizmos and grid, which share the editor's world with it.
+		camera_3d->set_cull_mask(((1 << 20) - 1) | (1 << SPLIT_VIEW_GRID_LAYER));
 		viewport->add_child(camera_3d);
 		tools->setup(viewport, camera_3d, overlay);
 		rotation_control->set_camera(camera_3d);
-
-		live_container = memnew(SubViewportContainer);
-		live_container->set_stretch(true);
-		live_container->set_v_size_flags(SIZE_EXPAND_FILL);
-		live_container->set_h_size_flags(SIZE_EXPAND_FILL);
-		live_container->set_mouse_filter(MOUSE_FILTER_STOP);
-		live_container->set_tooltip_text(TTRC("Click to edit this scene in the 2D or 3D editor."));
-		live_container->hide();
-		content->add_child(live_container);
-
-		live_viewport = memnew(SubViewport);
-		live_viewport->set_disable_input(true);
-		live_viewport->set_update_mode(SubViewport::UPDATE_WHEN_VISIBLE);
-		live_container->add_child(live_viewport);
-
-		live_camera = memnew(Camera3D);
-		live_viewport->add_child(live_camera);
 
 		code_container = memnew(VBoxContainer);
 		code_container->set_v_size_flags(SIZE_EXPAND_FILL);
@@ -469,12 +529,72 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 		code_container->hide();
 		content->add_child(code_container);
 
+		// The script editor's Search and Go To menus, read-only, and its
+		// back and forward arrows for the scripts shown here.
+		code_toolbar = memnew(HBoxContainer);
+		code_toolbar->add_theme_constant_override("separation", 0);
+		code_container->add_child(code_toolbar);
+
+		code_search_menu = memnew(MenuButton);
+		code_search_menu->set_flat(false);
+		code_search_menu->set_theme_type_variation("FlatMenuButton");
+		code_search_menu->set_text(TTRC("Search"));
+		code_search_menu->set_switch_on_hover(true);
+		// Shown in the menu, but taken only over this pane (see input()).
+		code_search_menu->set_disable_shortcuts(true);
+		code_toolbar->add_child(code_search_menu);
+
+		code_goto_menu = memnew(MenuButton);
+		code_goto_menu->set_flat(false);
+		code_goto_menu->set_theme_type_variation("FlatMenuButton");
+		code_goto_menu->set_text(TTRC("Go To"));
+		code_goto_menu->set_switch_on_hover(true);
+		code_goto_menu->set_disable_shortcuts(true);
+		code_toolbar->add_child(code_goto_menu);
+
+		code_function_menu = memnew(MenuButton);
+		code_function_menu->set_flat(false);
+		code_function_menu->set_theme_type_variation("FlatMenuButton");
+		code_function_menu->set_text(TTRC("Function"));
+		code_function_menu->set_tooltip_text(TTRC("Jump to a function in this script."));
+		code_function_menu->set_disable_shortcuts(true);
+		code_function_menu->get_popup()->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+		code_toolbar->add_child(code_function_menu);
+
+		code_toolbar->add_child(memnew(VSeparator));
+
+		code_back_button = memnew(Button);
+		code_back_button->set_theme_type_variation(SceneStringName(FlatButton));
+		code_back_button->set_tooltip_text(TTRC("Show the previous script shown here."));
+		code_back_button->set_accessibility_name(TTRC("Previous Script"));
+		code_back_button->set_disabled(true);
+		code_toolbar->add_child(code_back_button);
+
+		code_forward_button = memnew(Button);
+		code_forward_button->set_theme_type_variation(SceneStringName(FlatButton));
+		code_forward_button->set_tooltip_text(TTRC("Show the next script shown here."));
+		code_forward_button->set_accessibility_name(TTRC("Next Script"));
+		code_forward_button->set_disabled(true);
+		code_toolbar->add_child(code_forward_button);
+
+		Control *code_toolbar_spacer = memnew(Control);
+		code_toolbar_spacer->set_h_size_flags(SIZE_EXPAND_FILL);
+		code_toolbar->add_child(code_toolbar_spacer);
+
+		code_both_button = memnew(Button);
+		code_both_button->set_theme_type_variation(SceneStringName(FlatButton));
+		code_both_button->set_toggle_mode(true);
+		code_both_button->set_text(TTRC("Both Scripts"));
+		code_both_button->set_tooltip_text(TTRC("Search and Go to Function also act on the script being edited, to line the two up."));
+		code_toolbar->add_child(code_both_button);
+
 		code_view = memnew(CodeEdit);
 		code_view->set_v_size_flags(SIZE_EXPAND_FILL);
 		code_view->set_editable(false);
 		code_view->set_draw_line_numbers(true);
+		// Shows where Go To and Find landed.
+		code_view->set_highlight_current_line(true);
 		code_view->set_context_menu_enabled(false);
-		code_view->set_tooltip_text(TTRC("Click to edit this script."));
 		code_container->add_child(code_view);
 
 		code_placeholder = memnew(Label);
@@ -484,6 +604,63 @@ EditorScenePane::EditorScenePane(bool p_focused) {
 		code_placeholder->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
 		code_placeholder->set_text(TTRC("Open another script to compare it here.\nThe script you switch away from appears here."));
 		code_container->add_child(code_placeholder);
+
+		// Find, as the script editor's find bar, without replacing. It wraps
+		// onto a second row rather than widen a narrow pane.
+		code_find_bar = memnew(HFlowContainer);
+		code_find_bar->hide();
+		code_container->add_child(code_find_bar);
+		code_find_text = memnew(LineEdit);
+		code_find_text->set_h_size_flags(SIZE_EXPAND_FILL);
+		code_find_text->set_custom_minimum_size(Size2(120, 0) * EDSCALE);
+		code_find_text->set_placeholder(TTRC("Find"));
+		code_find_text->set_tooltip_text(TTRC("Find"));
+		code_find_text->set_accessibility_name(TTRC("Find"));
+		code_find_text->set_keep_editing_on_text_submit(true);
+		code_find_bar->add_child(code_find_text);
+		code_find_matches = memnew(Label);
+		code_find_matches->set_focus_mode(FOCUS_ACCESSIBILITY);
+		code_find_bar->add_child(code_find_matches);
+		code_find_prev = memnew(Button);
+		code_find_prev->set_flat(true);
+		code_find_prev->set_tooltip_text(TTRC("Previous Match"));
+		code_find_prev->set_accessibility_name(TTRC("Previous Match"));
+		code_find_prev->set_focus_mode(FOCUS_ACCESSIBILITY);
+		code_find_bar->add_child(code_find_prev);
+		code_find_next = memnew(Button);
+		code_find_next->set_flat(true);
+		code_find_next->set_tooltip_text(TTRC("Next Match"));
+		code_find_next->set_accessibility_name(TTRC("Next Match"));
+		code_find_next->set_focus_mode(FOCUS_ACCESSIBILITY);
+		code_find_bar->add_child(code_find_next);
+		code_find_case = memnew(CheckBox);
+		code_find_case->set_text(TTRC("Match Case"));
+		code_find_case->set_focus_mode(FOCUS_ACCESSIBILITY);
+		code_find_bar->add_child(code_find_case);
+		code_find_words = memnew(CheckBox);
+		code_find_words->set_text(TTRC("Whole Words"));
+		code_find_words->set_focus_mode(FOCUS_ACCESSIBILITY);
+		code_find_bar->add_child(code_find_words);
+		code_find_close = memnew(Button);
+		code_find_close->set_flat(true);
+		code_find_close->set_tooltip_text(TTRC("Hide"));
+		code_find_close->set_accessibility_name(TTRC("Hide"));
+		code_find_close->set_focus_mode(FOCUS_ACCESSIBILITY);
+		code_find_bar->add_child(code_find_close);
+
+		code_line_popup = memnew(PopupPanel);
+		code_line_popup->set_title(TTRC("Go to Line"));
+		add_child(code_line_popup);
+		HBoxContainer *line_hb = memnew(HBoxContainer);
+		code_line_popup->add_child(line_hb);
+		Label *line_label = memnew(Label);
+		line_label->set_text(TTRC("Line Number:"));
+		line_hb->add_child(line_label);
+		code_line_text = memnew(LineEdit);
+		code_line_text->set_custom_minimum_size(Size2(100, 0) * EDSCALE);
+		code_line_text->set_select_all_on_focus(true);
+		code_line_text->set_accessibility_name(TTRC("Line Number:"));
+		line_hb->add_child(code_line_text);
 	}
 
 	inspector_strip = memnew(VBoxContainer);
@@ -559,6 +736,13 @@ Node *EditorSplitView::get_preview_scene() const {
 
 void EditorSplitView::_take_into_preview(Node *p_root) {
 	ERR_FAIL_NULL(p_root);
+	if (pane_live) {
+		// Shown once the pane stops editing the edited scene.
+		preview_scene = p_root->get_instance_id();
+		preview_view_custom = false;
+		preview_fit_root = ObjectID(); // Fit again.
+		return;
+	}
 	if (p_root->get_parent() == preview_pane->viewport) {
 		preview_scene = p_root->get_instance_id();
 		return;
@@ -571,6 +755,7 @@ void EditorSplitView::_take_into_preview(Node *p_root) {
 	preview_pane->viewport->add_child(p_root);
 	preview_scene = p_root->get_instance_id();
 	preview_view_custom = false;
+	preview_fit_root = ObjectID(); // Fit again.
 
 	_setup_preview_lighting(p_root);
 	_set_pane_tree_root(p_root);
@@ -588,18 +773,96 @@ void EditorSplitView::_take_into_preview(Node *p_root) {
 
 void EditorSplitView::_release_preview() {
 	Node *root = ObjectDB::get_instance<Node>(preview_scene);
-	preview_pane->tools->set_scene(nullptr);
-	preview_pane->inspector->edit(nullptr);
-	_set_pane_tree_root(nullptr);
+	if (!pane_live) {
+		preview_pane->tools->set_scene(nullptr);
+		preview_pane->inspector->edit(nullptr);
+		_set_pane_tree_root(nullptr);
+	}
 	if (preview_pane->fallback_lighting) {
 		memdelete(preview_pane->fallback_lighting);
 		preview_pane->fallback_lighting = nullptr;
 	}
 	if (root && root->get_parent() == preview_pane->viewport) {
 		preview_pane->viewport->remove_child(root);
+		preview_pane->viewport->set_editor_preview_scene_root(nullptr);
 	}
-	preview_pane->viewport->set_editor_preview_scene_root(nullptr);
 	preview_scene = ObjectID();
+}
+
+Node *EditorSplitView::_pane_scene() const {
+	// The scene the pane shows and edits.
+	return pane_live ? EditorNode::get_singleton()->get_edited_scene() : get_preview_scene();
+}
+
+void EditorSplitView::_set_pane_live(bool p_live) {
+	SubViewport *viewport = preview_pane->viewport;
+	if (p_live) {
+		if (!pane_live) {
+			// The other scene waits out of the tree, as open scenes do.
+			Node *root = ObjectDB::get_instance<Node>(preview_scene);
+			if (root && root->get_parent() == viewport) {
+				viewport->remove_child(root);
+			}
+			viewport->set_editor_preview_scene_root(nullptr);
+			if (preview_pane->fallback_lighting && preview_pane->fallback_lighting->get_parent() == viewport) {
+				// The 3D editor's preview sun and environment light it now.
+				// Only taken out: freeing its sky just before the world goes
+				// leaks the sky's radiance maps.
+				viewport->remove_child(preview_pane->fallback_lighting);
+			}
+			if (preview_world_2d.is_null()) {
+				preview_world_2d = viewport->get_world_2d();
+			}
+			// Without a world of its own the viewport uses the editor's, as
+			// the 3D editor's viewports do. Let go of the old world's scenario
+			// first: switching frees that world before the viewport moves.
+			RenderingServer::get_singleton()->viewport_set_scenario(viewport->get_viewport_rid(), RID());
+			viewport->set_use_own_world_3d(false);
+			viewport->set_world_2d(EditorNode::get_singleton()->get_scene_root()->get_world_2d());
+			pane_live = true;
+		}
+		Node *edited = EditorNode::get_singleton()->get_edited_scene();
+		const ObjectID id = edited ? edited->get_instance_id() : ObjectID();
+		if (id != pane_live_root) {
+			pane_live_root = id;
+			preview_view_custom = false;
+			preview_fit_root = ObjectID(); // Fit again.
+			preview_pane->tools->set_scene(edited);
+			_set_pane_tree_root(edited);
+			_sync_pane_live_selection();
+		}
+		return;
+	}
+	if (!pane_live) {
+		return;
+	}
+	pane_live = false;
+	pane_live_root = ObjectID();
+	preview_pane->tools->set_scene(nullptr);
+	_set_pane_tree_root(nullptr);
+	viewport->set_use_own_world_3d(true);
+	viewport->set_world_2d(preview_world_2d);
+	preview_view_custom = false;
+	preview_fit_root = ObjectID(); // Fit again.
+	Node *root = get_preview_scene();
+	if (root && !root->get_parent()) {
+		_take_into_preview(root);
+	}
+}
+
+void EditorSplitView::_sync_pane_live_selection() {
+	// Editing the edited scene, the pane shares the editor's selection.
+	Node *node = nullptr;
+	for (Node *selected : EditorNode::get_singleton()->get_editor_selection()->get_top_selected_node_list()) {
+		node = selected;
+		break;
+	}
+	if (preview_pane->tools->get_selected() != node) {
+		preview_pane->tools->set_selected(node, false);
+	}
+	syncing_live_selection = true;
+	_pane_selection_changed();
+	syncing_live_selection = false;
 }
 
 void EditorSplitView::_collect_bounds(Node *p_node, AABB &r_bounds, bool &r_has_bounds) {
@@ -675,7 +938,7 @@ void EditorSplitView::_setup_preview_lighting(Node *p_root) {
 }
 
 void EditorSplitView::_update_preview_camera() {
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	if (!root) {
 		return;
 	}
@@ -683,6 +946,7 @@ void EditorSplitView::_update_preview_camera() {
 		// Looked around in: keep that view.
 		if (Object::cast_to<Node3D>(root)) {
 			_apply_orbit(preview_orbit, preview_pane->camera_3d, preview_pane->viewport);
+			_update_preview_grid();
 		} else {
 			preview_pane->viewport->set_global_canvas_transform(preview_view_2d);
 		}
@@ -690,9 +954,20 @@ void EditorSplitView::_update_preview_camera() {
 		preview_pane->rotation_control->queue_redraw();
 		return;
 	}
-	const int idx = _find_scene_index(preview_scene);
-	const Dictionary states = EditorNode::get_editor_data().get_scene_editor_states(idx);
-	_frame_view(root, states.get("3D", Dictionary()), preview_pane->camera_3d, preview_pane->viewport, preview_pane->viewport_container->get_size());
+	if (Object::cast_to<Node3D>(root)) {
+		_apply_orbit(_preview_orbit_from_state(root), preview_pane->camera_3d, preview_pane->viewport);
+		_update_preview_grid();
+	} else {
+		// Fitted once it has a size; after that a resize, such as a bottom
+		// panel opening for the node just selected, leaves the view where it
+		// is, as in the 2D editor, so nothing moves under the cursor.
+		const Size2 size = preview_pane->viewport_container->get_size();
+		if (root->get_instance_id() != preview_fit_root || preview_fit_size.x <= 0 || preview_fit_size.y <= 0) {
+			preview_pane->viewport->set_global_canvas_transform(_fit_project_window(size));
+			preview_fit_root = root->get_instance_id();
+			preview_fit_size = size;
+		}
+	}
 	// The scene's own view: not a side view.
 	preview_view_type = PANE_VIEW_TYPE_USER;
 	preview_auto_orthogonal = false;
@@ -704,29 +979,14 @@ void EditorSplitView::_begin_custom_view() {
 	if (preview_view_custom) {
 		return;
 	}
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	if (!root) {
 		return;
 	}
 	// Start from what the pane shows now.
-	const int idx = _find_scene_index(preview_scene);
-	const Dictionary states = EditorNode::get_editor_data().get_scene_editor_states(idx);
-	preview_orbit = _orbit_from_state(root, states.get("3D", Dictionary()));
+	preview_orbit = _preview_orbit_from_state(root);
 	preview_view_2d = preview_pane->viewport->get_global_canvas_transform();
 	preview_view_custom = true;
-}
-
-void EditorSplitView::_update_live_camera() {
-	Node *root = EditorNode::get_singleton()->get_edited_scene();
-	if (!root || !showing_live || showing_code) {
-		return;
-	}
-	// The edited scene is drawn in the editor's own 3D world and the scene
-	// root's 2D canvas; look into those rather than moving the scene.
-	preview_pane->live_viewport->set_world_3d(get_tree()->get_root()->get_world_3d());
-	preview_pane->live_viewport->set_world_2d(EditorNode::get_singleton()->get_scene_root()->get_world_2d());
-	// Where the 3D editor's camera is now.
-	_frame_view(root, Node3DEditor::get_singleton()->get_state(), preview_pane->live_camera, preview_pane->live_viewport, preview_pane->live_container->get_size());
 }
 
 EditorSplitView::OrbitView EditorSplitView::_orbit_from_state(Node *p_root, const Dictionary &p_state_3d) {
@@ -758,6 +1018,22 @@ EditorSplitView::OrbitView EditorSplitView::_orbit_from_state(Node *p_root, cons
 	return orbit;
 }
 
+EditorSplitView::OrbitView EditorSplitView::_preview_orbit_from_state(Node *p_root) const {
+	// Where the scene's 3D editor camera was, but always in perspective:
+	// view 2 only goes orthogonal from its view menu.
+	Dictionary state_3d;
+	if (pane_live) {
+		// Where the 3D editor's camera is now.
+		state_3d = Node3DEditor::get_singleton()->get_state();
+	} else {
+		const int idx = _find_scene_index(preview_scene);
+		state_3d = EditorNode::get_editor_data().get_scene_editor_states(idx).get("3D", Dictionary());
+	}
+	OrbitView orbit = _orbit_from_state(p_root, state_3d);
+	orbit.orthogonal = false;
+	return orbit;
+}
+
 void EditorSplitView::_apply_orbit(const OrbitView &p_orbit, Camera3D *p_camera, SubViewport *p_viewport) {
 	Transform3D xform;
 	xform.translate_local(p_orbit.target);
@@ -785,29 +1061,6 @@ Transform2D EditorSplitView::_fit_project_window(const Size2 &p_size) {
 	xform.scale_basis(Size2(scale, scale));
 	xform.columns[2] = (p_size - project_size * scale) / 2;
 	return xform;
-}
-
-void EditorSplitView::_frame_view(Node *p_root, const Dictionary &p_state_3d, Camera3D *p_camera, SubViewport *p_viewport, const Size2 &p_size) {
-	if (Object::cast_to<Node3D>(p_root)) {
-		_apply_orbit(_orbit_from_state(p_root, p_state_3d), p_camera, p_viewport);
-	} else if (p_size.x > 0 && p_size.y > 0) {
-		p_viewport->set_global_canvas_transform(_fit_project_window(p_size));
-	}
-}
-
-void EditorSplitView::_live_gui_input(const Ref<InputEvent> &p_event) {
-	const Ref<InputEventMouseButton> mb = p_event;
-	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT) {
-		callable_mp(this, &EditorSplitView::_open_live_scene_editor).call_deferred();
-		preview_pane->live_container->accept_event();
-	}
-}
-
-void EditorSplitView::_open_live_scene_editor() {
-	Node *root = EditorNode::get_singleton()->get_edited_scene();
-	if (root) {
-		EditorInterface::get_singleton()->set_main_screen_editor(Object::cast_to<Node3D>(root) ? "3D" : "2D");
-	}
 }
 
 void EditorSplitView::_track_current_script() {
@@ -914,6 +1167,9 @@ Ref<Script> EditorSplitView::_selected_node_script() const {
 }
 
 void EditorSplitView::_selection_changed() {
+	if (pane_live) {
+		_sync_pane_live_selection();
+	}
 	// Follow the selection: show the script of the node just selected.
 	EditorSelection *selection = EditorNode::get_singleton()->get_editor_selection();
 	for (Node *node : selection->get_top_selected_node_list()) {
@@ -956,10 +1212,448 @@ void EditorSplitView::_update_scene_code_view() {
 		}
 		preview_pane->set_title(title);
 		preview_pane->type_label->set_text(scr->get_class());
+		_record_code_history(scr->get_path());
 	}
 	if (floating) {
 		float_window->set_title(vformat(TTR("%s - Split View"), preview_pane->file_label->get_text()));
 	}
+	_update_code_toolbar();
+}
+
+// View 2's code toolbar: Search, Go To and back/forward, all read-only.
+
+Ref<Script> EditorSplitView::_shown_code_script() const {
+	if (showing_scene_code) {
+		return scene_code_script;
+	}
+	const TextEditorBase *shown = showing_code ? ObjectDB::get_instance<TextEditorBase>(code_editor_id) : nullptr;
+	if (!shown) {
+		return Ref<Script>();
+	}
+	const Ref<Script> scr = shown->get_edited_resource();
+	return scr;
+}
+
+CodeEdit *EditorSplitView::_edited_code_edit() const {
+	// The script being edited, when view 2 compares another with it.
+	TextEditorBase *edited = showing_code ? ObjectDB::get_instance<TextEditorBase>(current_code_editor_id) : nullptr;
+	return edited ? edited->get_code_editor()->get_text_editor() : nullptr;
+}
+
+bool EditorSplitView::_code_both_scripts() const {
+	return showing_code && preview_pane->code_both_button->is_pressed() && _edited_code_edit();
+}
+
+void EditorSplitView::_update_code_toolbar() {
+	const bool has_code = preview_pane->code_view->is_visible();
+	preview_pane->code_search_menu->set_disabled(!has_code);
+	preview_pane->code_goto_menu->set_disabled(!has_code);
+	preview_pane->code_function_menu->set_disabled(!has_code);
+	// Only beside the script editor is there a second script to line up.
+	preview_pane->code_both_button->set_visible(showing_code);
+	if (!has_code) {
+		_code_find_hide();
+	} else if (preview_pane->code_find_bar->is_visible()) {
+		// The text was replaced: show the search on it again.
+		_code_find_options_changed(false);
+	}
+	if (!_code_both_scripts()) {
+		_clear_other_search();
+	}
+	_update_code_history_buttons();
+}
+
+void EditorSplitView::_fill_code_menus() {
+	// Filled once the script editor has registered its shortcuts, which is
+	// after the panes are built.
+	PopupMenu *search = preview_pane->code_search_menu->get_popup();
+	if (search->get_item_count() == 0) {
+		search->add_shortcut(ED_GET_SHORTCUT("script_text_editor/find"), EditorScenePane::CODE_FIND);
+		search->add_shortcut(ED_GET_SHORTCUT("script_text_editor/find_next"), EditorScenePane::CODE_FIND_NEXT);
+		search->add_shortcut(ED_GET_SHORTCUT("script_text_editor/find_previous"), EditorScenePane::CODE_FIND_PREVIOUS);
+	}
+	PopupMenu *go_to = preview_pane->code_goto_menu->get_popup();
+	if (go_to->get_item_count() == 0) {
+		go_to->add_shortcut(ED_GET_SHORTCUT("script_text_editor/goto_line"), EditorScenePane::CODE_GOTO_LINE);
+		go_to->add_shortcut(ED_GET_SHORTCUT("script_text_editor/goto_function"), EditorScenePane::CODE_GOTO_FUNCTION);
+	}
+}
+
+void EditorSplitView::_code_menu_id_pressed(int p_id) {
+	switch (p_id) {
+		case EditorScenePane::CODE_FIND: {
+			_code_find_show();
+		} break;
+		case EditorScenePane::CODE_FIND_NEXT: {
+			_code_find(false);
+		} break;
+		case EditorScenePane::CODE_FIND_PREVIOUS: {
+			_code_find(true);
+		} break;
+		case EditorScenePane::CODE_GOTO_LINE: {
+			_code_line_popup();
+		} break;
+		case EditorScenePane::CODE_GOTO_FUNCTION: {
+			preview_pane->code_function_menu->show_popup();
+		} break;
+	}
+}
+
+bool EditorSplitView::_code_shortcut_input(const Ref<InputEvent> &p_event) {
+	// Over view 2's code, or typing in its find bar, the script editor's
+	// search shortcuts work on it instead.
+	const Ref<InputEventKey> k = p_event;
+	if (k.is_null() || !k->is_pressed() || !enabled) {
+		return false;
+	}
+	Control *container = preview_pane->code_container;
+	if (!container->is_visible_in_tree() || !preview_pane->code_view->is_visible()) {
+		return false;
+	}
+	const bool hovered = Rect2(Point2(), container->get_size()).has_point(container->get_local_mouse_position());
+	const Control *focus = container->get_viewport()->gui_get_focus_owner();
+	if (!hovered && !(focus && container->is_ancestor_of(focus))) {
+		return false;
+	}
+	if (ED_IS_SHORTCUT("script_text_editor/find", p_event)) {
+		_code_find_show();
+	} else if (ED_IS_SHORTCUT("script_text_editor/find_next", p_event)) {
+		_code_find(false);
+	} else if (ED_IS_SHORTCUT("script_text_editor/find_previous", p_event)) {
+		_code_find(true);
+	} else if (ED_IS_SHORTCUT("script_text_editor/goto_line", p_event)) {
+		_code_line_popup();
+	} else if (ED_IS_SHORTCUT("script_text_editor/goto_function", p_event)) {
+		preview_pane->code_function_menu->show_popup();
+	} else if (ED_IS_SHORTCUT("script_editor/history_previous", p_event)) {
+		_code_history_step(-1);
+	} else if (ED_IS_SHORTCUT("script_editor/history_next", p_event)) {
+		_code_history_step(1);
+	} else {
+		return false;
+	}
+	return true;
+}
+
+void EditorSplitView::_code_find_show() {
+	CodeEdit *view = preview_pane->code_view;
+	LineEdit *text = preview_pane->code_find_text;
+	// Start from a word or line selected here, as the script editor does.
+	if (view->has_selection() && view->get_selection_from_line() == view->get_selection_to_line()) {
+		text->set_text(view->get_selected_text());
+	}
+	preview_pane->code_find_bar->show();
+	text->grab_focus();
+	text->select_all();
+	_code_find_text_changed(text->get_text());
+}
+
+void EditorSplitView::_code_find_hide() {
+	if (!preview_pane->code_find_bar->is_visible()) {
+		return;
+	}
+	preview_pane->code_find_bar->hide();
+	preview_pane->code_view->set_search_text(String());
+	preview_pane->code_view->queue_redraw();
+	_clear_other_search();
+}
+
+uint32_t EditorSplitView::_code_find_flags() const {
+	uint32_t flags = 0;
+	if (preview_pane->code_find_case->is_pressed()) {
+		flags |= TextEdit::SEARCH_MATCH_CASE;
+	}
+	if (preview_pane->code_find_words->is_pressed()) {
+		flags |= TextEdit::SEARCH_WHOLE_WORDS;
+	}
+	return flags;
+}
+
+void EditorSplitView::_code_find_text_changed(const String &p_text) {
+	// Highlight every match, and move to the first from where it was.
+	const uint32_t flags = _code_find_flags();
+	CodeEdit *view = preview_pane->code_view;
+	view->set_search_text(p_text);
+	view->set_search_flags(flags);
+	view->queue_redraw();
+	if (!p_text.is_empty()) {
+		_code_search_in(view, p_text, flags, false, true);
+	}
+	CodeEdit *other = _code_both_scripts() ? _edited_code_edit() : nullptr;
+	if (other && current_code_editor_id != code_other_search_id) {
+		_clear_other_search();
+	}
+	if (other) {
+		other->set_search_text(p_text);
+		other->set_search_flags(flags);
+		other->queue_redraw();
+		code_other_search_id = current_code_editor_id;
+		if (!p_text.is_empty()) {
+			_code_search_in(other, p_text, flags, false, true);
+		}
+	} else {
+		_clear_other_search();
+	}
+	_update_code_find_matches();
+}
+
+void EditorSplitView::_code_find_submitted(const String &p_text) {
+	_code_find(Input::get_singleton()->is_key_pressed(Key::SHIFT));
+}
+
+void EditorSplitView::_code_find_options_changed(bool p_pressed) {
+	_code_find_text_changed(preview_pane->code_find_text->get_text());
+}
+
+void EditorSplitView::_code_find_input(const Ref<InputEvent> &p_event) {
+	const Ref<InputEventKey> k = p_event;
+	if (k.is_valid() && k->is_pressed() && k->get_keycode() == Key::ESCAPE) {
+		_code_find_hide();
+		preview_pane->code_find_text->accept_event();
+	}
+}
+
+void EditorSplitView::_code_find(bool p_backwards) {
+	const String text = preview_pane->code_find_text->get_text();
+	if (!preview_pane->code_find_bar->is_visible() || text.is_empty()) {
+		_code_find_show();
+		return;
+	}
+	const uint32_t flags = _code_find_flags();
+	_code_search_in(preview_pane->code_view, text, flags, p_backwards, false);
+	if (CodeEdit *other = _code_both_scripts() ? _edited_code_edit() : nullptr) {
+		_code_search_in(other, text, flags, p_backwards, false);
+	}
+	_update_code_find_matches();
+}
+
+bool EditorSplitView::_code_search_in(CodeEdit *p_edit, const String &p_text, uint32_t p_flags, bool p_backwards, bool p_from_start) {
+	// From the selected match: the next one after it, the one before it, or
+	// (while typing) the first at or after its start.
+	int line = p_edit->get_caret_line();
+	int column = p_edit->get_caret_column();
+	if (p_edit->has_selection()) {
+		const bool from = p_backwards || p_from_start;
+		line = from ? p_edit->get_selection_from_line() : p_edit->get_selection_to_line();
+		column = from ? p_edit->get_selection_from_column() : p_edit->get_selection_to_column();
+	}
+	const Point2i pos = p_edit->search(p_text, p_flags | (p_backwards ? (uint32_t)TextEdit::SEARCH_BACKWARDS : 0), line, column);
+	if (pos.x < 0) {
+		p_edit->deselect();
+		return false;
+	}
+	p_edit->unfold_line(pos.y);
+	p_edit->select(pos.y, pos.x, pos.y, pos.x + p_text.length());
+	p_edit->center_viewport_to_caret();
+	return true;
+}
+
+int EditorSplitView::_code_count_matches(CodeEdit *p_edit, const String &p_text, uint32_t p_flags, int &r_current) {
+	// As the script editor's find bar counts them.
+	r_current = 0;
+	if (p_text.is_empty()) {
+		return 0;
+	}
+	const bool match_case = p_flags & TextEdit::SEARCH_MATCH_CASE;
+	const bool whole_words = p_flags & TextEdit::SEARCH_WHOLE_WORDS;
+	const bool start_is_symbol = is_symbol(p_text[0]);
+	const bool end_is_symbol = is_symbol(p_text[p_text.length() - 1]);
+	const bool selected = p_edit->has_selection();
+	const int selected_line = p_edit->get_selection_from_line();
+	const int selected_column = p_edit->get_selection_from_column();
+	int count = 0;
+	for (int i = 0; i < p_edit->get_line_count(); i++) {
+		const String line = p_edit->get_line(i);
+		int column = 0;
+		while (true) {
+			column = match_case ? line.find(p_text, column) : line.findn(p_text, column);
+			if (column < 0) {
+				break;
+			}
+			const int end = column + p_text.length();
+			if (whole_words && ((!start_is_symbol && column > 0 && !is_symbol(line[column - 1])) || (!end_is_symbol && end < line.length() && !is_symbol(line[end])))) {
+				column = end;
+				continue;
+			}
+			count++;
+			if (selected && i == selected_line && column == selected_column) {
+				r_current = count;
+			}
+			column = end;
+		}
+	}
+	return count;
+}
+
+void EditorSplitView::_update_code_find_matches() {
+	Label *label = preview_pane->code_find_matches;
+	const String text = preview_pane->code_find_text->get_text();
+	if (text.is_empty()) {
+		label->set_text(String());
+		return;
+	}
+	const uint32_t flags = _code_find_flags();
+	int current = 0;
+	const int count = _code_count_matches(preview_pane->code_view, text, flags, current);
+	String result;
+	if (count == 0) {
+		result = TTR("No match");
+	} else if (current > 0) {
+		result = vformat(TTRN("%d of %d match", "%d of %d matches", count), current, count);
+	} else {
+		result = vformat(TTRN("%d match", "%d matches", count), count);
+	}
+	if (CodeEdit *other = _code_both_scripts() ? _edited_code_edit() : nullptr) {
+		int other_current = 0;
+		result += "  " + vformat(TTR("(%d in the edited script)"), _code_count_matches(other, text, flags, other_current));
+	}
+	label->set_text(result);
+	label->add_theme_color_override(SceneStringName(font_color), count > 0 ? get_theme_color(SceneStringName(font_color), SNAME("Label")) : get_theme_color(SNAME("error_color"), EditorStringName(Editor)));
+}
+
+void EditorSplitView::_clear_other_search() {
+	// Take the search off the edited script, unless its own find bar is
+	// searching it now.
+	TextEditorBase *editor = ObjectDB::get_instance<TextEditorBase>(code_other_search_id);
+	if (editor) {
+		const FindReplaceBar *bar = editor->get_code_editor()->get_find_replace_bar();
+		if (!bar || !bar->is_visible_in_tree() || bar->get_search_text().is_empty()) {
+			editor->get_code_editor()->get_text_editor()->set_search_text(String());
+			editor->get_code_editor()->get_text_editor()->queue_redraw();
+		}
+	}
+	code_other_search_id = ObjectID();
+}
+
+void EditorSplitView::_code_line_popup() {
+	CodeEdit *view = preview_pane->code_view;
+	if (!view->is_visible_in_tree()) {
+		return;
+	}
+	LineEdit *text = preview_pane->code_line_text;
+	text->set_text(itos(view->get_caret_line() + 1));
+	MenuButton *anchor = preview_pane->code_goto_menu;
+	preview_pane->code_line_popup->popup(Rect2i(anchor->get_screen_position() + Vector2(0, anchor->get_size().y), Size2i()));
+	text->grab_focus();
+	text->select_all();
+}
+
+void EditorSplitView::_code_line_submitted(const String &p_text) {
+	CodeEdit *view = preview_pane->code_view;
+	if (p_text.is_valid_int()) {
+		const int line = CLAMP(p_text.to_int() - 1, 0, view->get_line_count() - 1);
+		view->deselect();
+		view->unfold_line(line);
+		view->set_caret_line(line, false);
+		view->set_caret_column(0, false);
+		view->center_viewport_to_caret();
+	}
+	preview_pane->code_line_popup->hide();
+}
+
+void EditorSplitView::_fill_code_function_menu() {
+	// The functions of the script shown, in the order they appear.
+	PopupMenu *menu = preview_pane->code_function_menu->get_popup();
+	menu->clear();
+	const Ref<Script> scr = _shown_code_script();
+	List<String> functions;
+	if (scr.is_valid() && scr->get_language() && scr->get_language()->get_editor_language()) {
+		scr->get_language()->get_editor_language()->validate(preview_pane->code_view->get_text(), scr->get_path(), nullptr, nullptr, &functions, nullptr);
+	}
+	Vector<Pair<int, String>> sorted;
+	for (const String &function : functions) {
+		sorted.push_back(Pair<int, String>(function.get_slicec(':', 1).to_int(), function.get_slicec(':', 0)));
+	}
+	sorted.sort_custom<PairSort<int, String>>();
+	for (const Pair<int, String> &function : sorted) {
+		menu->add_item(function.second);
+		menu->set_item_metadata(-1, function.first);
+		menu->set_item_tooltip(-1, vformat(TTR("Line %d"), function.first));
+	}
+	if (sorted.is_empty()) {
+		menu->add_item(TTR("No functions found"));
+		menu->set_item_disabled(-1, true);
+	}
+}
+
+void EditorSplitView::_code_function_pressed(int p_index) {
+	PopupMenu *menu = preview_pane->code_function_menu->get_popup();
+	const int line_number = menu->get_item_metadata(p_index);
+	const int line = line_number - 1;
+	CodeEdit *view = preview_pane->code_view;
+	if (line < 0 || line >= view->get_line_count()) {
+		return;
+	}
+	view->deselect();
+	view->unfold_line(line);
+	view->set_caret_line(line, false);
+	view->set_caret_column(0, false);
+	view->center_viewport_to_caret();
+	if (!_code_both_scripts()) {
+		return;
+	}
+	// Line up the function of the same name in the script being edited.
+	CodeEditorBase *edited = ObjectDB::get_instance<CodeEditorBase>(current_code_editor_id);
+	if (!edited) {
+		return; // Not a script with functions, such as a text file.
+	}
+	const String name = menu->get_item_text(p_index);
+	for (const String &function : edited->get_functions()) {
+		if (function.get_slicec(':', 0) == name) {
+			edited->goto_line_centered(function.get_slicec(':', 1).to_int() - 1);
+			break;
+		}
+	}
+}
+
+void EditorSplitView::_record_code_history(const String &p_path) {
+	if (p_path.is_empty() || (code_history_pos >= 0 && code_history[code_history_pos] == p_path)) {
+		return;
+	}
+	// A new script drops the ones stepped back from, like a browser.
+	code_history.resize(code_history_pos + 1);
+	code_history.push_back(p_path);
+	if (code_history.size() > CODE_HISTORY_MAX) {
+		code_history.remove_at(0);
+	}
+	code_history_pos = code_history.size() - 1;
+	_update_code_history_buttons();
+}
+
+void EditorSplitView::_code_history_step(int p_step) {
+	// Skip scripts that can't be shown any more, such as one closed since.
+	for (int pos = code_history_pos + p_step; pos >= 0 && pos < code_history.size(); pos += p_step) {
+		const String &path = code_history[pos];
+		bool shown = false;
+		if (showing_code) {
+			DocumentEditorContainer *container = ScriptEditor::get_singleton()->get_script_container();
+			for (const Ref<Script> &scr : ScriptEditor::get_singleton()->get_open_scripts()) {
+				TextEditorBase *editor = Object::cast_to<TextEditorBase>(container->get_resource_editor(scr));
+				if (editor && scr->get_path() == path && editor->get_instance_id() != current_code_editor_id) {
+					code_editor_id = editor->get_instance_id();
+					shown = true;
+					break;
+				}
+			}
+		} else if (showing_scene_code) {
+			const Ref<Script> scr = ResourceLoader::load(path, "Script");
+			if (scr.is_valid()) {
+				scene_code_script = scr;
+				shown = true;
+			}
+		}
+		if (shown) {
+			code_history_pos = pos;
+			_update_code_history_buttons();
+			_queue_update();
+			return;
+		}
+	}
+}
+
+void EditorSplitView::_update_code_history_buttons() {
+	preview_pane->code_back_button->set_disabled(code_history_pos <= 0);
+	preview_pane->code_forward_button->set_disabled(code_history_pos < 0 || code_history_pos >= code_history.size() - 1);
 }
 
 void EditorSplitView::_set_setting(const String &p_name, const Variant &p_value) {
@@ -1011,36 +1705,12 @@ void EditorSplitView::_update_code_view() {
 		}
 		preview_pane->set_title(title);
 		preview_pane->type_label->set_text(res->get_class());
+		_record_code_history(res->get_path());
 	}
 	if (floating) {
 		float_window->set_title(vformat(TTR("%s - Split View"), preview_pane->file_label->get_text()));
 	}
-}
-
-void EditorSplitView::_code_gui_input(const Ref<InputEvent> &p_event) {
-	const Ref<InputEventMouseButton> mb = p_event;
-	if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT) {
-		const Point2i pos = preview_pane->code_view->get_line_column_at_pos(mb->get_position());
-		callable_mp(this, &EditorSplitView::_edit_code_at).call_deferred(pos.y, pos.x);
-		preview_pane->code_view->accept_event();
-	}
-}
-
-void EditorSplitView::_edit_code_at(int p_line, int p_column) {
-	if (showing_scene_code) {
-		if (scene_code_script.is_valid()) {
-			ScriptEditor::get_singleton()->edit(scene_code_script, p_line, p_column);
-			EditorInterface::get_singleton()->set_main_screen_editor("Script");
-		}
-		return;
-	}
-	TextEditorBase *shown = ObjectDB::get_instance<TextEditorBase>(code_editor_id);
-	if (!shown) {
-		return;
-	}
-	ScriptEditor::get_singleton()->edit(shown->get_edited_resource(), p_line, p_column);
-	_track_current_script();
-	_queue_update();
+	_update_code_toolbar();
 }
 
 void EditorSplitView::_fill_pick_menu() {
@@ -1320,8 +1990,15 @@ void EditorSplitView::_drop(const Point2 &p_point, const Variant &p_data) {
 
 void EditorSplitView::_draw_preview_overlay() {
 	Control *overlay = preview_pane->overlay;
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
+	const bool scene_2d = root && !Object::cast_to<Node3D>(root);
+	if (scene_2d) {
+		_draw_preview_2d_under();
+	}
 	preview_pane->tools->draw_overlay();
+	if (scene_2d) {
+		_draw_preview_2d_over();
+	}
 	if (zoom_indicator_delay > 0.0 && Object::cast_to<Node3D>(root) && !preview_cinematic) {
 		// The 3D editor's zoom bar (how far the view is from what it orbits)
 		// or, while flying, its speed bar; on a log scale between the
@@ -1353,30 +2030,6 @@ void EditorSplitView::_draw_preview_overlay() {
 			overlay->draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color);
 		}
 	}
-	if (root && !Object::cast_to<Node3D>(root)) {
-		// The project's window, as the 2D editor draws it.
-		const Size2 project_size = Size2(GLOBAL_GET("display/window/size/viewport_width"), GLOBAL_GET("display/window/size/viewport_height"));
-		const Transform2D xform = preview_pane->viewport->get_global_canvas_transform();
-		const Rect2 frame = xform.xform(Rect2(Point2(), project_size));
-		overlay->draw_rect(frame, get_theme_color(SNAME("accent_color"), EditorStringName(Editor)) * Color(1, 1, 1, 0.6), false, Math::round(EDSCALE));
-	}
-	if (!preview_pane->tools->is_dragging() && overlay->get_global_rect().has_point(overlay->get_global_mouse_position())) {
-		const Ref<Font> font = get_theme_font(SNAME("main"), EditorStringName(EditorFonts));
-		const int font_size = get_theme_font_size(SNAME("main_size"), EditorStringName(EditorFonts));
-		const int small_size = MAX(1, int(font_size * 0.85));
-		const String hint = preview_pane->tools->get_hint();
-		const String keys = root && Object::cast_to<Node3D>(root) ? TTR("Wheel: zoom  Middle-drag: orbit  Shift: pan  Right-drag: look, WASD to fly  Double middle-click: reset") : TTR("Wheel: zoom  Middle-drag: pan  Double middle-click: reset");
-		const Size2 hint_size = font->get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size);
-		const Size2 keys_size = font->get_string_size(keys, HORIZONTAL_ALIGNMENT_LEFT, -1, small_size);
-		const real_t width = MAX(hint_size.x, keys_size.x);
-		const real_t line = font->get_height(small_size);
-		const Point2 hint_pos = Point2((overlay->get_size().x - hint_size.x) / 2, overlay->get_size().y - 16 * EDSCALE - line);
-		const Point2 keys_pos = Point2((overlay->get_size().x - keys_size.x) / 2, overlay->get_size().y - 16 * EDSCALE);
-		const Rect2 bg = Rect2(Point2((overlay->get_size().x - width) / 2 - 8 * EDSCALE, hint_pos.y - font->get_ascent(font_size) - 4 * EDSCALE), Size2(width + 16 * EDSCALE, hint_size.y + line + 8 * EDSCALE));
-		overlay->draw_rect(bg, get_theme_color(SNAME("dark_color_1"), EditorStringName(Editor)) * Color(1, 1, 1, 0.85));
-		overlay->draw_string(font, hint_pos, hint, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, get_theme_color(SceneStringName(font_color), EditorStringName(Editor)));
-		overlay->draw_string(font, keys_pos, keys, HORIZONTAL_ALIGNMENT_LEFT, -1, small_size, get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)));
-	}
 }
 
 // The second pane's Scene toolbar: the Scene dock's, for the pane's scene.
@@ -1384,11 +2037,11 @@ void EditorSplitView::_draw_preview_overlay() {
 Node *EditorSplitView::_pane_target_node() const {
 	// What's selected in the pane, or its scene's root.
 	Node *selected = preview_pane->tools->get_selected();
-	return selected ? selected : get_preview_scene();
+	return selected ? selected : _pane_scene();
 }
 
 void EditorSplitView::_pane_add_child(Node *p_parent, Node *p_child, const String &p_action) {
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	const int history_id = preview_pane->tools->get_history_id();
 	if (!root || history_id == EditorUndoRedoManager::INVALID_HISTORY) {
 		memdelete(p_child);
@@ -1428,7 +2081,7 @@ void EditorSplitView::_pane_add_node() {
 
 void EditorSplitView::_pane_create_node() {
 	Node *parent = ObjectDB::get_instance<Node>(pane_new_node_parent);
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	if (!parent || !root || (parent != root && !root->is_ancestor_of(parent))) {
 		return;
 	}
@@ -1466,7 +2119,7 @@ void EditorSplitView::_pane_instantiate_scene() {
 
 void EditorSplitView::_pane_scene_picked(const String &p_path) {
 	Node *parent = ObjectDB::get_instance<Node>(pane_new_node_parent);
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	if (!parent || !root || (parent != root && !root->is_ancestor_of(parent))) {
 		return;
 	}
@@ -1504,7 +2157,7 @@ void EditorSplitView::_pane_attach_script() {
 	// Where the Scene dock suggests it: beside the scene.
 	String path = node->get_scene_file_path();
 	if (path.is_empty()) {
-		const String root_path = get_preview_scene()->get_scene_file_path();
+		const String root_path = _pane_scene()->get_scene_file_path();
 		path = (root_path.is_empty() ? String("res://") : root_path.get_base_dir()).path_join(node->get_name());
 	}
 	if (!pane_script_dialog) {
@@ -1519,7 +2172,7 @@ void EditorSplitView::_pane_attach_script() {
 
 void EditorSplitView::_pane_script_created(const Ref<Script> &p_script) {
 	Node *node = ObjectDB::get_instance<Node>(pane_script_target);
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	const int history_id = preview_pane->tools->get_history_id();
 	if (!node || !root || (node != root && !root->is_ancestor_of(node)) || history_id == EditorUndoRedoManager::INVALID_HISTORY) {
 		return;
@@ -1635,7 +2288,7 @@ void EditorSplitView::_pane_tree_menu_option(int p_option) {
 }
 
 void EditorSplitView::_pane_list_subresources() {
-	SceneTreeDock::get_singleton()->list_subresources(preview_pane->subresource_menu, get_preview_scene());
+	SceneTreeDock::get_singleton()->list_subresources(preview_pane->subresource_menu, _pane_scene());
 }
 
 void EditorSplitView::_pane_edit_subresource(int p_index) {
@@ -1647,9 +2300,7 @@ void EditorSplitView::_pane_edit_subresource(int p_index) {
 }
 
 void EditorSplitView::_update_pane_toolbar() {
-	// On the script screen the pane's tree is the edited scene's, and the
-	// Scene dock has the toolbar for that.
-	const bool pane_scene = !showing_live && get_preview_scene();
+	const bool pane_scene = !showing_code && !showing_scene_code && _pane_scene();
 	preview_pane->tree_toolbar->set_visible(pane_scene);
 	preview_pane->tree_title->set_visible(!pane_scene);
 	if (!pane_scene) {
@@ -1809,6 +2460,372 @@ bool EditorSplitView::_view_menu_shortcut(const Ref<InputEvent> &p_event) {
 		}
 	}
 	return false;
+}
+
+void EditorSplitView::_build_view_menu_2d() {
+	// The 2D editor's View menu, with the items that change what the pane
+	// shows. The 2D editor's own preview settings (theme, translation, canvas
+	// scale and resampling) apply to the whole project, so they stay there.
+	PopupMenu *grid = preview_pane->view_grid_menu_2d;
+	grid->add_radio_check_item(TTRC("Show"), PANE_2D_GRID_SHOW);
+	grid->add_radio_check_item(TTRC("Show When Snapping"), PANE_2D_GRID_SHOW_WHEN_SNAPPING);
+	grid->add_radio_check_item(TTRC("Hide"), PANE_2D_GRID_HIDE);
+	grid->add_separator();
+	grid->add_shortcut(ED_GET_SHORTCUT("canvas_item_editor/toggle_grid"), PANE_2D_GRID_TOGGLE);
+	grid->set_item_checked(grid->get_item_index(PANE_2D_GRID_SHOW_WHEN_SNAPPING), true);
+	grid->connect(SceneStringName(id_pressed), callable_mp(this, &EditorSplitView::_view_menu_2d_option));
+
+	PopupMenu *p = preview_pane->view_menu_2d->get_popup();
+	p->add_submenu_node_item(TTRC("Grid"), grid, PANE_2D_GRID_MENU);
+	p->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_rulers"), PANE_2D_SHOW_RULERS);
+	// Y toggles the pane's snapping, as in 3D, so this has no shortcut here.
+	p->add_check_item(TTRC("Show Guides"), PANE_2D_SHOW_GUIDES);
+	p->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_origin"), PANE_2D_SHOW_ORIGIN);
+	p->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_viewport"), PANE_2D_SHOW_VIEWPORT);
+	p->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_information"), PANE_2D_SHOW_INFORMATION);
+	p->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_frame_time"), PANE_2D_SHOW_FRAME_TIME);
+	p->add_separator();
+
+	PopupMenu *gizmos = preview_pane->view_gizmos_menu_2d;
+	gizmos->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_position_gizmos"), PANE_2D_GIZMO_POSITION);
+	gizmos->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_lock_gizmos"), PANE_2D_GIZMO_LOCK);
+	gizmos->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_group_gizmos"), PANE_2D_GIZMO_GROUP);
+	gizmos->add_check_shortcut(ED_GET_SHORTCUT("canvas_item_editor/show_transformation_gizmos"), PANE_2D_GIZMO_TRANSFORMATION);
+	gizmos->connect(SceneStringName(id_pressed), callable_mp(this, &EditorSplitView::_view_menu_2d_option));
+	p->add_submenu_node_item(TTRC("Gizmos"), gizmos, PANE_2D_GIZMOS_MENU);
+	p->add_separator();
+	p->add_shortcut(ED_GET_SHORTCUT("canvas_item_editor/center_selection"), PANE_2D_CENTER_SELECTION);
+	p->add_shortcut(ED_GET_SHORTCUT("canvas_item_editor/frame_selection"), PANE_2D_FRAME_SELECTION);
+	p->add_shortcut(ED_GET_SHORTCUT("canvas_item_editor/clear_guides"), PANE_2D_CLEAR_GUIDES);
+
+	// As the 2D editor starts.
+	static const int shown[] = { PANE_2D_SHOW_RULERS, PANE_2D_SHOW_GUIDES, PANE_2D_SHOW_ORIGIN, PANE_2D_SHOW_VIEWPORT, PANE_2D_GIZMO_POSITION, PANE_2D_GIZMO_LOCK, PANE_2D_GIZMO_GROUP, PANE_2D_GIZMO_TRANSFORMATION };
+	for (int option : shown) {
+		_set_view_menu_2d_checked(option, true);
+	}
+	p->connect(SceneStringName(id_pressed), callable_mp(this, &EditorSplitView::_view_menu_2d_option));
+	p->connect("about_to_popup", callable_mp(this, &EditorSplitView::_set_preview_active).bind(true));
+}
+
+bool EditorSplitView::_view_menu_2d_checked(int p_option) const {
+	const PopupMenu *menus[] = { preview_pane->view_menu_2d->get_popup(), preview_pane->view_grid_menu_2d, preview_pane->view_gizmos_menu_2d };
+	for (const PopupMenu *menu : menus) {
+		const int idx = menu->get_item_index(p_option);
+		if (idx >= 0) {
+			return menu->is_item_checked(idx);
+		}
+	}
+	return false;
+}
+
+void EditorSplitView::_set_view_menu_2d_checked(int p_option, bool p_checked) {
+	PopupMenu *menus[] = { preview_pane->view_menu_2d->get_popup(), preview_pane->view_grid_menu_2d, preview_pane->view_gizmos_menu_2d };
+	for (PopupMenu *menu : menus) {
+		const int idx = menu->get_item_index(p_option);
+		if (idx >= 0) {
+			menu->set_item_checked(idx, p_checked);
+			return;
+		}
+	}
+}
+
+bool EditorSplitView::_is_grid_2d_visible() const {
+	if (_view_menu_2d_checked(PANE_2D_GRID_SHOW)) {
+		return true;
+	}
+	return _view_menu_2d_checked(PANE_2D_GRID_SHOW_WHEN_SNAPPING) && preview_pane->tools->is_snap_enabled();
+}
+
+void EditorSplitView::_view_menu_2d_option(int p_option) {
+	_set_preview_active(true);
+	switch (p_option) {
+		case PANE_2D_GRID_SHOW:
+		case PANE_2D_GRID_SHOW_WHEN_SNAPPING:
+		case PANE_2D_GRID_HIDE: {
+			for (int option = PANE_2D_GRID_SHOW; option <= PANE_2D_GRID_HIDE; option++) {
+				_set_view_menu_2d_checked(option, option == p_option);
+			}
+		} break;
+		case PANE_2D_GRID_TOGGLE: {
+			// As in the 2D editor: shown or hidden, whatever snapping does.
+			const bool grid_shown = _is_grid_2d_visible();
+			for (int option = PANE_2D_GRID_SHOW; option <= PANE_2D_GRID_HIDE; option++) {
+				_set_view_menu_2d_checked(option, option == (grid_shown ? PANE_2D_GRID_HIDE : PANE_2D_GRID_SHOW));
+			}
+		} break;
+		case PANE_2D_SHOW_RULERS:
+		case PANE_2D_SHOW_GUIDES:
+		case PANE_2D_SHOW_ORIGIN:
+		case PANE_2D_SHOW_VIEWPORT:
+		case PANE_2D_SHOW_INFORMATION:
+		case PANE_2D_SHOW_FRAME_TIME:
+		case PANE_2D_GIZMO_POSITION:
+		case PANE_2D_GIZMO_LOCK:
+		case PANE_2D_GIZMO_GROUP:
+		case PANE_2D_GIZMO_TRANSFORMATION: {
+			_set_view_menu_2d_checked(p_option, !_view_menu_2d_checked(p_option));
+		} break;
+		case PANE_2D_CENTER_SELECTION: {
+			_focus_preview_2d(false);
+		} break;
+		case PANE_2D_FRAME_SELECTION: {
+			_focus_preview_2d(true);
+		} break;
+		case PANE_2D_CLEAR_GUIDES: {
+			Node *root = _pane_scene();
+			const int history_id = preview_pane->tools->get_history_id();
+			if (!root || history_id == EditorUndoRedoManager::INVALID_HISTORY || (!root->has_meta("_edit_horizontal_guides_") && !root->has_meta("_edit_vertical_guides_"))) {
+				break;
+			}
+			// As the 2D editor clears them, in the scene's own history.
+			EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+			undo_redo->create_action_for_history(TTR("Clear Guides"), history_id);
+			undo_redo->force_fixed_history();
+			static const char *metas[] = { "_edit_horizontal_guides_", "_edit_vertical_guides_" };
+			for (const char *meta : metas) {
+				if (root->has_meta(meta)) {
+					undo_redo->add_do_method(root, "remove_meta", meta);
+					undo_redo->add_undo_method(root, "set_meta", meta, root->get_meta(meta));
+				}
+			}
+			Control *overlay = preview_pane->overlay;
+			undo_redo->add_do_method(overlay, "queue_redraw");
+			undo_redo->add_undo_method(overlay, "queue_redraw");
+			undo_redo->commit_action();
+		} break;
+	}
+	_update_view_menu();
+	preview_pane->overlay->queue_redraw();
+}
+
+bool EditorSplitView::_view_menu_2d_shortcut(const Ref<InputEvent> &p_event) {
+	// The 2D editor's View shortcuts, while the pane has focus.
+	const Ref<InputEventKey> k = p_event;
+	if (k.is_null() || !k->is_pressed() || k->is_echo()) {
+		return false;
+	}
+	const PopupMenu *menus[] = { preview_pane->view_menu_2d->get_popup(), preview_pane->view_grid_menu_2d, preview_pane->view_gizmos_menu_2d };
+	for (const PopupMenu *menu : menus) {
+		for (int i = 0; i < menu->get_item_count(); i++) {
+			const Ref<Shortcut> shortcut = menu->get_item_shortcut(i);
+			if (shortcut.is_valid() && !menu->is_item_disabled(i) && shortcut->matches_event(p_event)) {
+				_view_menu_2d_option(menu->get_item_id(i));
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static Rect2 _split_view_canvas_rect(CanvasItem *p_item) {
+	// Where a canvas item is, in its canvas: its rectangle, or its position.
+	const Transform2D xform = p_item->get_global_transform();
+	if (p_item->_edit_use_rect()) {
+		return xform.xform(p_item->_edit_get_rect());
+	}
+	return Rect2(xform.get_origin(), Size2());
+}
+
+static void _split_view_merge_canvas_rects(Node *p_node, Rect2 &r_rect, bool &r_has_rect) {
+	CanvasItem *item = Object::cast_to<CanvasItem>(p_node);
+	if (item && !item->is_visible_in_tree()) {
+		return;
+	}
+	if (item) {
+		const Rect2 rect = _split_view_canvas_rect(item);
+		r_rect = r_has_rect ? r_rect.merge(rect) : rect;
+		r_has_rect = true;
+	}
+	for (Node *child : p_node->iterate_children()) {
+		_split_view_merge_canvas_rects(child, r_rect, r_has_rect);
+	}
+}
+
+void EditorSplitView::_focus_preview_2d(bool p_frame) {
+	Node *root = _pane_scene();
+	if (!root || Object::cast_to<Node3D>(root)) {
+		return;
+	}
+	_begin_custom_view();
+	CanvasItem *selected = Object::cast_to<CanvasItem>(preview_pane->tools->get_selected());
+	Rect2 rect;
+	bool has_rect = false;
+	if (selected) {
+		rect = _split_view_canvas_rect(selected);
+		has_rect = true;
+	} else if (p_frame) {
+		_split_view_merge_canvas_rects(root, rect, has_rect);
+	}
+	if (!has_rect) {
+		return;
+	}
+	const Size2 size = preview_pane->viewport_container->get_size();
+	real_t zoom = preview_view_2d.get_scale().x;
+	if (p_frame && rect.has_area()) {
+		// As the 2D editor frames: the selection fills most of the view.
+		zoom = MIN(size.x / rect.size.x, size.y / rect.size.y) * 0.9;
+	}
+	Transform2D xform;
+	xform.scale_basis(Size2(zoom, zoom));
+	xform.columns[2] = size / 2 - rect.get_center() * zoom;
+	preview_view_2d = xform;
+	_update_preview_camera();
+}
+
+void EditorSplitView::_draw_preview_2d_under() {
+	// Under the selection, as the 2D editor draws them: the grid, the
+	// origin, the project's window, locks, groups and node positions.
+	Control *overlay = preview_pane->overlay;
+	Node *root = _pane_scene();
+	const Transform2D xform = preview_pane->viewport->get_global_canvas_transform();
+	const Size2 size = overlay->get_size();
+	if (_is_grid_2d_visible()) {
+		// The 2D editor's grid, with its step and offset.
+		const Ref<CanvasItemManipulator> manipulator = CanvasItemEditor::get_singleton()->get_canvas_item_manipulator();
+		const Dictionary state = CanvasItemEditor::get_singleton()->get_state();
+		const Vector2i primary_grid_step = state.get("primary_grid_step", Vector2i(8, 8));
+		const Point2 step = manipulator->get_grid_step() * Math::pow(2.0, manipulator->get_grid_step_multiplier());
+		const Point2 offset = manipulator->get_grid_offset();
+		const Color secondary_grid_color = EDITOR_GET("editors/2d/grid_color");
+		const Color primary_grid_color = Color(secondary_grid_color.r, secondary_grid_color.g, secondary_grid_color.b, secondary_grid_color.a * 2.5);
+		const Transform2D inverse = xform.affine_inverse();
+		for (int axis = 0; axis < 2; axis++) {
+			if (step[axis] <= 0) {
+				continue;
+			}
+			const int length = axis == 0 ? size.width : size.height;
+			int last_cell = 0;
+			for (int i = 0; i < length; i++) {
+				const Vector2 at = axis == 0 ? Vector2(i, 0) : Vector2(0, i);
+				const int cell = Math::fast_ftoi(Math::floor((inverse.xform(at)[axis] - offset[axis]) / step[axis]));
+				if (i > 0 && cell != last_cell) {
+					const Color color = primary_grid_step[axis] > 1 && cell % primary_grid_step[axis] == 0 ? primary_grid_color : secondary_grid_color;
+					overlay->draw_line(at, axis == 0 ? Vector2(i, size.height) : Vector2(size.width, i), color, Math::round(EDSCALE));
+				}
+				last_cell = cell;
+			}
+		}
+	}
+	if (_view_menu_2d_checked(PANE_2D_SHOW_ORIGIN)) {
+		const Point2 origin = xform.get_origin();
+		overlay->draw_line(Point2(0, origin.y), Point2(size.width, origin.y), get_theme_color(SNAME("axis_x_color"), EditorStringName(Editor)) * Color(1, 1, 1, 0.75));
+		overlay->draw_line(Point2(origin.x, 0), Point2(origin.x, size.height), get_theme_color(SNAME("axis_y_color"), EditorStringName(Editor)) * Color(1, 1, 1, 0.75));
+	}
+	if (_view_menu_2d_checked(PANE_2D_SHOW_VIEWPORT)) {
+		const Size2 project_size = Size2(GLOBAL_GET("display/window/size/viewport_width"), GLOBAL_GET("display/window/size/viewport_height"));
+		const Color border_color = EDITOR_GET("editors/2d/viewport_border_color");
+		overlay->draw_rect(xform.xform(Rect2(Point2(), project_size)), border_color, false);
+	}
+	if (root && (_view_menu_2d_checked(PANE_2D_GIZMO_LOCK) || _view_menu_2d_checked(PANE_2D_GIZMO_GROUP) || _view_menu_2d_checked(PANE_2D_GIZMO_POSITION))) {
+		_draw_locks_and_positions_2d(root, xform, root);
+	}
+}
+
+void EditorSplitView::_draw_locks_and_positions_2d(Node *p_node, const Transform2D &p_xform, Node *p_root) {
+	if (p_node != p_root && p_node->get_owner() != p_root && !p_root->is_editable_instance(p_node->get_owner())) {
+		return;
+	}
+	CanvasItem *item = Object::cast_to<CanvasItem>(p_node);
+	if (item && !item->is_visible_in_tree()) {
+		return;
+	}
+	for (Node *child : p_node->iterate_children()) {
+		_draw_locks_and_positions_2d(child, p_xform, p_root);
+	}
+	if (!item) {
+		return;
+	}
+	Control *overlay = preview_pane->overlay;
+	const Point2 at = p_xform.xform(item->get_global_transform().get_origin());
+	real_t offset = 0;
+	if (_view_menu_2d_checked(PANE_2D_GIZMO_LOCK) && p_node->has_meta("_edit_lock_")) {
+		const Ref<Texture2D> lock = get_editor_theme_icon(SNAME("LockViewport"));
+		overlay->draw_texture(lock, at + Point2(offset, 0));
+		offset += lock->get_size().x;
+	}
+	if (_view_menu_2d_checked(PANE_2D_GIZMO_GROUP) && item->has_meta("_edit_group_")) {
+		overlay->draw_texture(get_editor_theme_icon(SNAME("GroupViewport")), at + Point2(offset, 0));
+	}
+	// Where nodes without a rectangle are, unless they are selected.
+	if (_view_menu_2d_checked(PANE_2D_GIZMO_POSITION) && !item->_edit_use_rect() && item != preview_pane->tools->get_selected()) {
+		const Ref<Texture2D> position = get_editor_theme_icon(SNAME("EditorPositionUnselected"));
+		overlay->draw_texture(position, at - position->get_size() / 2, Color(1, 1, 1, 0.5));
+	}
+}
+
+void EditorSplitView::_draw_preview_2d_over() {
+	// Over the selection, as the 2D editor draws them: guides and rulers.
+	Control *overlay = preview_pane->overlay;
+	Node *root = _pane_scene();
+	const Transform2D xform = preview_pane->viewport->get_global_canvas_transform();
+	const Size2 size = overlay->get_size();
+	if (root && _view_menu_2d_checked(PANE_2D_SHOW_GUIDES)) {
+		const Color guide_color = EDITOR_GET("editors/2d/guides_color");
+		const Array vguides = root->get_meta("_edit_vertical_guides_", Array());
+		for (int i = 0; i < vguides.size(); i++) {
+			const real_t x = xform.xform(Point2(vguides[i], 0)).x;
+			overlay->draw_line(Point2(x, 0), Point2(x, size.height), guide_color, Math::round(EDSCALE));
+		}
+		const Array hguides = root->get_meta("_edit_horizontal_guides_", Array());
+		for (int i = 0; i < hguides.size(); i++) {
+			const real_t y = xform.xform(Point2(0, hguides[i])).y;
+			overlay->draw_line(Point2(0, y), Point2(size.width, y), guide_color, Math::round(EDSCALE));
+		}
+	}
+	if (!_view_menu_2d_checked(PANE_2D_SHOW_RULERS)) {
+		return;
+	}
+	// The 2D editor's rulers, along the top and left.
+	const Color bg_color = get_theme_color(SNAME("ruler_color"), EditorStringName(Editor));
+	const Color graduation_color = get_theme_color(SceneStringName(font_color), EditorStringName(Editor)).lerp(bg_color, 0.5);
+	Color font_color = get_theme_color(SceneStringName(font_color), EditorStringName(Editor));
+	font_color.a = 0.9;
+	const Ref<Font> font = get_theme_font(SNAME("rulers"), EditorStringName(EditorFonts));
+	const int font_size = get_theme_font_size(SNAME("rulers_size"), EditorStringName(EditorFonts));
+	const real_t ruler_width = CanvasItemEditor::get_singleton()->get_canvas_item_manipulator()->get_ruler_width();
+	const real_t tick_scale = ruler_width / 15.0;
+	const real_t zoom = xform.get_scale().x;
+	real_t rule = 100;
+	for (int i = 0; rule * zoom > 100 * tick_scale; i++) {
+		rule /= (i % 2) ? 5.0 : 2.0;
+	}
+	for (int i = 0; rule * zoom < 60 * tick_scale; i++) {
+		rule *= (i % 2) ? 2.0 : 5.0;
+	}
+	Transform2D ruler_transform;
+	ruler_transform.scale(Size2(rule, rule));
+	const int major = 2;
+	const int minor = 5;
+	Transform2D subdivide;
+	subdivide.scale(Size2(1.0 / (major * minor), 1.0 / (major * minor)));
+	const Transform2D to_screen = xform * ruler_transform * subdivide;
+	const Point2 first = to_screen.affine_inverse().xform(Point2(ruler_width, ruler_width));
+	const Point2 last = to_screen.affine_inverse().xform(size);
+	overlay->draw_rect(Rect2(Point2(ruler_width, 0), Size2(size.width, ruler_width)), bg_color);
+	for (int i = Math::ceil(first.x); i < last.x; i++) {
+		const Point2 position = to_screen.xform(Point2(i, 0)).round();
+		if (i % (major * minor) == 0) {
+			overlay->draw_line(Point2(position.x, 0), Point2(position.x, ruler_width), graduation_color, Math::round(EDSCALE));
+			const real_t value = (ruler_transform * subdivide).xform(Point2(i, 0)).x;
+			overlay->draw_string(font, Point2(position.x + MAX(Math::round(font_size / 8.0), 2), font->get_ascent(font_size) + Math::round(EDSCALE)), vformat(((int)value == value) ? "%d" : "%.1f", value), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, font_color);
+		} else {
+			overlay->draw_line(Point2(position.x, ruler_width * (i % minor == 0 ? 0.33 : 0.75)), Point2(position.x, ruler_width), graduation_color, Math::round(EDSCALE));
+		}
+	}
+	overlay->draw_rect(Rect2(Point2(0, ruler_width), Size2(ruler_width, size.height)), bg_color);
+	for (int i = Math::ceil(first.y); i < last.y; i++) {
+		const Point2 position = to_screen.xform(Point2(0, i)).round();
+		if (i % (major * minor) == 0) {
+			overlay->draw_line(Point2(0, position.y), Point2(ruler_width, position.y), graduation_color, Math::round(EDSCALE));
+			const real_t value = (ruler_transform * subdivide).xform(Point2(0, i)).y;
+			overlay->draw_set_transform_matrix(Transform2D(-Math::PI / 2.0, Point2(font->get_ascent(font_size) + Math::round(EDSCALE), position.y - 2)));
+			overlay->draw_string(font, Point2(), vformat(((int)value == value) ? "%d" : "%.1f", value), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, font_color);
+			overlay->draw_set_transform_matrix(Transform2D());
+		} else {
+			overlay->draw_line(Point2(ruler_width * (i % minor == 0 ? 0.33 : 0.75), position.y), Point2(ruler_width, position.y), graduation_color, Math::round(EDSCALE));
+		}
+	}
+	overlay->draw_rect(Rect2(Point2(), Size2(ruler_width, ruler_width)), graduation_color);
 }
 
 void EditorSplitView::_orbit_preview(const Vector2 &p_relative) {
@@ -1984,7 +3001,7 @@ void EditorSplitView::_set_cinematic_preview(bool p_enabled) {
 }
 
 void EditorSplitView::_focus_preview_bounds(bool p_frame) {
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	if (!root) {
 		return;
 	}
@@ -2176,8 +3193,8 @@ void EditorSplitView::_update_view_menu() {
 	if (!preview_pane->grid) {
 		return; // Not built yet.
 	}
-	Node *root = get_preview_scene();
-	const bool view_3d = enabled && Object::cast_to<Node3D>(root) && !showing_live && !showing_scene_code;
+	Node *root = _pane_scene();
+	const bool view_3d = enabled && Object::cast_to<Node3D>(root) && !showing_code && !showing_scene_code;
 	MenuButton *menu = preview_pane->view_menu;
 	menu->set_visible(view_3d);
 	if (!view_3d && preview_cinematic) {
@@ -2187,8 +3204,7 @@ void EditorSplitView::_update_view_menu() {
 
 	bool orthogonal = preview_orbit.orthogonal;
 	if (!preview_view_custom && root) {
-		const int idx = _find_scene_index(preview_scene);
-		orthogonal = _orbit_from_state(root, EditorNode::get_editor_data().get_scene_editor_states(idx).get("3D", Dictionary())).orthogonal;
+		orthogonal = _preview_orbit_from_state(root).orthogonal;
 	}
 	_set_view_menu_checked(PANE_VIEW_PERSPECTIVE, !orthogonal);
 	_set_view_menu_checked(PANE_VIEW_ORTHOGONAL, orthogonal);
@@ -2224,16 +3240,23 @@ void EditorSplitView::_update_view_menu() {
 	const bool scene_2d = !Object::cast_to<Node3D>(root);
 	preview_pane->tools->set_show_selection(scene_2d || (!preview_cinematic && _view_menu_checked(PANE_VIEW_GIZMOS)));
 	preview_pane->tools->set_show_handles(scene_2d || (!preview_cinematic && _view_menu_checked(PANE_VIEW_TRANSFORM_GIZMO)));
-	preview_pane->info_panel->set_visible(view_3d && _view_menu_checked(PANE_VIEW_INFORMATION));
-	preview_pane->frame_time_panel->set_visible(view_3d && _view_menu_checked(PANE_VIEW_FRAME_TIME));
+	const bool view_2d = enabled && root && !Object::cast_to<Node3D>(root) && !showing_code && !showing_scene_code;
+	preview_pane->view_menu_2d->get_parent_control()->set_visible(view_2d);
+	if (view_2d) {
+		preview_pane->tools->set_show_handles(_view_menu_2d_checked(PANE_2D_GIZMO_TRANSFORMATION));
+	}
+	const bool information = (view_3d && _view_menu_checked(PANE_VIEW_INFORMATION)) || (view_2d && _view_menu_2d_checked(PANE_2D_SHOW_INFORMATION));
+	const bool frame_time = (view_3d && _view_menu_checked(PANE_VIEW_FRAME_TIME)) || (view_2d && _view_menu_2d_checked(PANE_2D_SHOW_FRAME_TIME));
+	preview_pane->info_panel->set_visible(information);
+	preview_pane->frame_time_panel->set_visible(frame_time);
 	if (!view_3d && preview_freelook) {
 		_set_freelook(false);
 	}
-	set_process(view_3d && (preview_cinematic || preview_freelook || zoom_indicator_delay > 0.0 || _view_menu_checked(PANE_VIEW_INFORMATION) || _view_menu_checked(PANE_VIEW_FRAME_TIME)));
+	set_process(information || frame_time || (view_3d && (preview_cinematic || preview_freelook || zoom_indicator_delay > 0.0)));
 }
 
 void EditorSplitView::_update_view_panels() {
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	SubViewport *viewport = preview_pane->viewport;
 	if (preview_cinematic && root) {
 		// Look through the scene's camera, as the 3D editor does.
@@ -2245,7 +3268,15 @@ void EditorSplitView::_update_view_panels() {
 			_update_view_menu();
 		}
 	}
-	if (preview_pane->info_panel->is_visible()) {
+	if (preview_pane->info_panel->is_visible() && root && !Object::cast_to<Node3D>(root)) {
+		// As the 2D editor's: the view's size and what it draws.
+		String text = vformat(TTR("Size: %s (%.1fMP)") + "\n", vformat(U"%d × %d", viewport->get_size().x, viewport->get_size().y), viewport->get_size().x * viewport->get_size().y * 0.000001);
+		text += "\n";
+		text += vformat(TTR("Objects: %d"), viewport->get_render_info(Viewport::RENDER_INFO_TYPE_CANVAS, Viewport::RENDER_INFO_OBJECTS_IN_FRAME)) + "\n";
+		text += vformat(TTR("Primitives: %d"), viewport->get_render_info(Viewport::RENDER_INFO_TYPE_CANVAS, Viewport::RENDER_INFO_PRIMITIVES_IN_FRAME)) + "\n";
+		text += vformat(TTR("Draw Calls: %d"), viewport->get_render_info(Viewport::RENDER_INFO_TYPE_CANVAS, Viewport::RENDER_INFO_DRAW_CALLS_IN_FRAME));
+		preview_pane->info_label->set_text(text);
+	} else if (preview_pane->info_panel->is_visible()) {
 		const Camera3D *camera = ObjectDB::get_instance<Camera3D>(preview_cinematic_camera);
 		if (!camera) {
 			camera = preview_pane->camera_3d;
@@ -2296,51 +3327,234 @@ void EditorSplitView::_update_view_panels() {
 }
 
 void EditorSplitView::_build_preview_grid() {
-	// A grid on the floor, as the 3D editor draws one; in the pane's own world.
-	const int extent = 100;
+	// The 3D editor's grid shader (see Node3DEditor): lines fade out with
+	// distance from the camera and as the plane turns edge-on.
+	Ref<Shader> grid_shader;
+	grid_shader.instantiate();
+	grid_shader->set_code(R"(
+// 3D editor grid shader.
+
+shader_type spatial;
+
+render_mode unshaded, fog_disabled;
+
+uniform bool orthogonal;
+uniform float grid_size;
+
+void vertex() {
+	// From FLAG_SRGB_VERTEX_COLOR.
+	if (!OUTPUT_IS_SRGB) {
+		COLOR.rgb = mix(pow((COLOR.rgb + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)), COLOR.rgb * (1.0 / 12.92), lessThan(COLOR.rgb, vec3(0.04045)));
+	}
+}
+
+void fragment() {
+	ALBEDO = COLOR.rgb;
+	vec3 dir = orthogonal ? -vec3(0, 0, 1) : VIEW;
+	float angle_fade = abs(dot(dir, NORMAL));
+	angle_fade = smoothstep(0.05, 0.2, angle_fade);
+
+	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 world_normal = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	vec3 camera_world_pos = INV_VIEW_MATRIX[3].xyz;
+	vec3 camera_world_pos_on_plane = camera_world_pos * (1.0 - world_normal);
+	float dist_fade = 1.0 - (distance(world_pos, camera_world_pos_on_plane) / grid_size);
+	dist_fade = smoothstep(0.02, 0.3, dist_fade);
+
+	ALPHA = COLOR.a * dist_fade * angle_fade;
+}
+)");
+	for (int i = 0; i < 3; i++) {
+		preview_grid_materials[i].instantiate();
+		preview_grid_materials[i]->set_shader(grid_shader);
+	}
+
+	Ref<ArrayMesh> grid_mesh;
+	grid_mesh.instantiate();
+	MeshInstance3D *grid = memnew(MeshInstance3D);
+	grid->set_mesh(grid_mesh);
+	// Out of sight of the 3D editor's cameras when the pane shares its world.
+	grid->set_layer_mask(1 << SPLIT_VIEW_GRID_LAYER);
+	grid->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
+	grid->hide();
+	preview_pane->viewport->add_child(grid);
+	preview_pane->grid = grid;
+
+	// The X, Y and Z axes through the origin, which the grid leaves out, as
+	// the 3D editor draws them.
 	const Ref<Theme> &theme = EditorNode::get_singleton()->get_editor_theme();
-	const Color minor = Color(0.5, 0.5, 0.5, 0.18);
-	const Color major = Color(0.5, 0.5, 0.5, 0.4);
-	const Color x_axis = theme->get_color(SNAME("axis_x_color"), EditorStringName(Editor));
-	const Color z_axis = theme->get_color(SNAME("axis_z_color"), EditorStringName(Editor));
+	const real_t length = 100000.0;
 	PackedVector3Array points;
 	PackedColorArray colors;
-	for (int i = -extent; i <= extent; i++) {
-		const Color line = i % 10 == 0 ? major : minor;
-		// Along X, and the X axis itself.
-		points.push_back(Vector3(-extent, 0, i));
-		points.push_back(Vector3(extent, 0, i));
-		colors.push_back(i == 0 ? x_axis : line);
-		colors.push_back(i == 0 ? x_axis : line);
-		// Along Z, and the Z axis itself.
-		points.push_back(Vector3(i, 0, -extent));
-		points.push_back(Vector3(i, 0, extent));
-		colors.push_back(i == 0 ? z_axis : line);
-		colors.push_back(i == 0 ? z_axis : line);
+	const StringName axis_colors[3] = { SNAME("axis_x_color"), SNAME("axis_y_color"), SNAME("axis_z_color") };
+	for (int i = 0; i < 3; i++) {
+		Vector3 axis;
+		axis[i] = length;
+		points.push_back(-axis);
+		points.push_back(axis);
+		const Color color = theme->get_color(axis_colors[i], EditorStringName(Editor));
+		colors.push_back(color);
+		colors.push_back(color);
 	}
 	Array arrays;
 	arrays.resize(Mesh::ARRAY_MAX);
 	arrays[Mesh::ARRAY_VERTEX] = points;
 	arrays[Mesh::ARRAY_COLOR] = colors;
-	Ref<ArrayMesh> mesh;
-	mesh.instantiate();
-	mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, arrays);
-	Ref<StandardMaterial3D> grid_material;
-	grid_material.instantiate();
-	grid_material->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
-	grid_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
-	grid_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-	grid_material->set_flag(BaseMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
-	grid_material->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
-	mesh->surface_set_material(0, grid_material);
+	Ref<ArrayMesh> axes_mesh;
+	axes_mesh.instantiate();
+	axes_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, arrays);
+	Ref<StandardMaterial3D> axes_material;
+	axes_material.instantiate();
+	axes_material->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
+	axes_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+	axes_material->set_flag(BaseMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
+	axes_material->set_flag(BaseMaterial3D::FLAG_DISABLE_FOG, true);
+	axes_mesh->surface_set_material(0, axes_material);
+	MeshInstance3D *axes = memnew(MeshInstance3D);
+	axes->set_mesh(axes_mesh);
+	axes->set_layer_mask(1 << SPLIT_VIEW_GRID_LAYER);
+	axes->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
+	grid->add_child(axes);
 
-	MeshInstance3D *grid = memnew(MeshInstance3D);
-	grid->set_mesh(mesh);
-	grid->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
-	grid->hide();
-	preview_pane->viewport->add_child(grid);
-	preview_pane->grid = grid;
 	_update_view_menu();
+}
+
+void EditorSplitView::_update_preview_grid(bool p_force) {
+	MeshInstance3D *grid = preview_pane->grid;
+	if (!grid || !preview_pane->camera_3d->is_inside_tree()) {
+		return;
+	}
+	const Camera3D *camera = preview_pane->camera_3d;
+	Vector3 camera_position = camera->get_global_position();
+	const bool orthogonal = camera->get_projection() == Camera3D::PROJECTION_ORTHOGONAL;
+	const real_t ortho_size = orthogonal ? camera->get_size() : 0.0;
+	if (!p_force && preview_grid_drawn && orthogonal == preview_grid_orthogonal && Math::is_equal_approx(ortho_size, preview_grid_ortho_size) && preview_grid_position.distance_squared_to(camera_position) < 100.0) {
+		return; // Close enough to where it was drawn, as in the 3D editor.
+	}
+	preview_grid_drawn = true;
+	preview_grid_orthogonal = orthogonal;
+	preview_grid_ortho_size = ortho_size;
+	preview_grid_position = camera_position;
+
+	// From here on, as Node3DEditor::_init_grid() builds the 3D editor's
+	// grid, but from this pane's camera.
+	const Color primary_grid_color = EDITOR_GET("editors/3d/primary_grid_color");
+	const Color secondary_grid_color = EDITOR_GET("editors/3d/secondary_grid_color");
+	const int grid_size = EDITOR_GET("editors/3d/grid_size");
+	const int primary_grid_steps = EDITOR_GET("editors/3d/primary_grid_steps");
+	bool grid_enable[3];
+	grid_enable[0] = orthogonal || EDITOR_GET("editors/3d/grid_xy_plane");
+	grid_enable[1] = orthogonal || EDITOR_GET("editors/3d/grid_yz_plane");
+	grid_enable[2] = orthogonal || EDITOR_GET("editors/3d/grid_xz_plane");
+	const real_t division_level_bias = EDITOR_GET("editors/3d/grid_division_level_bias");
+	int division_level_max = EDITOR_GET("editors/3d/grid_division_level_max");
+	int division_level_min = EDITOR_GET("editors/3d/grid_division_level_min");
+	if (division_level_max < division_level_min || primary_grid_steps < 2) {
+		return; // The 3D editor reports this one.
+	}
+	if (primary_grid_steps != 10) {
+		const real_t div = Math::log((real_t)primary_grid_steps) / (real_t)2.302585092994045901094; // ln(10).
+		division_level_max = (int)(division_level_max / div);
+		division_level_min = (int)(division_level_min / div);
+	}
+
+	Ref<ArrayMesh> mesh = grid->get_mesh();
+	mesh->clear_surfaces();
+	for (int a = 0; a < 3; a++) {
+		if (!grid_enable[a]) {
+			continue;
+		}
+		const int b = (a + 1) % 3;
+		const int c = (a + 2) % 3;
+		Vector3 normal;
+		normal[c] = 1.0;
+
+		Vector3 position = camera_position;
+		real_t camera_distance = Math::abs(position[c]);
+		if (orthogonal) {
+			camera_distance = camera->get_size() / 2.0;
+			const Vector3 camera_direction = -camera->get_global_transform().get_basis().get_column(2);
+			Vector3 intersection;
+			if (Plane(normal).intersects_ray(camera_position, camera_direction, &intersection)) {
+				position = intersection;
+			}
+		}
+
+		const real_t division_level = Math::log(Math::abs(camera_distance)) / Math::log((double)primary_grid_steps) + division_level_bias;
+		const real_t clamped_division_level = CLAMP(division_level, division_level_min, division_level_max);
+		const real_t division_level_floored = Math::floor(clamped_division_level);
+		const real_t division_level_decimals = clamped_division_level - division_level_floored;
+
+		const real_t small_step_size = Math::pow((real_t)primary_grid_steps, division_level_floored);
+		const real_t large_step_size = small_step_size * primary_grid_steps;
+		const real_t center_a = large_step_size * (int)(position[a] / large_step_size);
+		const real_t center_b = large_step_size * (int)(position[b] / large_step_size);
+		const real_t bgn_a = center_a - grid_size * small_step_size;
+		const real_t end_a = center_a + grid_size * small_step_size;
+		const real_t bgn_b = center_b - grid_size * small_step_size;
+		const real_t end_b = center_b + grid_size * small_step_size;
+
+		real_t fade_size = Math::pow((real_t)primary_grid_steps, division_level - (real_t)1.0);
+		const real_t min_fade_size = Math::pow((real_t)primary_grid_steps, (real_t)division_level_min);
+		const real_t max_fade_size = Math::pow((real_t)primary_grid_steps, (real_t)division_level_max);
+		fade_size = CLAMP(fade_size, min_fade_size, max_fade_size);
+		preview_grid_materials[c]->set_shader_parameter("grid_size", (grid_size - primary_grid_steps) * fade_size);
+		preview_grid_materials[c]->set_shader_parameter("orthogonal", orthogonal);
+
+		PackedVector3Array points;
+		PackedVector3Array normals;
+		PackedColorArray colors;
+		for (int i = -grid_size; i <= grid_size; i++) {
+			Color line_color;
+			if (i % primary_grid_steps == 0) {
+				line_color = primary_grid_color.lerp(secondary_grid_color, division_level_decimals);
+			} else {
+				line_color = secondary_grid_color;
+				line_color.a = line_color.a * (1 - division_level_decimals);
+			}
+			const real_t position_a = center_a + i * small_step_size;
+			const real_t position_b = center_b + i * small_step_size;
+			// Not over the axes, which are drawn on their own.
+			if (!Math::is_zero_approx(position_a)) {
+				Vector3 line_bgn;
+				Vector3 line_end;
+				line_bgn[a] = position_a;
+				line_end[a] = position_a;
+				line_bgn[b] = bgn_b;
+				line_end[b] = end_b;
+				points.push_back(line_bgn);
+				points.push_back(line_end);
+				colors.push_back(line_color);
+				colors.push_back(line_color);
+				normals.push_back(normal);
+				normals.push_back(normal);
+			}
+			if (!Math::is_zero_approx(position_b)) {
+				Vector3 line_bgn;
+				Vector3 line_end;
+				line_bgn[b] = position_b;
+				line_end[b] = position_b;
+				line_bgn[a] = bgn_a;
+				line_end[a] = end_a;
+				points.push_back(line_bgn);
+				points.push_back(line_end);
+				colors.push_back(line_color);
+				colors.push_back(line_color);
+				normals.push_back(normal);
+				normals.push_back(normal);
+			}
+		}
+		if (points.is_empty()) {
+			continue;
+		}
+		Array arrays;
+		arrays.resize(Mesh::ARRAY_MAX);
+		arrays[Mesh::ARRAY_VERTEX] = points;
+		arrays[Mesh::ARRAY_NORMAL] = normals;
+		arrays[Mesh::ARRAY_COLOR] = colors;
+		mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, arrays);
+		mesh->surface_set_material(mesh->get_surface_count() - 1, preview_grid_materials[c]);
+	}
 }
 
 void EditorSplitView::_set_preview_active(bool p_active) {
@@ -2353,7 +3567,7 @@ void EditorSplitView::_set_preview_active(bool p_active) {
 
 void EditorSplitView::_update_active_pane() {
 	// The second pane can only be edited while it shows a scene.
-	const bool pane_scene = enabled && !showing_live && !showing_scene_code && get_preview_scene();
+	const bool pane_scene = enabled && !showing_code && !showing_scene_code && _pane_scene();
 	focus_pane->set_active(!(preview_active && pane_scene));
 	preview_pane->set_active(preview_active && pane_scene, pane_scene);
 	// Undo and redo in the menu follow the side being edited.
@@ -2362,11 +3576,12 @@ void EditorSplitView::_update_active_pane() {
 }
 
 void EditorSplitView::_sync_main_inspector() {
-	if (get_active_history_id() != EditorUndoRedoManager::INVALID_HISTORY) {
+	// Editing the edited scene, the editor's own selection drives the docks.
+	if (!pane_live && get_active_history_id() != EditorUndoRedoManager::INVALID_HISTORY) {
 		// What's selected in the second pane, or its scene.
 		Node *node = preview_pane->tools->get_selected();
 		if (!node) {
-			node = get_preview_scene();
+			node = _pane_scene();
 		}
 		pane_in_main_inspector = true;
 		if (InspectorDock::get_inspector_singleton()->get_edited_object() != node) {
@@ -2389,7 +3604,7 @@ void EditorSplitView::_restore_main_inspector() {
 }
 
 int EditorSplitView::get_active_history_id() const {
-	if (!preview_active || !enabled || showing_live || showing_scene_code || !preview_pane->is_visible_in_tree() || !get_preview_scene()) {
+	if (!preview_active || !enabled || showing_code || showing_scene_code || !preview_pane->is_visible_in_tree() || !_pane_scene()) {
 		return EditorUndoRedoManager::INVALID_HISTORY;
 	}
 	return preview_pane->tools->get_history_id();
@@ -2397,8 +3612,18 @@ int EditorSplitView::get_active_history_id() const {
 
 void EditorSplitView::_pane_selection_changed() {
 	// The second pane's own selection: its tree and inspector follow it.
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	Node *selected = preview_pane->tools->get_selected();
+	if (pane_live && !syncing_live_selection) {
+		// Picked in the pane: select it in the editor too, as the 3D editor's
+		// viewport does.
+		EditorSelection *selection = EditorNode::get_singleton()->get_editor_selection();
+		selection->clear();
+		if (selected) {
+			selection->add_node(selected);
+			EditorNode::get_singleton()->edit_node(selected);
+		}
+	}
 	Node *inspected = selected ? selected : root;
 	preview_pane->inspector->edit(inspected);
 	preview_pane->inspector_title->set_text(inspected ? vformat(TTR("Inspector: %s"), inspected->get_name()) : TTR("Inspector"));
@@ -2415,6 +3640,10 @@ void EditorSplitView::_pane_selection_changed() {
 }
 
 void EditorSplitView::input(const Ref<InputEvent> &p_event) {
+	if (!floating && _code_shortcut_input(p_event)) {
+		get_viewport()->set_input_as_handled();
+		return;
+	}
 	// Undo and redo go to the side clicked last.
 	const Ref<InputEventMouseButton> mb = p_event;
 	if (mb.is_valid() && mb->is_pressed() && enabled && (mb->get_button_index() == MouseButton::LEFT || mb->get_button_index() == MouseButton::RIGHT || mb->get_button_index() == MouseButton::MIDDLE)) {
@@ -2429,6 +3658,10 @@ void EditorSplitView::input(const Ref<InputEvent> &p_event) {
 }
 
 void EditorSplitView::_float_window_input(const Ref<InputEvent> &p_event) {
+	if (floating && _code_shortcut_input(p_event)) {
+		float_window->set_input_as_handled();
+		return;
+	}
 	const Ref<InputEventMouseButton> mb = p_event;
 	if (mb.is_valid() && mb->is_pressed() && (mb->get_button_index() == MouseButton::LEFT || mb->get_button_index() == MouseButton::RIGHT || mb->get_button_index() == MouseButton::MIDDLE)) {
 		_set_preview_active(true);
@@ -2465,14 +3698,14 @@ void EditorSplitView::_trade_sides() {
 }
 
 void EditorSplitView::_preview_gui_input(const Ref<InputEvent> &p_event) {
-	Node *root = get_preview_scene();
+	Node *root = _pane_scene();
 	const bool is_3d = Object::cast_to<Node3D>(root);
 	const Ref<InputEventMouseButton> mb = p_event;
 	if (mb.is_valid() && mb->is_pressed() && (mb->get_button_index() == MouseButton::LEFT || mb->get_button_index() == MouseButton::RIGHT || mb->get_button_index() == MouseButton::MIDDLE)) {
 		_set_preview_active(true);
 		preview_pane->viewport_container->grab_focus();
 	}
-	if (is_3d && _view_menu_shortcut(p_event)) {
+	if (is_3d ? _view_menu_shortcut(p_event) : _view_menu_2d_shortcut(p_event)) {
 		preview_pane->viewport_container->accept_event();
 		return;
 	}
@@ -2540,6 +3773,7 @@ void EditorSplitView::_preview_gui_input(const Ref<InputEvent> &p_event) {
 				if (mb->is_double_click()) {
 					// Back to the scene's own view.
 					preview_view_custom = false;
+					preview_fit_root = ObjectID(); // Fit again.
 					_update_preview_camera();
 					_update_view_menu();
 				}
@@ -2807,6 +4041,7 @@ void EditorSplitView::_update() {
 	const bool script_screen = enabled && _is_script_screen();
 	showing_code = script_screen && compare_scripts;
 	showing_live = script_screen && (showing_code || edited);
+	_set_pane_live(showing_live && !showing_code);
 	if (showing_live != was_live && !floating && preview_pane->get_parent() == this) {
 		if (was_live) {
 			script_split_offset = get_split_offset();
@@ -2815,8 +4050,9 @@ void EditorSplitView::_update() {
 		} else {
 			scene_split_offset = get_split_offset();
 			if (!has_script_split_offset) {
-				// Give the code about two thirds of the width.
-				const int sixth = int(get_size().x / 6);
+				// Comparing, give the code about two thirds of the width; an
+				// editable scene gets half, room for its tree beside it.
+				const int sixth = showing_code ? int(get_size().x / 6) : 0;
 				script_split_offset = preview_pane->get_index() > focus_pane->get_index() ? sixth : -sixth;
 			}
 			set_split_offset(script_split_offset);
@@ -2826,16 +4062,15 @@ void EditorSplitView::_update() {
 	showing_scene_code = scene_screen && code_beside_scene;
 	const bool split = showing_live || showing_scene_code || (scene_screen && preview);
 
-	preview_pane->viewport_container->set_visible(!showing_live && !showing_scene_code);
-	preview_pane->tools->set_visible(!showing_live && !showing_scene_code);
-	preview_pane->live_container->set_visible(showing_live && !showing_code);
+	preview_pane->viewport_container->set_visible(!showing_code && !showing_scene_code);
+	preview_pane->tools->set_visible(!showing_code && !showing_scene_code);
 	preview_pane->code_container->set_visible(showing_code || showing_scene_code);
 	// Scene or code, on every screen; each screen keeps its own choice.
 	preview_pane->code_button->set_visible(script_screen || scene_screen);
 	preview_pane->code_button->set_pressed_no_signal(script_screen ? compare_scripts : code_beside_scene);
 	// Trading sides needs something to edit on the other side.
 	preview_pane->swap_button->set_visible(showing_code || (scene_screen && !showing_scene_code));
-	preview_pane->code_button->set_tooltip_text(script_screen ? TTR("Show another open script here instead of the scene. The script you switch away from moves here; click it to edit it.") : TTR("Show the selected node's script here instead of another scene. Click it to edit it."));
+	preview_pane->code_button->set_tooltip_text(script_screen ? TTR("Show another open script here instead of the scene. The script you switch away from moves here.") : TTR("Show the selected node's script here instead of another scene."));
 	if (!showing_code && !showing_scene_code) {
 		_set_code_source(nullptr);
 		code_static_script.unref();
@@ -2873,8 +4108,8 @@ void EditorSplitView::_update() {
 	_update_pane_header(preview_pane, showing_live ? edited : preview);
 	preview_pane->tree->update_tree();
 	if (showing_live) {
-		preview_pane->tree->get_scene_tree()->deselect_all();
-		_update_live_camera();
+		_sync_pane_live_selection();
+		_update_preview_camera();
 		return;
 	}
 	_update_pane_header(focus_pane, edited);
@@ -3109,6 +4344,7 @@ void EditorSplitView::_notification(int p_what) {
 			set_split_enabled(EDITOR_GET("interface/editor/split_view/enabled"));
 			set_process_input(true);
 			_build_view_menu();
+			_build_view_menu_2d();
 			_build_preview_grid();
 			// The Scene dock's tree settings.
 			preview_pane->tree->set_auto_expand_selected(EDITOR_GET("docks/scene_tree/auto_expand_to_selected"), false);
@@ -3122,6 +4358,9 @@ void EditorSplitView::_notification(int p_what) {
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
 			if (EditorSettings::get_singleton()->check_changed_settings_in_group("editors/3d/navigation")) {
 				_update_view_menu(); // Showing the axis gizmo or not.
+			}
+			if (EditorSettings::get_singleton()->check_changed_settings_in_group("editors/3d")) {
+				_update_preview_grid(true); // Grid size, steps, colors or planes.
 			}
 			if (EditorSettings::get_singleton()->check_changed_settings_in_group("interface/editor/split_view")) {
 				set_show_pane_docks(EDITOR_GET("interface/editor/split_view/show_pane_docks"));
@@ -3141,6 +4380,12 @@ void EditorSplitView::_notification(int p_what) {
 				preview_pane->viewport->remove_child(root);
 			}
 			preview_scene = ObjectID();
+			// Taken out while the pane edited the edited scene; nothing else
+			// would free it.
+			if (preview_pane->fallback_lighting && !preview_pane->fallback_lighting->get_parent()) {
+				memdelete(preview_pane->fallback_lighting);
+				preview_pane->fallback_lighting = nullptr;
+			}
 		} break;
 
 		case NOTIFICATION_PROCESS: {
@@ -3199,8 +4444,6 @@ EditorSplitView::EditorSplitView() {
 	preview_pane->viewport_container->connect(SceneStringName(gui_input), callable_mp(this, &EditorSplitView::_preview_gui_input));
 	preview_pane->viewport_container->connect(SceneStringName(mouse_exited), callable_mp((CanvasItem *)preview_pane->overlay, &CanvasItem::queue_redraw));
 	preview_pane->viewport_container->connect(SceneStringName(resized), callable_mp(this, &EditorSplitView::_update_preview_camera));
-	preview_pane->live_container->connect(SceneStringName(gui_input), callable_mp(this, &EditorSplitView::_live_gui_input));
-	preview_pane->live_container->connect(SceneStringName(resized), callable_mp(this, &EditorSplitView::_update_live_camera));
 	preview_pane->overlay->connect(SceneStringName(draw), callable_mp(this, &EditorSplitView::_draw_preview_overlay));
 	preview_pane->close_button->connect(SceneStringName(pressed), callable_mp(this, &EditorSplitView::_close_preview));
 	preview_pane->float_button->connect(SceneStringName(toggled), callable_mp(this, &EditorSplitView::_float_toggled));
@@ -3208,11 +4451,28 @@ EditorSplitView::EditorSplitView() {
 	preview_pane->code_button->connect(SceneStringName(toggled), callable_mp(this, &EditorSplitView::_code_toggled));
 	preview_pane->pick_button->connect("about_to_popup", callable_mp(this, &EditorSplitView::_fill_pick_menu));
 	preview_pane->pick_button->get_popup()->connect(SceneStringName(id_pressed), callable_mp(this, &EditorSplitView::_pick_menu_id_pressed));
-	preview_pane->code_view->connect(SceneStringName(gui_input), callable_mp(this, &EditorSplitView::_code_gui_input));
+	preview_pane->code_search_menu->connect("about_to_popup", callable_mp(this, &EditorSplitView::_fill_code_menus));
+	preview_pane->code_goto_menu->connect("about_to_popup", callable_mp(this, &EditorSplitView::_fill_code_menus));
+	preview_pane->code_search_menu->get_popup()->connect(SceneStringName(id_pressed), callable_mp(this, &EditorSplitView::_code_menu_id_pressed));
+	preview_pane->code_goto_menu->get_popup()->connect(SceneStringName(id_pressed), callable_mp(this, &EditorSplitView::_code_menu_id_pressed));
+	preview_pane->code_function_menu->connect("about_to_popup", callable_mp(this, &EditorSplitView::_fill_code_function_menu));
+	preview_pane->code_function_menu->get_popup()->connect("index_pressed", callable_mp(this, &EditorSplitView::_code_function_pressed));
+	preview_pane->code_both_button->connect(SceneStringName(toggled), callable_mp(this, &EditorSplitView::_code_find_options_changed));
+	preview_pane->code_back_button->connect(SceneStringName(pressed), callable_mp(this, &EditorSplitView::_code_history_step).bind(-1));
+	preview_pane->code_forward_button->connect(SceneStringName(pressed), callable_mp(this, &EditorSplitView::_code_history_step).bind(1));
+	preview_pane->code_find_text->connect(SceneStringName(text_changed), callable_mp(this, &EditorSplitView::_code_find_text_changed));
+	preview_pane->code_find_text->connect(SceneStringName(text_submitted), callable_mp(this, &EditorSplitView::_code_find_submitted));
+	preview_pane->code_find_text->connect(SceneStringName(gui_input), callable_mp(this, &EditorSplitView::_code_find_input));
+	preview_pane->code_find_prev->connect(SceneStringName(pressed), callable_mp(this, &EditorSplitView::_code_find).bind(true));
+	preview_pane->code_find_next->connect(SceneStringName(pressed), callable_mp(this, &EditorSplitView::_code_find).bind(false));
+	preview_pane->code_find_case->connect(SceneStringName(toggled), callable_mp(this, &EditorSplitView::_code_find_options_changed));
+	preview_pane->code_find_words->connect(SceneStringName(toggled), callable_mp(this, &EditorSplitView::_code_find_options_changed));
+	preview_pane->code_find_close->connect(SceneStringName(pressed), callable_mp(this, &EditorSplitView::_code_find_hide));
+	preview_pane->code_line_text->connect(SceneStringName(text_submitted), callable_mp(this, &EditorSplitView::_code_line_submitted));
 	// Drop scene tabs, scenes, scripts and script list entries on the pane.
 	const Callable can_drop = callable_mp(this, &EditorSplitView::_can_drop);
 	const Callable drop = callable_mp(this, &EditorSplitView::_drop);
-	Control *drop_targets[] = { preview_pane, preview_pane->header, preview_pane->viewport_container, preview_pane->live_container, preview_pane->code_view, preview_pane->code_container };
+	Control *drop_targets[] = { preview_pane, preview_pane->header, preview_pane->viewport_container, preview_pane->code_view, preview_pane->code_container };
 	for (Control *target : drop_targets) {
 		target->set_drag_forwarding(Callable(), can_drop, drop);
 	}
