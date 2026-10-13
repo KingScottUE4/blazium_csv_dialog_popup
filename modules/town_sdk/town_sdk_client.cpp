@@ -58,8 +58,6 @@ TownSdkClient *TownSdkClient::get_singleton() {
 }
 
 TownSdkClient::TownSdkClient() {
-	ERR_FAIL_COND_MSG(singleton != nullptr, "Only one TownSdkClient singleton is allowed.");
-
 	client = std::make_unique<turnbattle::Client>();
 
 	if (client) {
@@ -67,7 +65,9 @@ TownSdkClient::TownSdkClient() {
 		client->set_debug_logging_enabled(true, 128);
 	}
 
-	singleton = this;
+	if (singleton == nullptr) {
+		singleton = this;
+	}
 }
 
 TownSdkClient::~TownSdkClient() {
