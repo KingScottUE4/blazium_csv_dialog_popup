@@ -354,7 +354,7 @@ String MultiuserEditorAccessList::canonicalize_path(const String &p_path) {
 		if (p == "..") {
 			return String();
 		}
-		if (p.contains(String::chr(0))) {
+		if (p.find_char(0) != -1) {
 			return String();
 		}
 		if (!first) {

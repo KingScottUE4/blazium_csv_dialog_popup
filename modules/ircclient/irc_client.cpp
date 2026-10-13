@@ -1711,8 +1711,19 @@ void IRCClient::_handle_sasl(Ref<IRCMessage> p_message) {
 			_send_immediate("AUTHENTICATE +");
 		} else {
 			// PLAIN mechanism: send base64(username\0username\0password)
-			String auth_string = sasl_username + String::chr(0) + sasl_username + String::chr(0) + sasl_password;
-			PackedByteArray auth_bytes = auth_string.to_utf8_buffer();
+			// Build the bytes directly: a String can't hold NUL characters.
+			const CharString username_utf8 = sasl_username.utf8();
+			const CharString password_utf8 = sasl_password.utf8();
+			PackedByteArray auth_bytes;
+			auth_bytes.resize(username_utf8.length() * 2 + password_utf8.length() + 2);
+			uint8_t *w = auth_bytes.ptrw();
+			memcpy(w, username_utf8.get_data(), username_utf8.length());
+			w += username_utf8.length();
+			*w++ = 0;
+			memcpy(w, username_utf8.get_data(), username_utf8.length());
+			w += username_utf8.length();
+			*w++ = 0;
+			memcpy(w, password_utf8.get_data(), password_utf8.length());
 
 			// Base64 encode
 			String auth_base64 = CryptoCore::b64_encode_str(auth_bytes.ptr(), auth_bytes.size());
@@ -1831,8 +1842,8 @@ String IRCClient::_sanitize_dcc_filename(const String &p_filename) const {
 	sanitized = sanitized.replace("/", "_");
 	sanitized = sanitized.replace("\\", "_");
 
-	// Remove any null bytes
-	sanitized = sanitized.replace(String::chr(0), "");
+	// Remove any null bytes (a String stores them as U+FFFD when decoded)
+	sanitized = sanitized.remove_char(0xFFFD);
 
 	// Check for path traversal attempts
 	if (sanitized.contains("..")) {
