@@ -263,8 +263,12 @@ void EditorFileSystem::_load_first_scan_root_dir() {
 }
 
 void EditorFileSystem::scan_for_uid() {
-	// Load file structure into memory.
-	_load_first_scan_root_dir();
+	// Load file structure into memory, unless the first scan already did. This can run while
+	// the first scan is in progress (a UID lookup during startup), and loading again would
+	// overwrite first_scan_root_dir and leak the tree the first scan created.
+	if (!first_scan_root_dir) {
+		_load_first_scan_root_dir();
+	}
 
 	// Load extensions for which an .import should exists.
 	List<String> extensionsl;
