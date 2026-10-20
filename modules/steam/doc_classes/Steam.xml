@@ -71,6 +71,45 @@
 				Adds a Workshop item to the local user's favorites. Emits [signal workshop_favorites_changed].
 			</description>
 		</method>
+		<method name="add_lobby_list_distance_filter">
+			<return type="void" />
+			<param index="0" name="distance" type="int" enum="Steam.LobbyDistanceFilter" />
+			<description>
+				Sets how far away (by Steam region) listed lobbies may be. The default is [constant LOBBY_DISTANCE_FILTER_DEFAULT]. Applies to the next [method request_lobby_list] call only.
+			</description>
+		</method>
+		<method name="add_lobby_list_numerical_filter">
+			<return type="void" />
+			<param index="0" name="key" type="String" />
+			<param index="1" name="value" type="int" />
+			<param index="2" name="comparison" type="int" enum="Steam.LobbyComparison" default="0" />
+			<description>
+				Only list lobbies whose lobby data [param key], read as an integer, compares to [param value] as [param comparison] says. Applies to the next [method request_lobby_list] call only.
+			</description>
+		</method>
+		<method name="add_lobby_list_result_count_filter">
+			<return type="void" />
+			<param index="0" name="max_results" type="int" />
+			<description>
+				Limits how many lobbies the next [method request_lobby_list] call returns. Fewer results are faster.
+			</description>
+		</method>
+		<method name="add_lobby_list_slots_available_filter">
+			<return type="void" />
+			<param index="0" name="slots_available" type="int" />
+			<description>
+				Only list lobbies with at least [param slots_available] open slots. Applies to the next [method request_lobby_list] call only.
+			</description>
+		</method>
+		<method name="add_lobby_list_string_filter">
+			<return type="void" />
+			<param index="0" name="key" type="String" />
+			<param index="1" name="value" type="String" />
+			<param index="2" name="comparison" type="int" enum="Steam.LobbyComparison" default="0" />
+			<description>
+				Only list lobbies whose lobby data [param key] compares to [param value] as [param comparison] says. Applies to the next [method request_lobby_list] call only.
+			</description>
+		</method>
 		<method name="add_promo_item">
 			<return type="bool" />
 			<param index="0" name="def_id" type="int" />
@@ -126,11 +165,42 @@
 			<description>
 			</description>
 		</method>
+		<method name="create_lobby">
+			<return type="bool" />
+			<param index="0" name="type" type="int" enum="Steam.LobbyType" default="1" />
+			<param index="1" name="max_members" type="int" default="4" />
+			<description>
+				Creates a lobby of the given [param type] with room for [param max_members] players (1 to 250), and makes the local user its owner. Returns [code]false[/code] if the request couldn't be sent.
+				The result arrives through [signal lobby_created]. On success, [signal lobby_joined] is emitted right after it, since the creator is already a member.
+				[codeblock]
+				func host_game():
+					Steam.lobby_created.connect(_on_lobby_created, CONNECT_ONE_SHOT)
+					Steam.create_lobby(Steam.LOBBY_TYPE_FRIENDS_ONLY, 4)
+
+
+				func _on_lobby_created(result: int, lobby_id: int):
+					if result != 1: # k_EResultOK
+						return
+					Steam.set_lobby_data(lobby_id, "name", Steam.get_persona_name())
+					var peer := SteamMultiplayerPeer.new()
+					peer.create_host()
+					multiplayer.multiplayer_peer = peer
+				[/codeblock]
+			</description>
+		</method>
 		<method name="create_workshop_item">
 			<return type="bool" />
 			<param index="0" name="file_type" type="int" enum="Steam.WorkshopFileType" default="0" />
 			<description>
 				Creates a new, empty Workshop item owned by the local user. Emits [signal workshop_item_created] with the new published file ID, which can then be filled in with [method start_item_update]. Requires the app ID, either passed to [method initialize] or provided by the Steam client. Returns [code]false[/code] if the request could not be sent.
+			</description>
+		</method>
+		<method name="delete_lobby_data">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="key" type="String" />
+			<description>
+				Removes the lobby data [param key] from the lobby [param lobby_id]. Only the owner can do this.
 			</description>
 		</method>
 		<method name="delete_workshop_item">
@@ -202,6 +272,13 @@
 			<description>
 			</description>
 		</method>
+		<method name="get_all_lobby_data" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Returns all lobby data of the lobby [param lobby_id] as a [Dictionary] of [String] keys and values.
+			</description>
+		</method>
 		<method name="get_avatar_image">
 			<return type="Image" />
 			<param index="0" name="steam_id" type="int" default="0" />
@@ -221,6 +298,13 @@
 			<param index="0" name="steam_id" type="int" default="0" />
 			<description>
 				Returns item definition IDs for promo items the user can still receive. [param steam_id] [code]0[/code] uses the local user.
+			</description>
+		</method>
+		<method name="get_friend_persona_name" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="steam_id" type="int" />
+			<description>
+				Returns the Steam display name of [param steam_id]. Works for friends and for users the local user shares a lobby with; may return an empty string or [code][unknown][/code] for other users.
 			</description>
 		</method>
 		<method name="get_inventory_result_items">
@@ -288,10 +372,61 @@
 			<description>
 			</description>
 		</method>
+		<method name="get_launch_lobby_id" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the lobby ID passed on the command line with [code]+connect_lobby[/code], or [code]0[/code]. Steam starts the game this way when the player accepts a lobby invite while the game isn't running; call [method join_lobby] with the returned ID after [method initialize].
+			</description>
+		</method>
+		<method name="get_lobby_data" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="key" type="String" />
+			<description>
+				Returns the lobby data value for [param key] of the lobby [param lobby_id], or an empty string if it isn't set.
+			</description>
+		</method>
+		<method name="get_lobby_member_data" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="steam_id" type="int" />
+			<param index="2" name="key" type="String" />
+			<description>
+				Returns the value of [param key] that the member [param steam_id] set with [method set_lobby_member_data], or an empty string.
+			</description>
+		</method>
+		<method name="get_lobby_member_limit" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Returns the maximum number of members of the lobby [param lobby_id], or [code]0[/code] if unknown.
+			</description>
+		</method>
+		<method name="get_lobby_members" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Returns the Steam IDs of the members of the lobby [param lobby_id]. Only works for lobbies the local user is a member of.
+			</description>
+		</method>
+		<method name="get_lobby_owner" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Returns the Steam ID of the owner of the lobby [param lobby_id], or [code]0[/code] if unknown. Only works for lobbies the local user is a member of.
+			</description>
+		</method>
 		<method name="get_local_steam_id" qualifiers="const">
 			<return type="int" />
 			<description>
 				Returns the local user's 64-bit Steam ID, or [code]0[/code] if unavailable.
+			</description>
+		</method>
+		<method name="get_num_lobby_members" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Returns the number of members in the lobby [param lobby_id]. Only works for lobbies the local user is a member of.
 			</description>
 		</method>
 		<method name="get_num_subscribed_items" qualifiers="const">
@@ -362,6 +497,18 @@
 			<description>
 			</description>
 		</method>
+		<method name="has_matchmaking_support" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the loaded Steam API library exposes [code]ISteamMatchmaking[/code] (lobbies).
+			</description>
+		</method>
+		<method name="has_networking_support" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the loaded Steam API library exposes [code]ISteamNetworkingSockets[/code], which [SteamMultiplayerPeer] requires.
+			</description>
+		</method>
 		<method name="has_workshop_support" qualifiers="const">
 			<return type="bool" />
 			<description>
@@ -376,11 +523,25 @@
 				Increments an integer stat in memory by [code]1[/code]. [param delta] must be [code]1[/code]. Call [method store_stats] to persist.
 			</description>
 		</method>
+		<method name="init_relay_network_access">
+			<return type="void" />
+			<description>
+				Starts connecting to the Steam Datagram Relay network. [SteamMultiplayerPeer] calls this automatically, but calling it right after [method initialize] makes the first connection faster. Does nothing if it was already called.
+			</description>
+		</method>
 		<method name="initialize">
 			<return type="int" enum="Error" />
 			<param index="0" name="app_id" type="int" default="0" />
 			<description>
 				Loads and initializes the Steam API. [param app_id] sets [code]SteamAppId[/code] when greater than zero.
+			</description>
+		</method>
+		<method name="invite_user_to_lobby">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="steam_id" type="int" />
+			<description>
+				Sends a Steam invite for the lobby [param lobby_id] to the user [param steam_id]. The user receives [signal lobby_invite_received] if the game is running, or a Steam chat invite otherwise.
 			</description>
 		</method>
 		<method name="is_available">
@@ -405,6 +566,20 @@
 			<return type="bool" />
 			<description>
 				Returns whether the local Steam user is logged on.
+			</description>
+		</method>
+		<method name="join_lobby">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Asks to join the lobby [param lobby_id]. Returns [code]false[/code] if the request couldn't be sent. The result arrives through [signal lobby_joined].
+			</description>
+		</method>
+		<method name="leave_lobby">
+			<return type="void" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Leaves the lobby [param lobby_id]. Other members receive [signal lobby_member_state_changed] with [constant LOBBY_MEMBER_LEFT]. If the owner leaves, Steam picks a new owner.
 			</description>
 		</method>
 		<method name="load_item_definitions">
@@ -510,6 +685,18 @@
 			<description>
 			</description>
 		</method>
+		<method name="request_lobby_list">
+			<return type="bool" />
+			<description>
+				Searches for [constant LOBBY_TYPE_PUBLIC] lobbies of this game, using the filters added since the previous search. Returns [code]false[/code] if the request couldn't be sent. The results arrive through [signal lobby_list_received]; their lobby data can be read with [method get_lobby_data] right away.
+				[codeblock]
+				Steam.add_lobby_list_string_filter("mode", "race")
+				Steam.add_lobby_list_slots_available_filter(1)
+				Steam.lobby_list_received.connect(_on_lobby_list_received, CONNECT_ONE_SHOT)
+				Steam.request_lobby_list()
+				[/codeblock]
+			</description>
+		</method>
 		<method name="request_web_api_ticket">
 			<return type="void" />
 			<param index="0" name="identity" type="String" default="&quot;blazium&quot;" />
@@ -602,6 +789,56 @@
 				Sets the visibility of the item in an update.
 			</description>
 		</method>
+		<method name="set_lobby_data">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="key" type="String" />
+			<param index="2" name="value" type="String" />
+			<description>
+				Sets the lobby data [param key] to [param value] for the lobby [param lobby_id]. Lobby data is visible to everyone, including players searching with [method request_lobby_list]. Only the owner can do this. Members receive [signal lobby_data_updated].
+			</description>
+		</method>
+		<method name="set_lobby_joinable">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="joinable" type="bool" />
+			<description>
+				Sets whether new players can join the lobby [param lobby_id]. For example, disable it once the match starts. Only the owner can do this.
+			</description>
+		</method>
+		<method name="set_lobby_member_data">
+			<return type="void" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="key" type="String" />
+			<param index="2" name="value" type="String" />
+			<description>
+				Sets data for the local user in the lobby [param lobby_id], visible to the other members (for example a selected character or a ready flag). Members receive [signal lobby_data_updated].
+			</description>
+		</method>
+		<method name="set_lobby_member_limit">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="max_members" type="int" />
+			<description>
+				Changes the maximum number of members of the lobby [param lobby_id]. Only the owner can do this.
+			</description>
+		</method>
+		<method name="set_lobby_owner">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="steam_id" type="int" />
+			<description>
+				Makes [param steam_id] the owner of the lobby [param lobby_id]. Only the current owner can do this.
+			</description>
+		</method>
+		<method name="set_lobby_type">
+			<return type="bool" />
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="type" type="int" enum="Steam.LobbyType" />
+			<description>
+				Changes the type (visibility) of the lobby [param lobby_id]. Only the owner can do this.
+			</description>
+		</method>
 		<method name="set_property_bool">
 			<return type="bool" />
 			<param index="0" name="instance_id" type="int" />
@@ -656,6 +893,13 @@
 			<param index="1" name="vote_up" type="bool" />
 			<description>
 				Votes a Workshop item up ([code]true[/code]) or down ([code]false[/code]). Emits [signal workshop_item_vote_set].
+			</description>
+		</method>
+		<method name="show_lobby_invite_dialog">
+			<return type="void" />
+			<param index="0" name="lobby_id" type="int" />
+			<description>
+				Opens the Steam overlay dialog for inviting friends to the lobby [param lobby_id].
 			</description>
 		</method>
 		<method name="show_workshop_eula">
@@ -772,6 +1016,64 @@
 			<param index="0" name="result_handle" type="int" />
 			<param index="1" name="result_code" type="int" />
 			<description>
+			</description>
+		</signal>
+		<signal name="lobby_created">
+			<param index="0" name="result" type="int" />
+			<param index="1" name="lobby_id" type="int" />
+			<description>
+				Emitted when a [method create_lobby] request finishes. [param result] is a Steam [code]EResult[/code] value: [code]1[/code] on success; [code]15[/code] means Steam couldn't be reached. [param lobby_id] is [code]0[/code] on failure.
+			</description>
+		</signal>
+		<signal name="lobby_data_updated">
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="member_steam_id" type="int" />
+			<description>
+				Emitted when lobby data changes in a lobby the local user is in, or when the data of a listed lobby arrives. [param member_steam_id] is the member whose data changed, or equal to [param lobby_id] when the lobby data itself changed.
+			</description>
+		</signal>
+		<signal name="lobby_invite_received">
+			<param index="0" name="inviter_steam_id" type="int" />
+			<param index="1" name="lobby_id" type="int" />
+			<description>
+				Emitted when a friend invites the local user to a lobby while the game is running.
+			</description>
+		</signal>
+		<signal name="lobby_join_requested">
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="friend_steam_id" type="int" />
+			<description>
+				Emitted when the local user accepts a lobby invite, or chooses "Join game" on a friend, from the Steam overlay or friends list while the game is running. Call [method join_lobby] with [param lobby_id] to join.
+			</description>
+		</signal>
+		<signal name="lobby_joined">
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="response" type="int" enum="Steam.LobbyEnterResponse" />
+			<description>
+				Emitted when the local user enters a lobby, either through [method join_lobby] or after a successful [method create_lobby]. The join succeeded if [param response] is [constant LOBBY_ENTER_SUCCESS].
+			</description>
+		</signal>
+		<signal name="lobby_kicked">
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="admin_steam_id" type="int" />
+			<param index="2" name="due_to_disconnect" type="bool" />
+			<description>
+				Emitted when the local user was removed from the lobby [param lobby_id].
+			</description>
+		</signal>
+		<signal name="lobby_list_received">
+			<param index="0" name="lobby_ids" type="PackedInt64Array" />
+			<description>
+				Emitted when a [method request_lobby_list] search finishes. [param lobby_ids] is empty when nothing matched or Steam couldn't be reached.
+			</description>
+		</signal>
+		<signal name="lobby_member_state_changed">
+			<param index="0" name="lobby_id" type="int" />
+			<param index="1" name="steam_id" type="int" />
+			<param index="2" name="state_change" type="int" enum="Steam.LobbyMemberStateChange" is_bitfield="true" />
+			<param index="3" name="changed_by_steam_id" type="int" />
+			<description>
+				Emitted when the user [param steam_id] enters or leaves a lobby the local user is in. [param changed_by_steam_id] is the user who caused the change, which differs from [param steam_id] when someone was kicked or banned.
 			</description>
 		</signal>
 		<signal name="web_api_ticket_failed">
@@ -1155,6 +1457,99 @@
 		</constant>
 		<constant name="WORKSHOP_PREVIEW_TYPE_CLIP" value="5" enum="WorkshopPreviewType">
 			A Steam clip ID.
+		</constant>
+		<constant name="LOBBY_TYPE_PRIVATE" value="0" enum="LobbyType">
+			Only joinable through invites.
+		</constant>
+		<constant name="LOBBY_TYPE_FRIENDS_ONLY" value="1" enum="LobbyType">
+			Joinable by friends and through invites.
+		</constant>
+		<constant name="LOBBY_TYPE_PUBLIC" value="2" enum="LobbyType">
+			Returned by [method request_lobby_list] and joinable by anyone.
+		</constant>
+		<constant name="LOBBY_TYPE_INVISIBLE" value="3" enum="LobbyType">
+			Joinable by anyone who knows the lobby ID, but not listed and not shown to friends.
+		</constant>
+		<constant name="LOBBY_TYPE_PRIVATE_UNIQUE" value="4" enum="LobbyType">
+			Private, and the user can only be in one lobby of this type at a time.
+		</constant>
+		<constant name="LOBBY_COMPARISON_EQUAL_TO_OR_LESS_THAN" value="-2" enum="LobbyComparison">
+			The lobby value must be less than or equal to the filter value.
+		</constant>
+		<constant name="LOBBY_COMPARISON_LESS_THAN" value="-1" enum="LobbyComparison">
+			The lobby value must be less than the filter value.
+		</constant>
+		<constant name="LOBBY_COMPARISON_EQUAL" value="0" enum="LobbyComparison">
+			The lobby value must be equal to the filter value.
+		</constant>
+		<constant name="LOBBY_COMPARISON_GREATER_THAN" value="1" enum="LobbyComparison">
+			The lobby value must be greater than the filter value.
+		</constant>
+		<constant name="LOBBY_COMPARISON_EQUAL_TO_OR_GREATER_THAN" value="2" enum="LobbyComparison">
+			The lobby value must be greater than or equal to the filter value.
+		</constant>
+		<constant name="LOBBY_COMPARISON_NOT_EQUAL" value="3" enum="LobbyComparison">
+			The lobby value must differ from the filter value.
+		</constant>
+		<constant name="LOBBY_DISTANCE_FILTER_CLOSE" value="0" enum="LobbyDistanceFilter">
+			Only lobbies in the same region.
+		</constant>
+		<constant name="LOBBY_DISTANCE_FILTER_DEFAULT" value="1" enum="LobbyDistanceFilter">
+			Lobbies in the same or nearby regions.
+		</constant>
+		<constant name="LOBBY_DISTANCE_FILTER_FAR" value="2" enum="LobbyDistanceFilter">
+			Lobbies up to about half-way around the world.
+		</constant>
+		<constant name="LOBBY_DISTANCE_FILTER_WORLDWIDE" value="3" enum="LobbyDistanceFilter">
+			Lobbies anywhere. Expect high latency.
+		</constant>
+		<constant name="LOBBY_MEMBER_ENTERED" value="1" enum="LobbyMemberStateChange" is_bitfield="true">
+			The user joined the lobby.
+		</constant>
+		<constant name="LOBBY_MEMBER_LEFT" value="2" enum="LobbyMemberStateChange" is_bitfield="true">
+			The user left the lobby.
+		</constant>
+		<constant name="LOBBY_MEMBER_DISCONNECTED" value="4" enum="LobbyMemberStateChange" is_bitfield="true">
+			The user lost their connection to Steam.
+		</constant>
+		<constant name="LOBBY_MEMBER_KICKED" value="8" enum="LobbyMemberStateChange" is_bitfield="true">
+			The user was kicked.
+		</constant>
+		<constant name="LOBBY_MEMBER_BANNED" value="16" enum="LobbyMemberStateChange" is_bitfield="true">
+			The user was kicked and banned.
+		</constant>
+		<constant name="LOBBY_ENTER_SUCCESS" value="1" enum="LobbyEnterResponse">
+			The lobby was joined.
+		</constant>
+		<constant name="LOBBY_ENTER_DOESNT_EXIST" value="2" enum="LobbyEnterResponse">
+			The lobby no longer exists.
+		</constant>
+		<constant name="LOBBY_ENTER_NOT_ALLOWED" value="3" enum="LobbyEnterResponse">
+			The user isn't allowed to join (for example a private lobby without an invite).
+		</constant>
+		<constant name="LOBBY_ENTER_FULL" value="4" enum="LobbyEnterResponse">
+			The lobby is full.
+		</constant>
+		<constant name="LOBBY_ENTER_ERROR" value="5" enum="LobbyEnterResponse">
+			An unexpected error occurred, or Steam couldn't be reached.
+		</constant>
+		<constant name="LOBBY_ENTER_BANNED" value="6" enum="LobbyEnterResponse">
+			The user is banned from this lobby.
+		</constant>
+		<constant name="LOBBY_ENTER_LIMITED" value="7" enum="LobbyEnterResponse">
+			The user has a limited account and can't join.
+		</constant>
+		<constant name="LOBBY_ENTER_CLAN_DISABLED" value="8" enum="LobbyEnterResponse">
+			The lobby belongs to a Steam group that is locked or disabled.
+		</constant>
+		<constant name="LOBBY_ENTER_COMMUNITY_BAN" value="9" enum="LobbyEnterResponse">
+			The user has a Steam Community ban.
+		</constant>
+		<constant name="LOBBY_ENTER_MEMBER_BLOCKED_YOU" value="10" enum="LobbyEnterResponse">
+			A member of the lobby has blocked the user.
+		</constant>
+		<constant name="LOBBY_ENTER_YOU_BLOCKED_MEMBER" value="11" enum="LobbyEnterResponse">
+			The user has blocked a member of the lobby.
 		</constant>
 	</constants>
 </class>

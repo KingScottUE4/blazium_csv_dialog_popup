@@ -37,9 +37,11 @@
 #include "steam_workshop_item.h"
 
 #include "core/object/object.h"
+#include "core/templates/local_vector.h"
 #include "core/variant/type_info.h"
 
 class SteamAuthClient;
+class SteamSocketsTransport;
 
 class Steam : public Object {
 	GDCLASS(Steam, Object);
@@ -172,6 +174,52 @@ public:
 		WORKSHOP_PREVIEW_TYPE_CLIP = 5,
 	};
 
+	enum LobbyType {
+		LOBBY_TYPE_PRIVATE = 0,
+		LOBBY_TYPE_FRIENDS_ONLY = 1,
+		LOBBY_TYPE_PUBLIC = 2,
+		LOBBY_TYPE_INVISIBLE = 3,
+		LOBBY_TYPE_PRIVATE_UNIQUE = 4,
+	};
+
+	enum LobbyComparison {
+		LOBBY_COMPARISON_EQUAL_TO_OR_LESS_THAN = -2,
+		LOBBY_COMPARISON_LESS_THAN = -1,
+		LOBBY_COMPARISON_EQUAL = 0,
+		LOBBY_COMPARISON_GREATER_THAN = 1,
+		LOBBY_COMPARISON_EQUAL_TO_OR_GREATER_THAN = 2,
+		LOBBY_COMPARISON_NOT_EQUAL = 3,
+	};
+
+	enum LobbyDistanceFilter {
+		LOBBY_DISTANCE_FILTER_CLOSE = 0,
+		LOBBY_DISTANCE_FILTER_DEFAULT = 1,
+		LOBBY_DISTANCE_FILTER_FAR = 2,
+		LOBBY_DISTANCE_FILTER_WORLDWIDE = 3,
+	};
+
+	enum LobbyMemberStateChange {
+		LOBBY_MEMBER_ENTERED = 1,
+		LOBBY_MEMBER_LEFT = 2,
+		LOBBY_MEMBER_DISCONNECTED = 4,
+		LOBBY_MEMBER_KICKED = 8,
+		LOBBY_MEMBER_BANNED = 16,
+	};
+
+	enum LobbyEnterResponse {
+		LOBBY_ENTER_SUCCESS = 1,
+		LOBBY_ENTER_DOESNT_EXIST = 2,
+		LOBBY_ENTER_NOT_ALLOWED = 3,
+		LOBBY_ENTER_FULL = 4,
+		LOBBY_ENTER_ERROR = 5,
+		LOBBY_ENTER_BANNED = 6,
+		LOBBY_ENTER_LIMITED = 7,
+		LOBBY_ENTER_CLAN_DISABLED = 8,
+		LOBBY_ENTER_COMMUNITY_BAN = 9,
+		LOBBY_ENTER_MEMBER_BLOCKED_YOU = 10,
+		LOBBY_ENTER_YOU_BLOCKED_MEMBER = 11,
+	};
+
 private:
 	static Steam *singleton;
 
@@ -189,6 +237,9 @@ private:
 	SteamAPILoader::ISteamUtilsPtr steam_utils = nullptr;
 	SteamAPILoader::ISteamInventoryPtr steam_inventory = nullptr;
 	SteamAPILoader::ISteamUGCPtr steam_ugc = nullptr;
+	SteamAPILoader::ISteamNetworkingSocketsPtr steam_networking_sockets = nullptr;
+	SteamAPILoader::ISteamNetworkingUtilsPtr steam_networking_utils = nullptr;
+	SteamAPILoader::ISteamMatchmakingPtr steam_matchmaking = nullptr;
 
 	TicketState ticket_state = TICKET_STATE_IDLE;
 	SteamAPILoader::HAuthTicket pending_auth_ticket = 0;
@@ -223,6 +274,15 @@ private:
 	HashMap<uint64_t, WorkshopPendingCall> workshop_pending_calls;
 	HashMap<uint64_t, uint32_t> workshop_query_return_flags;
 
+	// Steam Networking Sockets and lobbies.
+	struct LobbyPendingCall {
+		int callback_id = 0;
+		uint64_t lobby_id = 0;
+	};
+	HashMap<uint64_t, LobbyPendingCall> lobby_pending_calls; // Keyed by SteamAPICall_t.
+	LocalVector<SteamSocketsTransport *> networking_transports;
+	bool relay_network_access_initialized = false;
+
 	Vector<String> debug_log;
 	static const int kMaxDebugLogEntries = 256;
 
@@ -254,6 +314,13 @@ private:
 	Array _parse_workshop_query_results(SteamUGCQueryHandle_t p_handle, uint32_t p_num_results);
 	Ref<SteamWorkshopItem> _build_workshop_item(SteamUGCQueryHandle_t p_handle, uint32_t p_index, uint32_t p_return_flags) const;
 	void _clear_workshop_state();
+
+	static void _bind_matchmaking_methods();
+	bool _ensure_matchmaking_ready() const;
+	bool _track_lobby_call(SteamAPICallHandle_t p_call, int p_callback_id, uint64_t p_lobby_id = 0);
+	bool _handle_networking_callback(int p_callback_id, const void *p_data, int p_size);
+	bool _handle_lobby_call_completed(uint64_t p_call, bool p_success, const uint8_t *p_data, int p_size);
+	void _clear_networking_state();
 
 protected:
 	static void _bind_methods();
@@ -377,6 +444,44 @@ public:
 	bool stop_playtime_tracking_for_all_items();
 	bool show_workshop_eula();
 
+	// Steam Networking Sockets (see SteamMultiplayerPeer).
+	bool has_networking_support() const;
+	void init_relay_network_access();
+	const SteamAPILoader &get_loader() const { return loader; }
+	SteamAPILoader::ISteamNetworkingSocketsPtr get_networking_sockets_interface() const { return steam_networking_sockets; }
+	void register_networking_transport(SteamSocketsTransport *p_transport);
+	void unregister_networking_transport(SteamSocketsTransport *p_transport);
+
+	// Steam Matchmaking (lobbies).
+	bool has_matchmaking_support() const;
+	bool create_lobby(LobbyType p_type = LOBBY_TYPE_FRIENDS_ONLY, int p_max_members = 4);
+	bool join_lobby(uint64_t p_lobby_id);
+	void leave_lobby(uint64_t p_lobby_id);
+	void add_lobby_list_string_filter(const String &p_key, const String &p_value, LobbyComparison p_comparison = LOBBY_COMPARISON_EQUAL);
+	void add_lobby_list_numerical_filter(const String &p_key, int p_value, LobbyComparison p_comparison = LOBBY_COMPARISON_EQUAL);
+	void add_lobby_list_slots_available_filter(int p_slots_available);
+	void add_lobby_list_distance_filter(LobbyDistanceFilter p_distance);
+	void add_lobby_list_result_count_filter(int p_max_results);
+	bool request_lobby_list();
+	bool invite_user_to_lobby(uint64_t p_lobby_id, uint64_t p_steam_id);
+	void show_lobby_invite_dialog(uint64_t p_lobby_id);
+	int get_num_lobby_members(uint64_t p_lobby_id) const;
+	PackedInt64Array get_lobby_members(uint64_t p_lobby_id) const;
+	uint64_t get_lobby_owner(uint64_t p_lobby_id) const;
+	bool set_lobby_owner(uint64_t p_lobby_id, uint64_t p_steam_id);
+	int get_lobby_member_limit(uint64_t p_lobby_id) const;
+	bool set_lobby_member_limit(uint64_t p_lobby_id, int p_max_members);
+	bool set_lobby_type(uint64_t p_lobby_id, LobbyType p_type);
+	bool set_lobby_joinable(uint64_t p_lobby_id, bool p_joinable);
+	String get_lobby_data(uint64_t p_lobby_id, const String &p_key) const;
+	bool set_lobby_data(uint64_t p_lobby_id, const String &p_key, const String &p_value);
+	bool delete_lobby_data(uint64_t p_lobby_id, const String &p_key);
+	Dictionary get_all_lobby_data(uint64_t p_lobby_id) const;
+	String get_lobby_member_data(uint64_t p_lobby_id, uint64_t p_steam_id, const String &p_key) const;
+	void set_lobby_member_data(uint64_t p_lobby_id, const String &p_key, const String &p_value);
+	String get_friend_persona_name(uint64_t p_steam_id) const;
+	uint64_t get_launch_lobby_id() const;
+
 	Steam();
 	~Steam();
 };
@@ -392,3 +497,8 @@ VARIANT_ENUM_CAST(Steam::WorkshopUserList);
 VARIANT_ENUM_CAST(Steam::WorkshopUserListSortOrder);
 VARIANT_ENUM_CAST(Steam::WorkshopUpdateStatus);
 VARIANT_ENUM_CAST(Steam::WorkshopPreviewType);
+VARIANT_ENUM_CAST(Steam::LobbyType);
+VARIANT_ENUM_CAST(Steam::LobbyComparison);
+VARIANT_ENUM_CAST(Steam::LobbyDistanceFilter);
+VARIANT_BITFIELD_CAST(Steam::LobbyMemberStateChange);
+VARIANT_ENUM_CAST(Steam::LobbyEnterResponse);
