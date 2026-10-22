@@ -34,11 +34,13 @@
 #include "steam_auth_result.h"
 #include "steam_inventory_item.h"
 #include "steam_item_definition.h"
+#include "steam_leaderboard_entry.h"
 #include "steam_workshop_item.h"
 
 #include "core/object/object.h"
 #include "core/templates/local_vector.h"
 #include "core/variant/type_info.h"
+#include "core/variant/typed_array.h"
 
 class SteamAuthClient;
 class SteamSocketsTransport;
@@ -61,6 +63,26 @@ public:
 	};
 
 	// Values mirror the Steamworks SDK enums so they can be passed through.
+	// Values mirror ELeaderboardSortMethod / ELeaderboardDisplayType / ELeaderboardDataRequest.
+	enum LeaderboardSortMethod {
+		LEADERBOARD_SORT_NONE = 0,
+		LEADERBOARD_SORT_ASCENDING = 1,
+		LEADERBOARD_SORT_DESCENDING = 2,
+	};
+
+	enum LeaderboardDisplayType {
+		LEADERBOARD_DISPLAY_NONE = 0,
+		LEADERBOARD_DISPLAY_NUMERIC = 1,
+		LEADERBOARD_DISPLAY_TIME_SECONDS = 2,
+		LEADERBOARD_DISPLAY_TIME_MILLISECONDS = 3,
+	};
+
+	enum LeaderboardDataRequest {
+		LEADERBOARD_GLOBAL = 0,
+		LEADERBOARD_GLOBAL_AROUND_USER = 1,
+		LEADERBOARD_FRIENDS = 2,
+	};
+
 	enum WorkshopFileType {
 		WORKSHOP_FILE_TYPE_COMMUNITY = 0,
 		WORKSHOP_FILE_TYPE_MICROTRANSACTION = 1,
@@ -274,6 +296,16 @@ private:
 	HashMap<uint64_t, WorkshopPendingCall> workshop_pending_calls;
 	HashMap<uint64_t, uint32_t> workshop_query_return_flags;
 
+	// Leaderboard async call results, keyed by SteamAPICall_t. The public
+	// leaderboard methods block until their result arrives (or times out).
+	struct LeaderboardCallResult {
+		bool done = false;
+		bool failed = false;
+		int callback_id = 0;
+		Vector<uint8_t> data;
+	};
+	HashMap<uint64_t, LeaderboardCallResult> leaderboard_calls;
+
 	// Steam Networking Sockets and lobbies.
 	struct LobbyPendingCall {
 		int callback_id = 0;
@@ -316,6 +348,10 @@ private:
 	void _clear_workshop_state();
 
 	static void _bind_matchmaking_methods();
+	static void _bind_leaderboard_methods();
+	bool _ensure_leaderboards_ready() const;
+	bool _wait_for_leaderboard_call(SteamAPICallHandle_t p_call, int p_callback_id, int p_min_size, Vector<uint8_t> &r_data);
+	TypedArray<SteamLeaderboardEntry> _collect_leaderboard_entries(const Vector<uint8_t> &p_result);
 	bool _ensure_matchmaking_ready() const;
 	bool _track_lobby_call(SteamAPICallHandle_t p_call, int p_callback_id, uint64_t p_lobby_id = 0);
 	bool _handle_networking_callback(int p_callback_id, const void *p_data, int p_size);
@@ -452,6 +488,17 @@ public:
 	void register_networking_transport(SteamSocketsTransport *p_transport);
 	void unregister_networking_transport(SteamSocketsTransport *p_transport);
 
+	// Steam leaderboards (ISteamUserStats).
+	bool has_leaderboard_support() const;
+	int64_t find_leaderboard(const String &p_name, bool p_create = false, LeaderboardSortMethod p_sort = LEADERBOARD_SORT_ASCENDING, LeaderboardDisplayType p_display = LEADERBOARD_DISPLAY_TIME_MILLISECONDS);
+	Dictionary upload_leaderboard_score(int64_t p_handle, int p_score, bool p_keep_best = true, const PackedInt32Array &p_details = PackedInt32Array());
+	TypedArray<SteamLeaderboardEntry> download_leaderboard_entries(int64_t p_handle, LeaderboardDataRequest p_request = LEADERBOARD_GLOBAL, int p_range_start = 1, int p_range_end = 10);
+	TypedArray<SteamLeaderboardEntry> download_leaderboard_entries_for_users(int64_t p_handle, const PackedInt64Array &p_steam_ids);
+	int get_leaderboard_entry_count(int64_t p_handle) const;
+	String get_leaderboard_name(int64_t p_handle) const;
+	LeaderboardSortMethod get_leaderboard_sort_method(int64_t p_handle) const;
+	LeaderboardDisplayType get_leaderboard_display_type(int64_t p_handle) const;
+
 	// Steam Matchmaking (lobbies).
 	bool has_matchmaking_support() const;
 	bool create_lobby(LobbyType p_type = LOBBY_TYPE_FRIENDS_ONLY, int p_max_members = 4);
@@ -497,6 +544,9 @@ VARIANT_ENUM_CAST(Steam::WorkshopUserList);
 VARIANT_ENUM_CAST(Steam::WorkshopUserListSortOrder);
 VARIANT_ENUM_CAST(Steam::WorkshopUpdateStatus);
 VARIANT_ENUM_CAST(Steam::WorkshopPreviewType);
+VARIANT_ENUM_CAST(Steam::LeaderboardSortMethod);
+VARIANT_ENUM_CAST(Steam::LeaderboardDisplayType);
+VARIANT_ENUM_CAST(Steam::LeaderboardDataRequest);
 VARIANT_ENUM_CAST(Steam::LobbyType);
 VARIANT_ENUM_CAST(Steam::LobbyComparison);
 VARIANT_ENUM_CAST(Steam::LobbyDistanceFilter);
