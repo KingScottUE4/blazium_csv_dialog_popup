@@ -59,6 +59,7 @@ private:
 	bool workshop_loaded = false;
 	bool networking_loaded = false;
 	bool matchmaking_loaded = false;
+	bool leaderboard_loaded = false;
 
 	// Core API
 	typedef int (*SteamAPI_InitFlatFn)(char *p_out_err_msg);
@@ -228,6 +229,15 @@ private:
 	typedef bool (*ISteamMatchmaking_SetLobbyJoinableFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id, bool p_joinable);
 	typedef uint64_t (*ISteamMatchmaking_GetLobbyOwnerFn)(ISteamMatchmakingPtr p_self, uint64_t p_lobby_id);
 	typedef void (*ISteamFriends_ActivateGameOverlayInviteDialogFn)(ISteamFriendsPtr p_self, uint64_t p_lobby_id);
+	// ISteamUserStats leaderboard flat API. Enum parameters are passed as int.
+	typedef SteamAPICallHandle_t (*ISteamUserStats_FindOrCreateLeaderboardFn)(ISteamUserStatsPtr p_self, const char *p_name, int p_sort_method, int p_display_type);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_FindLeaderboardFn)(ISteamUserStatsPtr p_self, const char *p_name);
+	typedef const char *(*ISteamUserStats_GetLeaderboardNameFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard);
+	typedef int (*ISteamUserStats_GetLeaderboardIntFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_DownloadLeaderboardEntriesFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, int p_request, int p_range_start, int p_range_end);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_DownloadLeaderboardEntriesForUsersFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, uint64_t *p_users, int p_count);
+	typedef bool (*ISteamUserStats_GetDownloadedLeaderboardEntryFn)(ISteamUserStatsPtr p_self, SteamLeaderboardEntries_t p_entries, int p_index, SteamLeaderboardEntryData *p_entry, int32_t *p_details, int p_details_max);
+	typedef SteamAPICallHandle_t (*ISteamUserStats_UploadLeaderboardScoreFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, int p_upload_method, int32_t p_score, const int32_t *p_details, int p_details_count);
 	typedef const char *(*ISteamFriends_GetFriendPersonaNameFn)(ISteamFriendsPtr p_self, uint64_t p_steam_id);
 
 	SteamAPI_InitFlatFn fn_init_flat = nullptr;
@@ -423,6 +433,17 @@ private:
 	ISteamFriends_ActivateGameOverlayInviteDialogFn fn_friends_activate_game_overlay_invite_dialog = nullptr;
 	ISteamFriends_GetFriendPersonaNameFn fn_friends_get_friend_persona_name = nullptr;
 
+	ISteamUserStats_FindOrCreateLeaderboardFn fn_find_or_create_leaderboard = nullptr;
+	ISteamUserStats_FindLeaderboardFn fn_find_leaderboard = nullptr;
+	ISteamUserStats_GetLeaderboardNameFn fn_get_leaderboard_name = nullptr;
+	ISteamUserStats_GetLeaderboardIntFn fn_get_leaderboard_entry_count = nullptr;
+	ISteamUserStats_GetLeaderboardIntFn fn_get_leaderboard_sort_method = nullptr;
+	ISteamUserStats_GetLeaderboardIntFn fn_get_leaderboard_display_type = nullptr;
+	ISteamUserStats_DownloadLeaderboardEntriesFn fn_download_leaderboard_entries = nullptr;
+	ISteamUserStats_DownloadLeaderboardEntriesForUsersFn fn_download_leaderboard_entries_for_users = nullptr;
+	ISteamUserStats_GetDownloadedLeaderboardEntryFn fn_get_downloaded_leaderboard_entry = nullptr;
+	ISteamUserStats_UploadLeaderboardScoreFn fn_upload_leaderboard_score = nullptr;
+
 	bool _load_symbol(const char *p_name, void *&r_symbol, bool p_optional = false);
 	bool _load_stats_symbols();
 	bool _load_inventory_symbols();
@@ -431,6 +452,7 @@ private:
 	bool _load_networking_symbols();
 	void _clear_networking_symbols();
 	bool _load_matchmaking_symbols();
+	bool _load_leaderboard_symbols();
 	void _clear_matchmaking_symbols();
 
 public:
@@ -444,6 +466,7 @@ public:
 	bool has_workshop_support() const { return workshop_loaded; }
 	bool has_networking_support() const { return networking_loaded; }
 	bool has_matchmaking_support() const { return matchmaking_loaded; }
+	bool has_leaderboard_support() const { return leaderboard_loaded; }
 
 	int init_flat(String &r_err_msg);
 	void shutdown();
@@ -616,6 +639,19 @@ public:
 	bool net_set_connection_poll_group(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetConnection p_connection, SteamHSteamNetPollGroup p_poll_group) const;
 	int net_receive_messages_on_poll_group(ISteamNetworkingSocketsPtr p_sockets, SteamHSteamNetPollGroup p_poll_group, SteamNetworkingMessage **r_messages, int p_max_messages) const;
 	void net_release_message(SteamNetworkingMessage *p_message) const;
+
+	// Steam leaderboards (ISteamUserStats). All wrappers return a safe failure
+	// value when the symbols are unavailable.
+	SteamAPICallHandle_t find_or_create_leaderboard(ISteamUserStatsPtr p_stats, const char *p_name, int p_sort_method, int p_display_type) const;
+	SteamAPICallHandle_t find_leaderboard(ISteamUserStatsPtr p_stats, const char *p_name) const;
+	String get_leaderboard_name(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	int get_leaderboard_entry_count(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	int get_leaderboard_sort_method(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	int get_leaderboard_display_type(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard) const;
+	SteamAPICallHandle_t download_leaderboard_entries(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, int p_request, int p_range_start, int p_range_end) const;
+	SteamAPICallHandle_t download_leaderboard_entries_for_users(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, const Vector<uint64_t> &p_users) const;
+	bool get_downloaded_leaderboard_entry(ISteamUserStatsPtr p_stats, SteamLeaderboardEntries_t p_entries, int p_index, SteamLeaderboardEntryData &r_entry, Vector<int32_t> &r_details) const;
+	SteamAPICallHandle_t upload_leaderboard_score(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, int p_upload_method, int32_t p_score, const Vector<int32_t> &p_details) const;
 
 	// Steam Matchmaking (lobbies).
 	ISteamMatchmakingPtr get_steam_matchmaking() const;

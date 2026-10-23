@@ -15,6 +15,7 @@ def get_doc_classes():
         "SteamItemDefinition",
         "SteamMultiplayerPeer",
         "SteamWorkshopItem",
+        "SteamLeaderboardEntry",
         "SteamEditorPlugin",
     ]
 

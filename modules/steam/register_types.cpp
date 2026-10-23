@@ -34,6 +34,7 @@
 #include "steam_auth_result.h"
 #include "steam_inventory_item.h"
 #include "steam_item_definition.h"
+#include "steam_leaderboard_entry.h"
 #include "steam_multiplayer_peer.h"
 #include "steam_workshop_item.h"
 
@@ -101,6 +102,7 @@ void initialize_steam_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(SteamInventoryItem);
 		GDREGISTER_CLASS(SteamItemDefinition);
 		GDREGISTER_CLASS(SteamWorkshopItem);
+		GDREGISTER_CLASS(SteamLeaderboardEntry);
 		GDREGISTER_CLASS(SteamMultiplayerPeer);
 		GDREGISTER_CLASS(Steam);
 		steam_singleton = memnew(Steam);
