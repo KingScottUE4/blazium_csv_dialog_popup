@@ -266,6 +266,7 @@ private:
 	SteamAPILoader::ISteamNetworkingSocketsPtr steam_networking_sockets = nullptr;
 	SteamAPILoader::ISteamNetworkingUtilsPtr steam_networking_utils = nullptr;
 	SteamAPILoader::ISteamMatchmakingPtr steam_matchmaking = nullptr;
+	SteamAPILoader::ISteamAppsPtr steam_apps = nullptr;
 
 	TicketState ticket_state = TICKET_STATE_IDLE;
 	SteamAPILoader::HAuthTicket pending_auth_ticket = 0;
@@ -410,6 +411,8 @@ public:
 	bool clear_stat(const String &p_name);
 
 	String get_persona_name() const;
+	String get_current_game_language() const;
+	PackedStringArray get_available_game_languages() const;
 	Ref<Image> get_avatar_image(uint64_t p_steam_id = 0, AvatarSize p_size = AVATAR_SIZE_LARGE);
 
 	bool load_item_definitions();

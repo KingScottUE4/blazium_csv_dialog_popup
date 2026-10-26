@@ -172,6 +172,13 @@ TEST_CASE("[Steam] achievement methods no-op without init") {
 	CHECK_FALSE(steam->has_inventory_support());
 }
 
+TEST_CASE("[Steam] game language without init") {
+	Steam *steam = Steam::get_singleton();
+	REQUIRE(steam != nullptr);
+	CHECK(steam->get_current_game_language().is_empty());
+	CHECK(steam->get_available_game_languages().is_empty());
+}
+
 TEST_CASE("[Steam] inventory item without init") {
 	Ref<SteamInventoryItem> item;
 	item.instantiate();

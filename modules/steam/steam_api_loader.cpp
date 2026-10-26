@@ -172,6 +172,10 @@ bool SteamAPILoader::try_load() {
 	loaded = true;
 	stats_loaded = _load_stats_symbols();
 	leaderboard_loaded = stats_loaded && _load_leaderboard_symbols();
+	apps_loaded = _load_apps_symbols();
+	if (!apps_loaded) {
+		_clear_apps_symbols();
+	}
 	inventory_loaded = _load_inventory_symbols();
 	workshop_loaded = _load_workshop_symbols();
 	if (!workshop_loaded) {
@@ -391,6 +395,7 @@ void SteamAPILoader::unload() {
 	fn_download_leaderboard_entries_for_users = nullptr;
 	fn_get_downloaded_leaderboard_entry = nullptr;
 	fn_upload_leaderboard_score = nullptr;
+	_clear_apps_symbols();
 	_clear_workshop_symbols();
 	_clear_networking_symbols();
 	_clear_matchmaking_symbols();
