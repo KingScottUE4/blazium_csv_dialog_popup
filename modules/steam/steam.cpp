@@ -76,6 +76,8 @@ void Steam::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("increment_stat_int", "name", "delta"), &Steam::increment_stat_int);
 	ClassDB::bind_method(D_METHOD("clear_stat", "name"), &Steam::clear_stat);
 	ClassDB::bind_method(D_METHOD("get_persona_name"), &Steam::get_persona_name);
+	ClassDB::bind_method(D_METHOD("get_current_game_language"), &Steam::get_current_game_language);
+	ClassDB::bind_method(D_METHOD("get_available_game_languages"), &Steam::get_available_game_languages);
 	ClassDB::bind_method(D_METHOD("get_avatar_image", "steam_id", "size"), &Steam::get_avatar_image, DEFVAL(0), DEFVAL(2));
 
 	ClassDB::bind_method(D_METHOD("load_item_definitions"), &Steam::load_item_definitions);
@@ -400,6 +402,15 @@ Error Steam::initialize(int p_app_id) {
 		}
 	}
 
+	if (loader.has_apps_support()) {
+		steam_apps = loader.get_steam_apps();
+		if (!steam_apps) {
+			_log_debug("Steam apps interface unavailable");
+		}
+	} else {
+		_log_debug("Steam apps calls (game language) not found in the steam_api library");
+	}
+
 	if (loader.has_inventory_support()) {
 		steam_inventory = loader.get_steam_inventory();
 		if (!steam_inventory) {
@@ -449,6 +460,7 @@ void Steam::shutdown() {
 	steam_user_stats = nullptr;
 	steam_friends = nullptr;
 	steam_utils = nullptr;
+	steam_apps = nullptr;
 	steam_inventory = nullptr;
 	steam_ugc = nullptr;
 	_clear_workshop_state();
@@ -799,6 +811,28 @@ String Steam::get_persona_name() const {
 		return String();
 	}
 	return loader.get_persona_name(steam_friends);
+}
+
+String Steam::get_current_game_language() const {
+	if (!initialized || !steam_apps) {
+		return String();
+	}
+	return loader.get_current_game_language(steam_apps);
+}
+
+PackedStringArray Steam::get_available_game_languages() const {
+	PackedStringArray languages;
+	if (!initialized || !steam_apps) {
+		return languages;
+	}
+	const String list = loader.get_available_game_languages(steam_apps);
+	for (const String &language : list.split(",", false)) {
+		const String trimmed = language.strip_edges();
+		if (!trimmed.is_empty()) {
+			languages.push_back(trimmed);
+		}
+	}
+	return languages;
 }
 
 Ref<Image> Steam::get_avatar_image(uint64_t p_steam_id, AvatarSize p_size) {
