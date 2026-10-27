@@ -314,12 +314,29 @@
 				Returns all lobby data of the lobby [param lobby_id] as a [Dictionary] of [String] keys and values.
 			</description>
 		</method>
+		<method name="get_available_game_languages" qualifiers="const">
+			<return type="PackedStringArray" />
+			<description>
+				Returns the languages this app supports on Steam, as Steam API language codes such as [code]"english"[/code] and [code]"french"[/code]. Returns an empty array if Steam is not initialized or the call is unavailable.
+			</description>
+		</method>
 		<method name="get_avatar_image">
 			<return type="Image" />
 			<param index="0" name="steam_id" type="int" default="0" />
 			<param index="1" name="size" type="int" enum="Steam.AvatarSize" default="2" />
 			<description>
 				Returns the user's avatar as an RGBA [Image]. [param steam_id] [code]0[/code] uses the local user.
+			</description>
+		</method>
+		<method name="get_current_game_language" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the language the player picked for this game in Steam, as a Steam API language code such as [code]"english"[/code], [code]"french"[/code] or [code]"schinese"[/code]. If the player has not picked a game language, Steam returns the language of the Steam client. Returns an empty string if Steam is not initialized or the call is unavailable.
+				[codeblock]
+				var lang := Steam.get_current_game_language()
+				if lang == "french":
+					TranslationServer.set_locale("fr")
+				[/codeblock]
 			</description>
 		</method>
 		<method name="get_debug_log" qualifiers="const">

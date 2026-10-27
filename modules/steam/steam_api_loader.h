@@ -50,6 +50,7 @@ public:
 	typedef void *ISteamNetworkingSocketsPtr;
 	typedef void *ISteamNetworkingUtilsPtr;
 	typedef void *ISteamMatchmakingPtr;
+	typedef void *ISteamAppsPtr;
 
 private:
 	void *library_handle = nullptr;
@@ -60,6 +61,7 @@ private:
 	bool networking_loaded = false;
 	bool matchmaking_loaded = false;
 	bool leaderboard_loaded = false;
+	bool apps_loaded = false;
 
 	// Core API
 	typedef int (*SteamAPI_InitFlatFn)(char *p_out_err_msg);
@@ -239,6 +241,9 @@ private:
 	typedef bool (*ISteamUserStats_GetDownloadedLeaderboardEntryFn)(ISteamUserStatsPtr p_self, SteamLeaderboardEntries_t p_entries, int p_index, SteamLeaderboardEntryData *p_entry, int32_t *p_details, int p_details_max);
 	typedef SteamAPICallHandle_t (*ISteamUserStats_UploadLeaderboardScoreFn)(ISteamUserStatsPtr p_self, SteamLeaderboard_t p_leaderboard, int p_upload_method, int32_t p_score, const int32_t *p_details, int p_details_count);
 	typedef const char *(*ISteamFriends_GetFriendPersonaNameFn)(ISteamFriendsPtr p_self, uint64_t p_steam_id);
+	// ISteamApps flat API.
+	typedef ISteamAppsPtr (*SteamAPI_SteamAppsFn)();
+	typedef const char *(*ISteamApps_GetLanguageFn)(ISteamAppsPtr p_self);
 
 	SteamAPI_InitFlatFn fn_init_flat = nullptr;
 	SteamAPI_ShutdownFn fn_shutdown = nullptr;
@@ -444,6 +449,10 @@ private:
 	ISteamUserStats_GetDownloadedLeaderboardEntryFn fn_get_downloaded_leaderboard_entry = nullptr;
 	ISteamUserStats_UploadLeaderboardScoreFn fn_upload_leaderboard_score = nullptr;
 
+	SteamAPI_SteamAppsFn fn_steam_apps = nullptr;
+	ISteamApps_GetLanguageFn fn_apps_get_current_game_language = nullptr;
+	ISteamApps_GetLanguageFn fn_apps_get_available_game_languages = nullptr;
+
 	bool _load_symbol(const char *p_name, void *&r_symbol, bool p_optional = false);
 	bool _load_stats_symbols();
 	bool _load_inventory_symbols();
@@ -454,6 +463,8 @@ private:
 	bool _load_matchmaking_symbols();
 	bool _load_leaderboard_symbols();
 	void _clear_matchmaking_symbols();
+	bool _load_apps_symbols();
+	void _clear_apps_symbols();
 
 public:
 	static constexpr int kGetTicketForWebApiResponseCallback = 168; // k_iSteamUserCallbacks(100) + 68
@@ -467,6 +478,7 @@ public:
 	bool has_networking_support() const { return networking_loaded; }
 	bool has_matchmaking_support() const { return matchmaking_loaded; }
 	bool has_leaderboard_support() const { return leaderboard_loaded; }
+	bool has_apps_support() const { return apps_loaded; }
 
 	int init_flat(String &r_err_msg);
 	void shutdown();
@@ -652,6 +664,12 @@ public:
 	SteamAPICallHandle_t download_leaderboard_entries_for_users(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, const Vector<uint64_t> &p_users) const;
 	bool get_downloaded_leaderboard_entry(ISteamUserStatsPtr p_stats, SteamLeaderboardEntries_t p_entries, int p_index, SteamLeaderboardEntryData &r_entry, Vector<int32_t> &r_details) const;
 	SteamAPICallHandle_t upload_leaderboard_score(ISteamUserStatsPtr p_stats, SteamLeaderboard_t p_leaderboard, int p_upload_method, int32_t p_score, const Vector<int32_t> &p_details) const;
+
+	// Steam apps (ISteamApps). The wrappers return an empty string when the
+	// symbols are unavailable.
+	ISteamAppsPtr get_steam_apps() const;
+	String get_current_game_language(ISteamAppsPtr p_apps) const;
+	String get_available_game_languages(ISteamAppsPtr p_apps) const;
 
 	// Steam Matchmaking (lobbies).
 	ISteamMatchmakingPtr get_steam_matchmaking() const;
